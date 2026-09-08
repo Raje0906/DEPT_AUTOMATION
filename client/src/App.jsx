@@ -18,6 +18,10 @@ import StudentRevaluation from './pages/student/StudentRevaluation'
 import FacultyDashboard  from './pages/faculty/FacultyDashboard'
 import MarksEntry        from './pages/faculty/MarksEntry'
 import FacultyRevaluation from './pages/faculty/FacultyRevaluation'
+import ClassReports      from './pages/faculty/ClassReports'
+import LabMaintenance   from './pages/faculty/LabMaintenance'
+import ProjectEval       from './pages/faculty/ProjectEval'
+import Magazines         from './pages/faculty/Magazines'
 
 // HOD
 import HODDashboard   from './pages/hod/HODDashboard'
@@ -63,6 +67,10 @@ export default function App() {
           <Route path="/faculty/subjects" element={<FacultyLayout><FacultyDashboard /></FacultyLayout>} />
           <Route path="/faculty/marks/:subjectId" element={<FacultyLayout><MarksEntry /></FacultyLayout>} />
           <Route path="/faculty/revaluation" element={<FacultyLayout><FacultyRevaluation /></FacultyLayout>} />
+          <Route path="/faculty/reports" element={<FacultyLayout><ClassReports /></FacultyLayout>} />
+          <Route path="/faculty/lab-maintenance" element={<FacultyLayout><LabMaintenance /></FacultyLayout>} />
+          <Route path="/faculty/project-eval" element={<FacultyLayout><ProjectEval /></FacultyLayout>} />
+          <Route path="/faculty/magazines" element={<FacultyLayout><Magazines /></FacultyLayout>} />
 
           {/* HOD */}
           <Route path="/hod" element={<HODLayout><HODDashboard /></HODLayout>} />

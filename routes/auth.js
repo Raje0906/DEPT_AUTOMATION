@@ -14,32 +14,52 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email/ID and password are required' });
     }
 
-    // Try to find by email first, then by roll_no/enrollment_no/employee_id
+    const trimmed = identifier.trim();
+    const lower = trimmed.toLowerCase();
+
+    // 1. Try to find by email first (case-insensitive)
     let userResult = await pool.query(
       `SELECT u.id, u.name, u.role, u.email, u.password_hash, u.department, u.is_active
-       FROM users u WHERE u.email = $1`,
-      [identifier.toLowerCase().trim()]
+       FROM users u WHERE LOWER(u.email) = $1`,
+      [lower]
     );
 
-    // If not found by email, try student roll_no / enrollment_no
+    // 2. If not found by email, try student roll_no / enrollment_no / roll aliases
     if (userResult.rows.length === 0) {
+      const emailMatch = lower.match(/^(?:ce6a|student)(\d+)@meswadiacoe\.edu$/);
+      let parsedRoll = null;
+      if (emailMatch) {
+        parsedRoll = String(parseInt(emailMatch[1], 10));
+      } else {
+        const rollMatch = lower.match(/^(?:ce6a)?0*(\d+)$/);
+        if (rollMatch) {
+          parsedRoll = String(parseInt(rollMatch[1], 10));
+        }
+      }
+
       userResult = await pool.query(
         `SELECT u.id, u.name, u.role, u.email, u.password_hash, u.department, u.is_active
          FROM users u
          JOIN students s ON s.user_id = u.id
-         WHERE s.roll_no = $1 OR s.enrollment_no = $1`,
-        [identifier.trim()]
+         WHERE LOWER(s.roll_no) = $1 
+            OR LOWER(s.enrollment_no) = $1
+            OR ($2::text IS NOT NULL AND (
+                s.roll_no = $2 
+                OR s.roll_no = LPAD($2, 3, '0') 
+                OR LOWER(s.roll_no) = 'ce6a' || LPAD($2, 3, '0')
+            ))`,
+        [lower, parsedRoll]
       );
     }
 
-    // Try faculty employee_id
+    // 3. Try faculty employee_id (case-insensitive)
     if (userResult.rows.length === 0) {
       userResult = await pool.query(
         `SELECT u.id, u.name, u.role, u.email, u.password_hash, u.department, u.is_active
          FROM users u
          JOIN faculty f ON f.user_id = u.id
-         WHERE f.employee_id = $1`,
-        [identifier.trim()]
+         WHERE LOWER(f.employee_id) = $1`,
+        [lower]
       );
     }
 

@@ -11,9 +11,12 @@ const roleNav = {
   ],
   faculty: [
     { to: '/faculty',             label: 'Dashboard',        icon: '⊟' },
-    { to: '/faculty/subjects',    label: 'My Subjects',      icon: '≡' },
+    { to: '/faculty/subjects',    label: 'Result Generation', icon: '≡' },
     { to: '/faculty/revaluation', label: 'Revaluation Requests', icon: '⟳' },
     { to: '/faculty/reports',     label: 'Class Reports',    icon: '◈' },
+    { to: '/faculty/lab-maintenance', label: 'Lab Maintainence', icon: '⚙' },
+    { to: '/faculty/project-eval', label: 'Project Eval',     icon: '📋' },
+    { to: '/faculty/magazines',   label: 'Magazines',        icon: '📚' },
   ],
   hod: [
     { to: '/hod',                 label: 'Dashboard',        icon: '⊟' },

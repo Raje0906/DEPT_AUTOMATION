@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import api from '../../api/axios';
 import { StatusBadge } from '../../components/ResultTable';
 
 export default function FacultyDashboard() {
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
+  const location              = useLocation();
+  const isResultGen           = location.pathname === '/faculty/subjects';
 
   useEffect(() => {
     api.get('/faculty/subjects')
@@ -22,9 +24,13 @@ export default function FacultyDashboard() {
   return (
     <div className="p-8 lg:p-10 w-full max-w-7xl mx-auto">
       <div className="mb-8 pb-5 border-b border-rule">
-        <h1 className="font-serif text-3xl font-bold text-ink">Faculty Dashboard</h1>
+        <h1 className="font-serif text-3xl font-bold text-ink">
+          {isResultGen ? 'Result Generation' : 'Faculty Dashboard'}
+        </h1>
         <p className="text-base text-draft mt-1 font-medium">
-          {data?.faculty?.designation} · {data?.faculty?.department}
+          {isResultGen
+            ? 'Enter Continuous Internal Evaluation (CIE), Practical & End-Sem marks to generate student results'
+            : `${data?.faculty?.designation} · ${data?.faculty?.department}`}
         </p>
       </div>
 

@@ -123,7 +123,7 @@ async function seed() {
     for (const item of wadiaStudents) {
       const rollNo = String(item.roll_no);
       const enrollNo = item.prn_no || item.seat_no || `2025TE${rollNo.padStart(4, '0')}`;
-      const email = `student${rollNo}@meswadiacoe.edu`;
+      const email = `ce6a${rollNo.padStart(3, '0')}@meswadiacoe.edu`;
       const name = item.name;
 
       const u = await client.query(
