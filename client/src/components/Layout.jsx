@@ -95,10 +95,11 @@ const roleNav = {
     {
       group: 'Academic Records',
       items: [
-        { to: '/student',             label: 'Dashboard',        icon: Icons.dashboard },
-        { to: '/student/results',     label: 'Results & Marks',  icon: Icons.results },
-        { to: '/student/cgpa',        label: 'CGPA Overview',    icon: Icons.cgpa },
-        { to: '/student/revaluation', label: 'Revaluation Cell', icon: Icons.reval },
+        { to: '/student',             label: 'Dashboard',             icon: Icons.dashboard },
+        { to: '/student/results',     label: 'Results & Marks',       icon: Icons.results },
+        { to: '/student/cgpa',        label: 'CGPA Overview',         icon: Icons.cgpa },
+        { to: '/student/revaluation', label: 'Revaluation Cell',      icon: Icons.reval },
+        { to: '/student/project',     label: 'BE Capstone Project',   icon: Icons.project },
       ],
     },
   ],
@@ -126,6 +127,7 @@ const roleNav = {
       group: 'Department Governance',
       items: [
         { to: '/hod',                 label: 'Executive Dashboard',   icon: Icons.dashboard },
+        { to: '/hod/projects',        label: 'BE Project Governance', icon: Icons.project },
         { to: '/hod/approval',        label: 'Mark Approvals',        icon: Icons.approval },
         { to: '/hod/publish',         label: 'Publish Results',       icon: Icons.publish },
         { to: '/hod/analytics',       label: 'Academic Analytics',    icon: Icons.analytics },

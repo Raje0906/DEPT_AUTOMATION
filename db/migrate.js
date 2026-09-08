@@ -161,12 +161,142 @@ async function runMigrations() {
       )
     `);
 
+    // ─── PROJECT GROUPS ───────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS project_groups (
+        id            SERIAL PRIMARY KEY,
+        group_code    VARCHAR(50) UNIQUE NOT NULL,
+        academic_year VARCHAR(20) NOT NULL,
+        batch         VARCHAR(20) NOT NULL,
+        title         TEXT NOT NULL,
+        domain        VARCHAR(150) NOT NULL,
+        abstract      TEXT,
+        status        VARCHAR(30) NOT NULL DEFAULT 'DRAFT'
+                      CHECK (status IN ('DRAFT','PENDING_GUIDE_APPROVAL','ACTIVE','COMPLETED','WITHDRAWN')),
+        guide_id      INTEGER REFERENCES faculty(id) ON DELETE SET NULL,
+        created_by    INTEGER NOT NULL REFERENCES users(id),
+        created_at    TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    // ─── PROJECT GROUP MEMBERS ────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS project_group_members (
+        id          SERIAL PRIMARY KEY,
+        group_id    INTEGER NOT NULL REFERENCES project_groups(id) ON DELETE CASCADE,
+        student_id  INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+        roll_no     VARCHAR(20) NOT NULL,
+        is_leader   BOOLEAN DEFAULT FALSE,
+        UNIQUE(group_id, student_id)
+      )
+    `);
+
+    // ─── PROJECT GUIDE REQUESTS ───────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS project_guide_requests (
+        id                 SERIAL PRIMARY KEY,
+        group_id           INTEGER NOT NULL REFERENCES project_groups(id) ON DELETE CASCADE,
+        requested_guide_id INTEGER NOT NULL REFERENCES faculty(id) ON DELETE CASCADE,
+        status             VARCHAR(20) NOT NULL DEFAULT 'PENDING'
+                           CHECK (status IN ('PENDING','APPROVED','REJECTED')),
+        requested_at       TIMESTAMPTZ DEFAULT NOW(),
+        decided_at         TIMESTAMPTZ,
+        decided_by         INTEGER REFERENCES users(id),
+        remarks            TEXT
+      )
+    `);
+
+    // ─── PROJECT EVALUATION STAGES ────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS project_evaluation_stages (
+        id                  SERIAL PRIMARY KEY,
+        name                VARCHAR(100) NOT NULL,
+        academic_year       VARCHAR(20) NOT NULL,
+        sequence_order      INTEGER NOT NULL,
+        scheduled_date_from DATE,
+        scheduled_date_to   DATE,
+        max_marks_total     NUMERIC(5,2) NOT NULL DEFAULT 100,
+        aggregation_rule   VARCHAR(20) NOT NULL DEFAULT 'AVERAGE'
+                           CHECK (aggregation_rule IN ('AVERAGE','SUM','MAX')),
+        is_active           BOOLEAN DEFAULT TRUE
+      )
+    `);
+
+    // ─── PROJECT STAGE CRITERIA ───────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS project_stage_criteria (
+        id            SERIAL PRIMARY KEY,
+        stage_id      INTEGER NOT NULL REFERENCES project_evaluation_stages(id) ON DELETE CASCADE,
+        name          VARCHAR(150) NOT NULL,
+        max_marks     NUMERIC(5,2) NOT NULL,
+        weight        NUMERIC(5,2) DEFAULT 1.0,
+        display_order INTEGER NOT NULL DEFAULT 1
+      )
+    `);
+
+    // ─── PROJECT PANEL ASSIGNMENTS ────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS project_panel_assignments (
+        id              SERIAL PRIMARY KEY,
+        stage_id        INTEGER NOT NULL REFERENCES project_evaluation_stages(id) ON DELETE CASCADE,
+        group_id        INTEGER NOT NULL REFERENCES project_groups(id) ON DELETE CASCADE,
+        panel_member_id INTEGER NOT NULL REFERENCES faculty(id) ON DELETE CASCADE,
+        assigned_by     INTEGER REFERENCES users(id),
+        assigned_at     TIMESTAMPTZ DEFAULT NOW(),
+        status          VARCHAR(20) NOT NULL DEFAULT 'ASSIGNED'
+                        CHECK (status IN ('ASSIGNED','COMPLETED','REASSIGNED'))
+      )
+    `);
+
+    // ─── PROJECT EVALUATIONS ──────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS project_evaluations (
+        id                  SERIAL PRIMARY KEY,
+        panel_assignment_id INTEGER UNIQUE NOT NULL REFERENCES project_panel_assignments(id) ON DELETE CASCADE,
+        status              VARCHAR(20) NOT NULL DEFAULT 'DRAFT'
+                            CHECK (status IN ('DRAFT','SUBMITTED','LOCKED')),
+        submitted_at        TIMESTAMPTZ,
+        overall_remarks     TEXT,
+        is_unlocked         BOOLEAN DEFAULT FALSE,
+        unlocked_by         INTEGER REFERENCES users(id),
+        unlocked_at         TIMESTAMPTZ,
+        unlock_reason       TEXT
+      )
+    `);
+
+    // ─── PROJECT EVALUATION SCORES ────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS project_evaluation_scores (
+        id            SERIAL PRIMARY KEY,
+        evaluation_id INTEGER NOT NULL REFERENCES project_evaluations(id) ON DELETE CASCADE,
+        criterion_id  INTEGER NOT NULL REFERENCES project_stage_criteria(id) ON DELETE CASCADE,
+        marks_awarded NUMERIC(5,2) NOT NULL,
+        remark        TEXT,
+        UNIQUE(evaluation_id, criterion_id)
+      )
+    `);
+
+    // ─── PROJECT SCORE RELEASES ───────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS project_score_releases (
+        id          SERIAL PRIMARY KEY,
+        stage_id    INTEGER NOT NULL REFERENCES project_evaluation_stages(id) ON DELETE CASCADE,
+        group_id    INTEGER REFERENCES project_groups(id) ON DELETE CASCADE,
+        released_by INTEGER NOT NULL REFERENCES users(id),
+        released_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
     // ─── INDEXES ──────────────────────────────────────────────────────────────
     await client.query(`CREATE INDEX IF NOT EXISTS idx_marks_student ON marks(student_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_marks_subject ON marks(subject_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_marks_status  ON marks(status)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_audit_record  ON audit_log(table_name, record_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_reval_student ON revaluation_requests(student_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_proj_group_code ON project_groups(group_code)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_proj_group_guide ON project_groups(guide_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_proj_panel_group ON project_panel_assignments(group_id, stage_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_proj_panel_member ON project_panel_assignments(panel_member_id)`);
 
     await client.query('COMMIT');
     console.log('[Migration] All tables created successfully');
