@@ -103,21 +103,24 @@ export default function LabMaintenance() {
   const getStatusBadge = (status) => {
     if (status === 'Operational') {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-800">
-          ● Operational
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          Operational
         </span>
       );
     }
     if (status === 'Under Maintenance') {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800">
-          ▲ Under Maintenance
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-semibold bg-red-50 text-red-700 border border-red-200">
+          <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+          Under Maintenance
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800">
-        ◈ Routine Inspection
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+        <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+        Routine Inspection
       </span>
     );
   };
@@ -127,7 +130,7 @@ export default function LabMaintenance() {
       {/* Page header */}
       <div className="mb-8 pb-5 border-b border-rule flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-serif text-3xl font-bold text-ink">Lab Maintainence</h1>
+          <h1 className="font-serif text-3xl font-bold text-ink">Lab Maintenance</h1>
           <p className="text-base text-draft mt-1 font-medium">
             Department of Computer Engineering · Equipment Calibration &amp; Service Logs
           </p>
