@@ -11,22 +11,32 @@ export default function Login() {
   const [showForgot, setShowForgot] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotSent, setForgotSent]   = useState(false);
-  const { login } = useAuth();
+  const { login, loginDemo } = useAuth();
   const navigate  = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    if (!identifier.trim() || !password) return;
+    if (!identifier.trim()) return;
     setLoading(true);
     try {
       const user = await login(identifier.trim(), password);
       const routes = { student: '/student', faculty: '/faculty', hod: '/hod' };
-      navigate(routes[user.role] || '/login', { replace: true });
+      navigate(routes[user?.role] || '/student', { replace: true });
     } catch (err) {
       const msg = err.response?.data?.error || 'Login failed. Please check your credentials.';
       toast.error(msg);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleQuickDemo = (role) => {
+    try {
+      const user = loginDemo(role);
+      const routes = { student: '/student', faculty: '/faculty', hod: '/hod' };
+      navigate(routes[user?.role] || '/student', { replace: true });
+    } catch {
+      toast.error('Unable to sign in as demo user');
     }
   };
 
@@ -152,14 +162,41 @@ export default function Login() {
               </button>
 
               {/* Dev credentials hint */}
-              <div className="mt-10 p-4 bg-white border border-rule rounded-sm">
-                <p className="text-xs font-semibold text-draft uppercase tracking-wide mb-2">
-                  Demo credentials
+              <div className="mt-8 p-4 bg-white border border-rule rounded-sm">
+                <p className="text-xs font-semibold text-draft uppercase tracking-wide mb-2.5">
+                  Demo credentials (click to quick sign-in)
                 </p>
-                <div className="space-y-1 text-xs text-ink font-mono">
-                  <p>HOD:     hod@meswadiacoe.edu / hod@123</p>
-                  <p>Faculty: rajan@meswadiacoe.edu / faculty@123</p>
-                  <p>Student: ce6a001@meswadiacoe.edu / student@123</p>
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => handleQuickDemo('student')}
+                    className="w-full text-left p-2 rounded border border-rule hover:border-navy hover:bg-blue-50 transition-colors flex items-center justify-between group"
+                  >
+                    <span className="text-xs font-medium text-ink">
+                      Student: <span className="font-mono text-draft group-hover:text-navy">ce6a001@meswadiacoe.edu</span>
+                    </span>
+                    <span className="text-[10px] text-navy font-semibold uppercase">Sign in →</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickDemo('faculty')}
+                    className="w-full text-left p-2 rounded border border-rule hover:border-navy hover:bg-blue-50 transition-colors flex items-center justify-between group"
+                  >
+                    <span className="text-xs font-medium text-ink">
+                      Faculty: <span className="font-mono text-draft group-hover:text-navy">rajan@meswadiacoe.edu</span>
+                    </span>
+                    <span className="text-[10px] text-navy font-semibold uppercase">Sign in →</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickDemo('hod')}
+                    className="w-full text-left p-2 rounded border border-rule hover:border-navy hover:bg-blue-50 transition-colors flex items-center justify-between group"
+                  >
+                    <span className="text-xs font-medium text-ink">
+                      HOD: <span className="font-mono text-draft group-hover:text-navy">hod@meswadiacoe.edu</span>
+                    </span>
+                    <span className="text-[10px] text-navy font-semibold uppercase">Sign in →</span>
+                  </button>
                 </div>
               </div>
             </>

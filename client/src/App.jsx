@@ -31,6 +31,10 @@ import HODAnalytics   from './pages/hod/HODAnalytics'
 import HODRevaluation from './pages/hod/HODRevaluation'
 import AuditLog       from './pages/hod/AuditLog'
 
+// Alumni
+import AlumniFeedback      from './pages/alumni/AlumniFeedback'
+import DistinguishedAlumni from './pages/alumni/DistinguishedAlumni'
+
 function StudentLayout({ children }) {
   return <ProtectedRoute role="student"><Layout>{children}</Layout></ProtectedRoute>
 }
@@ -39,6 +43,10 @@ function FacultyLayout({ children }) {
 }
 function HODLayout({ children }) {
   return <ProtectedRoute role="hod"><Layout>{children}</Layout></ProtectedRoute>
+}
+// Alumni pages are accessible to any authenticated user (no role restriction)
+function AnyLayout({ children }) {
+  return <ProtectedRoute><Layout>{children}</Layout></ProtectedRoute>
 }
 
 export default function App() {
@@ -79,6 +87,10 @@ export default function App() {
           <Route path="/hod/analytics" element={<HODLayout><HODAnalytics /></HODLayout>} />
           <Route path="/hod/revaluation" element={<HODLayout><HODRevaluation /></HODLayout>} />
           <Route path="/hod/audit" element={<HODLayout><AuditLog /></HODLayout>} />
+
+          {/* Alumni */}
+          <Route path="/alumni/feedback"      element={<AnyLayout><AlumniFeedback /></AnyLayout>} />
+          <Route path="/alumni/distinguished" element={<AnyLayout><DistinguishedAlumni /></AnyLayout>} />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/login" replace />} />
