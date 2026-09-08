@@ -1,0 +1,1682 @@
+[
+  {
+    "roll_no": "1",
+    "seat_no": "T400320365",
+    "prn_no": "72312799K",
+    "name": "AADISH PRAMOD SONAWANE",
+    "in_sem": 23.0
+  },
+  {
+    "roll_no": "2",
+    "seat_no": "T400320366",
+    "prn_no": "72312802C",
+    "name": "ACHAWALE VISHWAJA PRADEEP",
+    "in_sem": 19.0
+  },
+  {
+    "roll_no": "3",
+    "seat_no": "T400320367",
+    "prn_no": "72312804K",
+    "name": "ADITYA KUMAR MISHRA",
+    "in_sem": 20.0
+  },
+  {
+    "roll_no": "4",
+    "seat_no": "T400320368",
+    "prn_no": "72312807D",
+    "name": "ADITYA SANTOSH PATIL",
+    "in_sem": 22.0
+  },
+  {
+    "roll_no": "5",
+    "seat_no": "T400320369",
+    "prn_no": "72445408L",
+    "name": "AHER ANUJA LAXMAN",
+    "in_sem": 17.0
+  },
+  {
+    "roll_no": "6",
+    "seat_no": "T400320370",
+    "prn_no": "72312814G",
+    "name": "AMAN MUNDE",
+    "in_sem": 16.0
+  },
+  {
+    "roll_no": "7",
+    "seat_no": "T400320371",
+    "prn_no": "72445409J",
+    "name": "ANARASE AVISHKAR VAMAN",
+    "in_sem": 18.0
+  },
+  {
+    "roll_no": "8",
+    "seat_no": "T400320372",
+    "prn_no": "72312816C",
+    "name": "ANDHALE DIPALI GAJANAN",
+    "in_sem": 22.0
+  },
+  {
+    "roll_no": "9",
+    "seat_no": "T400320373",
+    "prn_no": "72445410B",
+    "name": "ANUJ ARJUN GHOLVE",
+    "in_sem": 12.0
+  },
+  {
+    "roll_no": "10",
+    "seat_no": "T400320374",
+    "prn_no": "72312818K",
+    "name": "ANUJ SANJAY NANHE",
+    "in_sem": 12.0
+  },
+  {
+    "roll_no": "11",
+    "seat_no": "T400320375",
+    "prn_no": "72312819H",
+    "name": "ARDE SHUBHANGI TULASHIRAM",
+    "in_sem": 22.0
+  },
+  {
+    "roll_no": "12",
+    "seat_no": "T400320376",
+    "prn_no": "72445411L",
+    "name": "ARYAN RAHUL WABLE",
+    "in_sem": 19.0
+  },
+  {
+    "roll_no": "13",
+    "seat_no": "T400320377",
+    "prn_no": "72445412J",
+    "name": "ASAWA VED SANTOSH",
+    "in_sem": 14.0
+  },
+  {
+    "roll_no": "14",
+    "seat_no": "T400320378",
+    "prn_no": "72312825B",
+    "name": "BADAVE ANAYA DILIP",
+    "in_sem": 22.0
+  },
+  {
+    "roll_no": "15",
+    "seat_no": "T400320379",
+    "prn_no": "72312828G",
+    "name": "BAGWAN ASADALI JAVED",
+    "in_sem": 13.0
+  },
+  {
+    "roll_no": "16",
+    "seat_no": "T400320380",
+    "prn_no": "72312829E",
+    "name": "BAMBALE RUTUJA CHANDRAKANT",
+    "in_sem": 16.0
+  },
+  {
+    "roll_no": "17",
+    "seat_no": "T400320381",
+    "prn_no": "72312830J",
+    "name": "BANGALE ADWAIT BHALCHANDRA",
+    "in_sem": 18.0
+  },
+  {
+    "roll_no": "18",
+    "seat_no": "T400320382",
+    "prn_no": "72312831G",
+    "name": "BANKAR RUSHI NITIN",
+    "in_sem": 13.0
+  },
+  {
+    "roll_no": "19",
+    "seat_no": "T400320383",
+    "prn_no": "72312835K",
+    "name": "BARI MANSI YOGESH",
+    "in_sem": 21.0
+  },
+  {
+    "roll_no": "20",
+    "seat_no": "T400320384",
+    "prn_no": "72445413G",
+    "name": "BELITKAR RAM NARENDRA",
+    "in_sem": 20.0
+  },
+  {
+    "roll_no": "21",
+    "seat_no": "T400320385",
+    "prn_no": "72312837F",
+    "name": "BESIKRAO ATHARVA GOURISHANKAR",
+    "in_sem": 21.0
+  },
+  {
+    "roll_no": "22",
+    "seat_no": "T400320386",
+    "prn_no": "72312841D",
+    "name": "BHAWALE SANIKA ARJUN",
+    "in_sem": 21.0
+  },
+  {
+    "roll_no": "23",
+    "seat_no": "",
+    "prn_no": "72445414E",
+    "name": "BHOSALE CHAITRALEE SAMEER",
+    "in_sem": null
+  },
+  {
+    "roll_no": "24",
+    "seat_no": "",
+    "prn_no": "72312845G",
+    "name": "BHOSALE RAJVEER MANOJ",
+    "in_sem": null
+  },
+  {
+    "roll_no": "25",
+    "seat_no": "T400320387",
+    "prn_no": "72312849K",
+    "name": "BHUJBAL SHRADDHA GANESH",
+    "in_sem": 19.0
+  },
+  {
+    "roll_no": "26",
+    "seat_no": "T400320388",
+    "prn_no": "72312851M",
+    "name": "BHUTARE KRUSHNA SANJAY",
+    "in_sem": 12.0
+  },
+  {
+    "roll_no": "27",
+    "seat_no": "T400320389",
+    "prn_no": "72312852K",
+    "name": "BIRE PRASAD BALASAHEB",
+    "in_sem": 14.0
+  },
+  {
+    "roll_no": "28",
+    "seat_no": "T400320391",
+    "prn_no": "72312855D",
+    "name": "BOTE SACHI DADASAHEB",
+    "in_sem": 17.0
+  },
+  {
+    "roll_no": "29",
+    "seat_no": "T400320392",
+    "prn_no": "72312856B",
+    "name": "BUTALA AYUSH SANJAY",
+    "in_sem": 15.0
+  },
+  {
+    "roll_no": "30",
+    "seat_no": "T400320393",
+    "prn_no": "72312858J",
+    "name": "CHAITANYA KADBANE",
+    "in_sem": 13.0
+  },
+  {
+    "roll_no": "31",
+    "seat_no": "T400320394",
+    "prn_no": "72312859G",
+    "name": "CHAKOTE HARSH GANGADHAR",
+    "in_sem": 20.0
+  },
+  {
+    "roll_no": "32",
+    "seat_no": "T400320396",
+    "prn_no": "72312863E",
+    "name": "CHAUDHARI SAMIKSHA SUNIL",
+    "in_sem": 19.0
+  },
+  {
+    "roll_no": "33",
+    "seat_no": "T400320397",
+    "prn_no": "72312864C",
+    "name": "CHAUGULE AVEJ MOHAMMADSAKLAIN",
+    "in_sem": 12.0
+  },
+  {
+    "roll_no": "34",
+    "seat_no": "T400320398",
+    "prn_no": "72312865M",
+    "name": "CHAVAN DARSHAN PRAKASH",
+    "in_sem": 17.0
+  },
+  {
+    "roll_no": "35",
+    "seat_no": "T400320399",
+    "prn_no": "72445415C",
+    "name": "CHAVAN ONKAR ANIL",
+    "in_sem": 16.0
+  },
+  {
+    "roll_no": "36",
+    "seat_no": "T400320400",
+    "prn_no": "72312866K",
+    "name": "CHAVAN PRAMOD RAJABHAU",
+    "in_sem": 15.0
+  },
+  {
+    "roll_no": "37",
+    "seat_no": "T400320401",
+    "prn_no": "72312868F",
+    "name": "CHAVAN SAKSHI SANDEEP",
+    "in_sem": 19.0
+  },
+  {
+    "roll_no": "38",
+    "seat_no": "T400320402",
+    "prn_no": "72312869D",
+    "name": "CHAVAN SHUBHAM RAVIKANT",
+    "in_sem": 20.0
+  },
+  {
+    "roll_no": "39",
+    "seat_no": "T400320403",
+    "prn_no": "72312871F",
+    "name": "CHAVHAN ABHISHEK ARJUN",
+    "in_sem": 17.0
+  },
+  {
+    "roll_no": "40",
+    "seat_no": "T400320404",
+    "prn_no": "72236970M",
+    "name": "DABHADE MAYUR BHIKAN",
+    "in_sem": 6.0
+  },
+  {
+    "roll_no": "41",
+    "seat_no": "T400320405",
+    "prn_no": "72312880E",
+    "name": "DAHATONDE ARYAN PARMANAND",
+    "in_sem": 15.0
+  },
+  {
+    "roll_no": "42",
+    "seat_no": "T400320406",
+    "prn_no": "72312881C",
+    "name": "DAKE YUVRAJ RAJENDRA",
+    "in_sem": 21.0
+  },
+  {
+    "roll_no": "43",
+    "seat_no": "T400320408",
+    "prn_no": "72312891L",
+    "name": "DEVKATE NIRVAHITA DATTATRAY",
+    "in_sem": 12.0
+  },
+  {
+    "roll_no": "44",
+    "seat_no": "T400320409",
+    "prn_no": "72312894E",
+    "name": "DHANAWADE TUSHAR CHANDRAKANT",
+    "in_sem": 9.0
+  },
+  {
+    "roll_no": "45",
+    "seat_no": "T400320410",
+    "prn_no": "72312895C",
+    "name": "DHANWADE SAHIL NARENDRA",
+    "in_sem": 11.0
+  },
+  {
+    "roll_no": "46",
+    "seat_no": "T400320411",
+    "prn_no": "72312896M",
+    "name": "DHAVALE ARTH ONKAR",
+    "in_sem": 12.0
+  },
+  {
+    "roll_no": "47",
+    "seat_no": "T400320412",
+    "prn_no": "72312897K",
+    "name": "DHAWALE PRATIK RAJENDRA",
+    "in_sem": 10.0
+  },
+  {
+    "roll_no": "48",
+    "seat_no": "",
+    "prn_no": "72236994J",
+    "name": "DHOME SOHAM HAUSHIRAM",
+    "in_sem": null
+  },
+  {
+    "roll_no": "49",
+    "seat_no": "T400320413",
+    "prn_no": "72312900C",
+    "name": "DHORE SHRIKANT SANDIP",
+    "in_sem": 14.0
+  },
+  {
+    "roll_no": "50",
+    "seat_no": "T400320414",
+    "prn_no": "72312902K",
+    "name": "DHUMAL SHREYAS SACHIN",
+    "in_sem": 13.0
+  },
+  {
+    "roll_no": "51",
+    "seat_no": "T400320415",
+    "prn_no": "72312903H",
+    "name": "DHUMAL VIVEK VILAS",
+    "in_sem": 11.0
+  },
+  {
+    "roll_no": "52",
+    "seat_no": "",
+    "prn_no": "72312904F",
+    "name": "DHURVE DARSHAN RAMESH",
+    "in_sem": null
+  },
+  {
+    "roll_no": "53",
+    "seat_no": "T400320418",
+    "prn_no": "72312907L",
+    "name": "DIYA ZALPURI",
+    "in_sem": 13.0
+  },
+  {
+    "roll_no": "54",
+    "seat_no": "T400320419",
+    "prn_no": "72445416M",
+    "name": "GAIKWAD ANUSHKA DEEPAK",
+    "in_sem": 17.0
+  },
+  {
+    "roll_no": "55",
+    "seat_no": "T400320420",
+    "prn_no": "72312915M",
+    "name": "GAIKWAD OMKAR MARUTI",
+    "in_sem": 10.0
+  },
+  {
+    "roll_no": "56",
+    "seat_no": "T400320421",
+    "prn_no": "72312917H",
+    "name": "GAIKWAD SAMYAK AMIT",
+    "in_sem": 13.0
+  },
+  {
+    "roll_no": "57",
+    "seat_no": "T400320422",
+    "prn_no": "72312920H",
+    "name": "GAIKWAD VAIBHAVI VIJAYKUMAR",
+    "in_sem": 13.0
+  },
+  {
+    "roll_no": "58",
+    "seat_no": "T400320423",
+    "prn_no": "72312921F",
+    "name": "GAIKWAD VRUNDA RAJKUMAR",
+    "in_sem": 13.0
+  },
+  {
+    "roll_no": "59",
+    "seat_no": "T400320424",
+    "prn_no": "72445417K",
+    "name": "GAMBHIR CHINMAY MAHESH",
+    "in_sem": 17.0
+  },
+  {
+    "roll_no": "60",
+    "seat_no": "T400320426",
+    "prn_no": "72312927E",
+    "name": "GAURANG VINAYAK KHADE",
+    "in_sem": 12.0
+  },
+  {
+    "roll_no": "61",
+    "seat_no": "T400320427",
+    "prn_no": "72312930E",
+    "name": "GAWADE RAJAT RAMESH",
+    "in_sem": 14.0
+  },
+  {
+    "roll_no": "62",
+    "seat_no": "T400320428",
+    "prn_no": "72312932M",
+    "name": "GAWATE SARTHAK HEMANT",
+    "in_sem": 13.0
+  },
+  {
+    "roll_no": "63",
+    "seat_no": "T400320429",
+    "prn_no": "72312936D",
+    "name": "GHULE APEKSHA ASHOK",
+    "in_sem": 17.0
+  },
+  {
+    "roll_no": "64",
+    "seat_no": "T400320431",
+    "prn_no": "72312939J",
+    "name": "GOYAL KASHVI RAJESH",
+    "in_sem": 17.0
+  },
+  {
+    "roll_no": "65",
+    "seat_no": "T400320432",
+    "prn_no": "72312940B",
+    "name": "GOYDANI ANVESHA RAKESH",
+    "in_sem": 16.0
+  },
+  {
+    "roll_no": "66",
+    "seat_no": "T400320433",
+    "prn_no": "72312942J",
+    "name": "GUNDECHA SIDDHI SUHAS",
+    "in_sem": 22.0
+  },
+  {
+    "roll_no": "67",
+    "seat_no": "T400320434",
+    "prn_no": "72237037H",
+    "name": "HARKAL SANKET SANJAY",
+    "in_sem": 11.0
+  },
+  {
+    "roll_no": "68",
+    "seat_no": "T400320435",
+    "prn_no": "72312951H",
+    "name": "HARSHAVARDHAN RAMCHANDRA GHARAL",
+    "in_sem": 24.0
+  },
+  {
+    "roll_no": "69",
+    "seat_no": "T400320436",
+    "prn_no": "72312953D",
+    "name": "HOLAM PRASHANT DATTATRAY",
+    "in_sem": 23.0
+  },
+  {
+    "roll_no": "70",
+    "seat_no": "T400320437",
+    "prn_no": "72312954B",
+    "name": "HOLE ANSHU NITIN",
+    "in_sem": 14.0
+  },
+  {
+    "roll_no": "71",
+    "seat_no": "T400320439",
+    "prn_no": "72445418H",
+    "name": "INAMDAR AFRIN JAVED",
+    "in_sem": 17.0
+  },
+  {
+    "roll_no": "72",
+    "seat_no": "T400320440",
+    "prn_no": "72312958E",
+    "name": "JADHAV AARYA MILIND",
+    "in_sem": 21.0
+  },
+  {
+    "roll_no": "73",
+    "seat_no": "T400320442",
+    "prn_no": "72312961E",
+    "name": "JADHAV MOHIT MOHAN",
+    "in_sem": 12.0
+  },
+  {
+    "roll_no": "74",
+    "seat_no": "T400320443",
+    "prn_no": "72312968B",
+    "name": "JAGTAP SANIKA MAHESH",
+    "in_sem": 4.0
+  },
+  {
+    "roll_no": "75",
+    "seat_no": "T400320444",
+    "prn_no": "72312969L",
+    "name": "JAGTAP SNEHAL NAGNATH",
+    "in_sem": 13.0
+  },
+  {
+    "roll_no": "76",
+    "seat_no": "T400320445",
+    "prn_no": "72312971B",
+    "name": "JAMDADE ADITYA GANESH",
+    "in_sem": 15.0
+  },
+  {
+    "roll_no": "77",
+    "seat_no": "T400320446",
+    "prn_no": "72445419F",
+    "name": "JAVARAT ADITYA MAHENDRA",
+    "in_sem": 18.0
+  },
+  {
+    "roll_no": "78",
+    "seat_no": "T400320447",
+    "prn_no": "72312976C",
+    "name": "JEURKAR VEDIKA VIJAY",
+    "in_sem": 10.0
+  },
+  {
+    "roll_no": "79",
+    "seat_no": "T400320448",
+    "prn_no": "72312977M",
+    "name": "JIJORE YASHRAJ SUDAM",
+    "in_sem": 17.0
+  },
+  {
+    "roll_no": "80",
+    "seat_no": "T400320449",
+    "prn_no": "72312978K",
+    "name": "JIMEET KALAL",
+    "in_sem": 10.0
+  },
+  {
+    "roll_no": "81",
+    "seat_no": "T400320451",
+    "prn_no": "72445420K",
+    "name": "KADAM KANAK AJIT",
+    "in_sem": 21.0
+  },
+  {
+    "roll_no": "82",
+    "seat_no": "T400320453",
+    "prn_no": "72312988G",
+    "name": "KADGANCHI MEGHRAJ JAGDISH",
+    "in_sem": 18.0
+  },
+  {
+    "roll_no": "83",
+    "seat_no": "T400320454",
+    "prn_no": "72312990J",
+    "name": "KALANI KESHAV KAMALKISHOR",
+    "in_sem": 23.0
+  },
+  {
+    "roll_no": "84",
+    "seat_no": "T400320455",
+    "prn_no": "72312993C",
+    "name": "KALHAPURE VAIBHAV DIPAK",
+    "in_sem": 12.0
+  },
+  {
+    "roll_no": "85",
+    "seat_no": "T400320456",
+    "prn_no": "72312994M",
+    "name": "KAMAAL TABISH AHMAD JAVED",
+    "in_sem": 16.0
+  },
+  {
+    "roll_no": "86",
+    "seat_no": "T400320457",
+    "prn_no": "72312995K",
+    "name": "KAMBLE NIKHIL RAJKUMAR",
+    "in_sem": 9.0
+  },
+  {
+    "roll_no": "87",
+    "seat_no": "",
+    "prn_no": "72237087D",
+    "name": "KAMBLE NIRANJAN MAHESHKUMAR",
+    "in_sem": null
+  },
+  {
+    "roll_no": "88",
+    "seat_no": "T400320459",
+    "prn_no": "72312999B",
+    "name": "KANADE MRUNAL GANESH",
+    "in_sem": 19.0
+  },
+  {
+    "roll_no": "89",
+    "seat_no": "T400320460",
+    "prn_no": "72313001K",
+    "name": "KANDHARKAR TANVI PRANIL",
+    "in_sem": 22.0
+  },
+  {
+    "roll_no": "90",
+    "seat_no": "T400320461",
+    "prn_no": "72313003F",
+    "name": "KARDILE SOHAM VAIBHAV",
+    "in_sem": 23.0
+  },
+  {
+    "roll_no": "91",
+    "seat_no": "T400320463",
+    "prn_no": "72313005B",
+    "name": "KATILE SHRAVANI ASHOK",
+    "in_sem": 17.0
+  },
+  {
+    "roll_no": "92",
+    "seat_no": "",
+    "prn_no": "72237093J",
+    "name": "KAWALE TEJAS ASHOK",
+    "in_sem": null
+  },
+  {
+    "roll_no": "93",
+    "seat_no": "T400320464",
+    "prn_no": "72445421H",
+    "name": "KAZI SUFIYAN JAMIL",
+    "in_sem": 13.0
+  },
+  {
+    "roll_no": "94",
+    "seat_no": "T400320465",
+    "prn_no": "72313009E",
+    "name": "KESHARWANI AYUSH JAGDISHPRASAD",
+    "in_sem": 13.0
+  },
+  {
+    "roll_no": "95",
+    "seat_no": "T400320466",
+    "prn_no": "72313010J",
+    "name": "KESHRI AYUSH ALOK",
+    "in_sem": 17.0
+  },
+  {
+    "roll_no": "96",
+    "seat_no": "T400320467",
+    "prn_no": "72313013C",
+    "name": "KHALADKAR SHRAVANI ANIL",
+    "in_sem": 24.0
+  },
+  {
+    "roll_no": "97",
+    "seat_no": "T400320468",
+    "prn_no": "72313016H",
+    "name": "KHANDAGALE VIJAYKUMAR DIPAK",
+    "in_sem": 18.0
+  },
+  {
+    "roll_no": "98",
+    "seat_no": "T400320469",
+    "prn_no": "72313018D",
+    "name": "KHAPARDE ADITI RAJESH",
+    "in_sem": 17.0
+  },
+  {
+    "roll_no": "99",
+    "seat_no": "T400320470",
+    "prn_no": "72445422F",
+    "name": "KHARTMOL MAMATA SOMAJI",
+    "in_sem": 23.0
+  },
+  {
+    "roll_no": "100",
+    "seat_no": "T400320471",
+    "prn_no": "72313021D",
+    "name": "KHARWADE AYUSH SAGAR",
+    "in_sem": 15.0
+  },
+  {
+    "roll_no": "101",
+    "seat_no": "T400320472",
+    "prn_no": "72313022B",
+    "name": "KHATADE PRANAV KUNDAN",
+    "in_sem": 21.0
+  },
+  {
+    "roll_no": "102",
+    "seat_no": "T400320473",
+    "prn_no": "72445423D",
+    "name": "KODALKAR SUYASH SHRIRANG",
+    "in_sem": 6.0
+  },
+  {
+    "roll_no": "103",
+    "seat_no": "T400320474",
+    "prn_no": "72313028M",
+    "name": "KOREKAR SHWETA ANIL",
+    "in_sem": 24.0
+  },
+  {
+    "roll_no": "104",
+    "seat_no": "T400320475",
+    "prn_no": "72313032K",
+    "name": "KULKARNI MANASWI SANTOSH",
+    "in_sem": 20.0
+  },
+  {
+    "roll_no": "105",
+    "seat_no": "T400320476",
+    "prn_no": "72313034F",
+    "name": "KULKARNI SARVADA SWANAND",
+    "in_sem": 23.0
+  },
+  {
+    "roll_no": "106",
+    "seat_no": "T400320477",
+    "prn_no": "72313038J",
+    "name": "KUMBHAR SHRADHA RAJKUMAR",
+    "in_sem": 20.0
+  },
+  {
+    "roll_no": "107",
+    "seat_no": "T400320478",
+    "prn_no": "72313040L",
+    "name": "KUNBITHOP BHAGYASHRI MAHADEO",
+    "in_sem": 17.0
+  },
+  {
+    "roll_no": "108",
+    "seat_no": "T400320479",
+    "prn_no": "72313044C",
+    "name": "LANGHI MAYUR RAJESH",
+    "in_sem": 20.0
+  },
+  {
+    "roll_no": "109",
+    "seat_no": "T400320481",
+    "prn_no": "72313046K",
+    "name": "LOKHANDE YASHRAJ SAMBHAJI",
+    "in_sem": 14.0
+  },
+  {
+    "roll_no": "110",
+    "seat_no": "T400320482",
+    "prn_no": "72313047H",
+    "name": "LOLGE SIDDHI SHAILESH",
+    "in_sem": 20.0
+  },
+  {
+    "roll_no": "111",
+    "seat_no": "T400320483",
+    "prn_no": "72313048F",
+    "name": "LONDHE KRUTIKA VIVEK",
+    "in_sem": 18.0
+  },
+  {
+    "roll_no": "112",
+    "seat_no": "T400320485",
+    "prn_no": "72313050H",
+    "name": "MADIKUNT PARTH PRASAD",
+    "in_sem": 19.0
+  },
+  {
+    "roll_no": "113",
+    "seat_no": "T400320486",
+    "prn_no": "72313055J",
+    "name": "MANDAVKAR RAJ SANDEEP",
+    "in_sem": 24.0
+  },
+  {
+    "roll_no": "114",
+    "seat_no": "T400320487",
+    "prn_no": "72313056G",
+    "name": "MANE SAEE SANTOSH",
+    "in_sem": 23.0
+  },
+  {
+    "roll_no": "115",
+    "seat_no": "T400320488",
+    "prn_no": "72445424B",
+    "name": "MANE YASHAWANT DAYANAND",
+    "in_sem": 16.0
+  },
+  {
+    "roll_no": "116",
+    "seat_no": "T400320489",
+    "prn_no": "72313059M",
+    "name": "MANGLE SHREY VILAS",
+    "in_sem": 21.0
+  },
+  {
+    "roll_no": "117",
+    "seat_no": "T400320490",
+    "prn_no": "72313060E",
+    "name": "MANSHI",
+    "in_sem": 21.0
+  },
+  {
+    "roll_no": "118",
+    "seat_no": "",
+    "prn_no": "72313061C",
+    "name": "MARNE SUMEDH NILESH",
+    "in_sem": 13.0
+  },
+  {
+    "roll_no": "119",
+    "seat_no": "T400320491",
+    "prn_no": "72313062M",
+    "name": "MEDHI MANASWA MAKARAND",
+    "in_sem": 21.0
+  },
+  {
+    "roll_no": "120",
+    "seat_no": "T400320492",
+    "prn_no": "72313063K",
+    "name": "MEHTA DIYA SUNIL",
+    "in_sem": 15.0
+  },
+  {
+    "roll_no": "121",
+    "seat_no": "T400320493",
+    "prn_no": "72237153F",
+    "name": "MESHRAM PRADYUM PRADEEP",
+    "in_sem": 12.0
+  },
+  {
+    "roll_no": "122",
+    "seat_no": "",
+    "prn_no": "72313068L",
+    "name": "MISAL ROHIT MANOHAR",
+    "in_sem": null
+  },
+  {
+    "roll_no": "123",
+    "seat_no": "T400320494",
+    "prn_no": "72313070B",
+    "name": "MOGALGIDDIKAR HARSH RAJENDRA",
+    "in_sem": 14.0
+  },
+  {
+    "roll_no": "124",
+    "seat_no": "T400320495",
+    "prn_no": "72313072J",
+    "name": "MOHOLKAR PRANALI POPAT",
+    "in_sem": 15.0
+  },
+  {
+    "roll_no": "125",
+    "seat_no": "T400320496",
+    "prn_no": "72313073G",
+    "name": "MORE JETHKUMAR SANJAY",
+    "in_sem": 20.0
+  },
+  {
+    "roll_no": "126",
+    "seat_no": "T400320497",
+    "prn_no": "72313078H",
+    "name": "MUKESH KAMALAKANT DAS",
+    "in_sem": 14.0
+  },
+  {
+    "roll_no": "127",
+    "seat_no": "T400320498",
+    "prn_no": "72313079F",
+    "name": "MUNDHE GURUNATH PRABHAKAR",
+    "in_sem": 12.0
+  },
+  {
+    "roll_no": "128",
+    "seat_no": "T400320499",
+    "prn_no": "72313080K",
+    "name": "MURKUTE RAMKRUSHNA GANGADHAR",
+    "in_sem": 14.0
+  },
+  {
+    "roll_no": "129",
+    "seat_no": "T400320500",
+    "prn_no": "72313081H",
+    "name": "MURTHY PRUTHVI PRASANNAKUMAR",
+    "in_sem": 12.0
+  },
+  {
+    "roll_no": "130",
+    "seat_no": "T400320501",
+    "prn_no": "72313082F",
+    "name": "NAGPAL VISHNUNARAYAN RAKESHKUMAR",
+    "in_sem": 17.0
+  },
+  {
+    "roll_no": "131",
+    "seat_no": "",
+    "prn_no": "72313089C",
+    "name": "NARKE GAURI GANESH",
+    "in_sem": null
+  },
+  {
+    "roll_no": "132",
+    "seat_no": "T400320502",
+    "prn_no": "72313093M",
+    "name": "NIKAM PRASAD SACHIN",
+    "in_sem": null
+  },
+  {
+    "roll_no": "133",
+    "seat_no": "T400320503",
+    "prn_no": "72313098B",
+    "name": "PAKHALE HARSHAD HARISHCHANDRA",
+    "in_sem": 16.0
+  },
+  {
+    "roll_no": "134",
+    "seat_no": "T400320504",
+    "prn_no": "72313099L",
+    "name": "PAL NIHAR NIKHIL",
+    "in_sem": 12.0
+  },
+  {
+    "roll_no": "135",
+    "seat_no": "T400320505",
+    "prn_no": "72313101F",
+    "name": "PANDAV HARSH SHIRISH",
+    "in_sem": 17.0
+  },
+  {
+    "roll_no": "136",
+    "seat_no": "T400320506",
+    "prn_no": "72313104L",
+    "name": "PARDESHI TARUN SANJAY",
+    "in_sem": 12.0
+  },
+  {
+    "roll_no": "137",
+    "seat_no": "T400320507",
+    "prn_no": "72236891H",
+    "name": "PARDESHI VAISHNAVI KIRANSINGH",
+    "in_sem": 13.0
+  },
+  {
+    "roll_no": "138",
+    "seat_no": "T400320508",
+    "prn_no": "72313106G",
+    "name": "PARDHI ROHAN NARESH",
+    "in_sem": 17.0
+  },
+  {
+    "roll_no": "139",
+    "seat_no": "T400320509",
+    "prn_no": "72313108C",
+    "name": "PATHAN NIDA NAAZ ADIL RASHID",
+    "in_sem": 19.0
+  },
+  {
+    "roll_no": "140",
+    "seat_no": "T400320510",
+    "prn_no": "72292648M",
+    "name": "PATIL AARYA SUNIL",
+    "in_sem": null
+  },
+  {
+    "roll_no": "141",
+    "seat_no": "T400320511",
+    "prn_no": "72313109M",
+    "name": "PATIL ADITYA SANTOSH",
+    "in_sem": 8.0
+  },
+  {
+    "roll_no": "142",
+    "seat_no": "T400320512",
+    "prn_no": "72313110E",
+    "name": "PATIL ARYAN SUDHIR",
+    "in_sem": 12.0
+  },
+  {
+    "roll_no": "143",
+    "seat_no": "T400320513",
+    "prn_no": "72313113K",
+    "name": "PATIL KETAN DNYANESHWAR",
+    "in_sem": 10.0
+  },
+  {
+    "roll_no": "144",
+    "seat_no": "T400320514",
+    "prn_no": "72313117B",
+    "name": "PATIL RITESH RAVINDRA",
+    "in_sem": 14.0
+  },
+  {
+    "roll_no": "145",
+    "seat_no": "T400320515",
+    "prn_no": "72313118L",
+    "name": "PATIL SANIKA KRUSHNAT",
+    "in_sem": 12.0
+  },
+  {
+    "roll_no": "146",
+    "seat_no": "T400320516",
+    "prn_no": "72313119J",
+    "name": "PATIL SHARAYU YASHWANT",
+    "in_sem": 13.0
+  },
+  {
+    "roll_no": "147",
+    "seat_no": "T400320517",
+    "prn_no": "72313123G",
+    "name": "PATIL TEJASWINI SATILAL",
+    "in_sem": 17.0
+  },
+  {
+    "roll_no": "148",
+    "seat_no": "T400320518",
+    "prn_no": "72313124E",
+    "name": "PATIL VINIT VIJAY",
+    "in_sem": 12.0
+  },
+  {
+    "roll_no": "149",
+    "seat_no": "T400320519",
+    "prn_no": "72313126M",
+    "name": "PAWAR ADINATH SANTOSH",
+    "in_sem": 12.0
+  },
+  {
+    "roll_no": "150",
+    "seat_no": "T400320520",
+    "prn_no": "72313128H",
+    "name": "PAWAR PRANAV NARENDRA",
+    "in_sem": 12.0
+  },
+  {
+    "roll_no": "151",
+    "seat_no": "",
+    "prn_no": "72313129F",
+    "name": "PAWAR PREM SANJAY",
+    "in_sem": null
+  },
+  {
+    "roll_no": "152",
+    "seat_no": "T400320521",
+    "prn_no": "72313131H",
+    "name": "PAWAR YASH SARJERAO",
+    "in_sem": 14.0
+  },
+  {
+    "roll_no": "153",
+    "seat_no": "",
+    "prn_no": "72237239G",
+    "name": "PAWARA BHUPESH MUKESH",
+    "in_sem": null
+  },
+  {
+    "roll_no": "154",
+    "seat_no": "T400320522",
+    "prn_no": "72313135L",
+    "name": "PRACHI KUMAR NAILKAR",
+    "in_sem": 14.0
+  },
+  {
+    "roll_no": "155",
+    "seat_no": "T400320523",
+    "prn_no": "72313137G",
+    "name": "PRANAV HEMANT SARMUKADDAM",
+    "in_sem": 14.0
+  },
+  {
+    "roll_no": "156",
+    "seat_no": "T400320524",
+    "prn_no": "72313141E",
+    "name": "PRATHAMESH MANGESH CHAVAN",
+    "in_sem": 16.0
+  },
+  {
+    "roll_no": "157",
+    "seat_no": "T400320525",
+    "prn_no": "72313142C",
+    "name": "PRIYANSHU DINESH SHUKLA",
+    "in_sem": 13.0
+  },
+  {
+    "roll_no": "158",
+    "seat_no": "T400320526",
+    "prn_no": "72313143M",
+    "name": "PUJARI SARTHAK RAVINDRA",
+    "in_sem": 12.0
+  },
+  {
+    "roll_no": "159",
+    "seat_no": "T400320527",
+    "prn_no": "72313144K",
+    "name": "R VINESH",
+    "in_sem": 12.0
+  },
+  {
+    "roll_no": "160",
+    "seat_no": "T400320528",
+    "prn_no": "72445425L",
+    "name": "RADE DIYA MAHESH",
+    "in_sem": 21.0
+  },
+  {
+    "roll_no": "161",
+    "seat_no": "T400320529",
+    "prn_no": "72313146F",
+    "name": "RAHANE KHUSHI SUDHIR",
+    "in_sem": 19.0
+  },
+  {
+    "roll_no": "162",
+    "seat_no": "T400320530",
+    "prn_no": "72313147D",
+    "name": "RAJ SANJAY BICHUKALE",
+    "in_sem": 18.0
+  },
+  {
+    "roll_no": "163",
+    "seat_no": "T400320531",
+    "prn_no": "72313148B",
+    "name": "RAJE ADITYA YOGESH",
+    "in_sem": 25.0
+  },
+  {
+    "roll_no": "164",
+    "seat_no": "T400320533",
+    "prn_no": "72445426J",
+    "name": "RATHOD ARYAN RAMKRUSHNA",
+    "in_sem": 7.0
+  },
+  {
+    "roll_no": "165",
+    "seat_no": "T400320534",
+    "prn_no": "72313153J",
+    "name": "RATHOD HRISHIKESH PARSHRAM",
+    "in_sem": 15.0
+  },
+  {
+    "roll_no": "166",
+    "seat_no": "T400320535",
+    "prn_no": "72313155E",
+    "name": "RAUT PRANALEE PRADEEP",
+    "in_sem": 19.0
+  },
+  {
+    "roll_no": "167",
+    "seat_no": "T400320536",
+    "prn_no": "72313157M",
+    "name": "ROHIT SHARMA",
+    "in_sem": 6.0
+  },
+  {
+    "roll_no": "168",
+    "seat_no": "T400320537",
+    "prn_no": "72313158K",
+    "name": "SAFIR FARUK SAYYED",
+    "in_sem": 13.0
+  },
+  {
+    "roll_no": "169",
+    "seat_no": "T400320538",
+    "prn_no": "72313160M",
+    "name": "SAKHARE ANSHUMAN CHANDRASHEKHAR",
+    "in_sem": 10.0
+  },
+  {
+    "roll_no": "170",
+    "seat_no": "T400320539",
+    "prn_no": "72445427G",
+    "name": "SAMIKSHA RAMAKANT KOSALGE",
+    "in_sem": 26.0
+  },
+  {
+    "roll_no": "171",
+    "seat_no": "T400320540",
+    "prn_no": "72313166L",
+    "name": "SAMIKSHA RAMESH KALE",
+    "in_sem": 15.0
+  },
+  {
+    "roll_no": "172",
+    "seat_no": "T400320541",
+    "prn_no": "72313167J",
+    "name": "SANAS ATHARVA RAJENDRA",
+    "in_sem": 22.0
+  },
+  {
+    "roll_no": "173",
+    "seat_no": "T400320542",
+    "prn_no": "72313169E",
+    "name": "SANKPAL SWANAND SANTOSH",
+    "in_sem": 22.0
+  },
+  {
+    "roll_no": "174",
+    "seat_no": "T400320543",
+    "prn_no": "72237277K",
+    "name": "SARANG CHAKHALE",
+    "in_sem": 2.0
+  },
+  {
+    "roll_no": "175",
+    "seat_no": "T400320544",
+    "prn_no": "72313172E",
+    "name": "SATPUTE AKSHAY SOMNATH",
+    "in_sem": 10.0
+  },
+  {
+    "roll_no": "176",
+    "seat_no": "",
+    "prn_no": "72313173C",
+    "name": "SATRAS AVANTI AVINASH",
+    "in_sem": null
+  },
+  {
+    "roll_no": "177",
+    "seat_no": "T400320545",
+    "prn_no": "72313174M",
+    "name": "SATRE SHIVAM ANIL",
+    "in_sem": 12.0
+  },
+  {
+    "roll_no": "178",
+    "seat_no": "T400320546",
+    "prn_no": "72313179B",
+    "name": "SHAIKH AASHIR ALI REHAN",
+    "in_sem": 19.0
+  },
+  {
+    "roll_no": "179",
+    "seat_no": "T400320547",
+    "prn_no": "72313181D",
+    "name": "SHAIKH LAIBA ZAHID ALI",
+    "in_sem": 19.0
+  },
+  {
+    "roll_no": "180",
+    "seat_no": "T400320548",
+    "prn_no": "72445428E",
+    "name": "SHAIKH MAHEK VALISAB",
+    "in_sem": 13.0
+  },
+  {
+    "roll_no": "181",
+    "seat_no": "T400320549",
+    "prn_no": "72313188M",
+    "name": "SHEJAL SONONE",
+    "in_sem": 17.0
+  },
+  {
+    "roll_no": "182",
+    "seat_no": "T400320550",
+    "prn_no": "72313189K",
+    "name": "SHEJUL SAMARTH PRADIP",
+    "in_sem": 20.0
+  },
+  {
+    "roll_no": "183",
+    "seat_no": "T400320551",
+    "prn_no": "72313190C",
+    "name": "SHELAR ADITYA BALIRAM",
+    "in_sem": 14.0
+  },
+  {
+    "roll_no": "184",
+    "seat_no": "T400320552",
+    "prn_no": "72445429C",
+    "name": "SHELAR TEJAS POPAT",
+    "in_sem": 19.0
+  },
+  {
+    "roll_no": "185",
+    "seat_no": "T400320553",
+    "prn_no": "72313191M",
+    "name": "SHELKE ANIKET UMESH",
+    "in_sem": 25.0
+  },
+  {
+    "roll_no": "186",
+    "seat_no": "T400320554",
+    "prn_no": "72313192K",
+    "name": "SHELKE SOHAM ATUL",
+    "in_sem": 16.0
+  },
+  {
+    "roll_no": "187",
+    "seat_no": "T400320555",
+    "prn_no": "72313196B",
+    "name": "SHINDE CHAITANYA BHIMA",
+    "in_sem": 15.0
+  },
+  {
+    "roll_no": "188",
+    "seat_no": "T400320556",
+    "prn_no": "72313197L",
+    "name": "SHINDE DIVYA AMIT",
+    "in_sem": 9.0
+  },
+  {
+    "roll_no": "189",
+    "seat_no": "T400320557",
+    "prn_no": "72313200D",
+    "name": "SHINDE OJASWI DEEPAK",
+    "in_sem": 12.0
+  },
+  {
+    "roll_no": "190",
+    "seat_no": "T400320558",
+    "prn_no": "72445430G",
+    "name": "SHIVANI SANTOSH KAPASE",
+    "in_sem": 16.0
+  },
+  {
+    "roll_no": "191",
+    "seat_no": "T400320559",
+    "prn_no": "72313208K",
+    "name": "SHIVARKAR PRANEEL DEEPAK",
+    "in_sem": 10.0
+  },
+  {
+    "roll_no": "192",
+    "seat_no": "T400320560",
+    "prn_no": "72313209H",
+    "name": "SHRAVAN RAINA",
+    "in_sem": 12.0
+  },
+  {
+    "roll_no": "193",
+    "seat_no": "T400320561",
+    "prn_no": "72445431E",
+    "name": "SIAMWALA HUSAIN HATIM",
+    "in_sem": 11.0
+  },
+  {
+    "roll_no": "194",
+    "seat_no": "T400320562",
+    "prn_no": "72313210M",
+    "name": "SINGH ABHIJEET ARUNESHKUMAR",
+    "in_sem": 6.0
+  },
+  {
+    "roll_no": "195",
+    "seat_no": "T400320563",
+    "prn_no": "72313211K",
+    "name": "SINGH ANMOL SANTOSH",
+    "in_sem": 18.0
+  },
+  {
+    "roll_no": "196",
+    "seat_no": "T400320564",
+    "prn_no": "72445432C",
+    "name": "SONALI VIJAY YEDGE",
+    "in_sem": 17.0
+  },
+  {
+    "roll_no": "197",
+    "seat_no": "T400320566",
+    "prn_no": "72313215B",
+    "name": "SONAWANE ADITYA KIRAN",
+    "in_sem": 7.0
+  },
+  {
+    "roll_no": "198",
+    "seat_no": "T400320567",
+    "prn_no": "72313216L",
+    "name": "SONAWANE DEVANG BHAGWAN",
+    "in_sem": 15.0
+  },
+  {
+    "roll_no": "199",
+    "seat_no": "T400320568",
+    "prn_no": "72313218G",
+    "name": "SONUNE PAVAN ARUN",
+    "in_sem": 19.0
+  },
+  {
+    "roll_no": "200",
+    "seat_no": "T400320569",
+    "prn_no": "72313219E",
+    "name": "SOR SEJAL RAVINDRA",
+    "in_sem": 5.0
+  },
+  {
+    "roll_no": "201",
+    "seat_no": "T400320570",
+    "prn_no": "72313220J",
+    "name": "SRUSHTI SURYAKANT BELIKAR",
+    "in_sem": 18.0
+  },
+  {
+    "roll_no": "202",
+    "seat_no": "T400320571",
+    "prn_no": "72313221G",
+    "name": "SRUSHTI SUSHIL RANMALKAR",
+    "in_sem": 18.0
+  },
+  {
+    "roll_no": "203",
+    "seat_no": "T400320572",
+    "prn_no": "72313223C",
+    "name": "SURVASE ADITYA NAGNATH",
+    "in_sem": 12.0
+  },
+  {
+    "roll_no": "204",
+    "seat_no": "T400320573",
+    "prn_no": "72313226H",
+    "name": "SURYAVANSHI CHANDRAJEET SHARAD",
+    "in_sem": 9.0
+  },
+  {
+    "roll_no": "205",
+    "seat_no": "T400320574",
+    "prn_no": "72313228D",
+    "name": "SURYAWANSHI AISHWARYA GANESH",
+    "in_sem": 20.0
+  },
+  {
+    "roll_no": "206",
+    "seat_no": "T400320670",
+    "prn_no": "72237334B",
+    "name": "SURYAWANSHI SWAPNIL ANIL",
+    "in_sem": null
+  },
+  {
+    "roll_no": "207",
+    "seat_no": "T400320576",
+    "prn_no": "72313229B",
+    "name": "SUTAR SAMRUDDHI UTTAMRAO",
+    "in_sem": 15.0
+  },
+  {
+    "roll_no": "208",
+    "seat_no": "T400320577",
+    "prn_no": "72313234J",
+    "name": "TAMANGONDA RAMNATH VITTHAL",
+    "in_sem": 18.0
+  },
+  {
+    "roll_no": "209",
+    "seat_no": "T400320578",
+    "prn_no": "72313238M",
+    "name": "TAVHARE DEVENDRA SUNIL",
+    "in_sem": 17.0
+  },
+  {
+    "roll_no": "210",
+    "seat_no": "T400320579",
+    "prn_no": "72313239K",
+    "name": "TEJAS RAJKUMAR BURKUL",
+    "in_sem": 20.0
+  },
+  {
+    "roll_no": "211",
+    "seat_no": "T400320580",
+    "prn_no": "72445433M",
+    "name": "THAKARE PURVA DINKAR",
+    "in_sem": 14.0
+  },
+  {
+    "roll_no": "212",
+    "seat_no": "T400320581",
+    "prn_no": "72313240C",
+    "name": "THAKUR HRIDAYESH MAHESH",
+    "in_sem": 14.0
+  },
+  {
+    "roll_no": "213",
+    "seat_no": "T400320582",
+    "prn_no": "72313241M",
+    "name": "THALAKOTTUR GLEN FRANK",
+    "in_sem": 14.0
+  },
+  {
+    "roll_no": "214",
+    "seat_no": "T400320583",
+    "prn_no": "72237368G",
+    "name": "UTTEKAR SAHIL SUNIL",
+    "in_sem": null
+  },
+  {
+    "roll_no": "215",
+    "seat_no": "T400320584",
+    "prn_no": "72445434K",
+    "name": "VAIBHAV GURUSHIDHAPPA KORE",
+    "in_sem": 21.0
+  },
+  {
+    "roll_no": "216",
+    "seat_no": "T400320585",
+    "prn_no": "72445435H",
+    "name": "VAISHNAVI RAHUL TAWARE",
+    "in_sem": 24.0
+  },
+  {
+    "roll_no": "217",
+    "seat_no": "T400320586",
+    "prn_no": "72313245D",
+    "name": "VANJARE AVISHKAR VILAS",
+    "in_sem": 21.0
+  },
+  {
+    "roll_no": "218",
+    "seat_no": "T400320587",
+    "prn_no": "72313248J",
+    "name": "VEDANT SANJAY WADEKAR",
+    "in_sem": 15.0
+  },
+  {
+    "roll_no": "219",
+    "seat_no": "T400320588",
+    "prn_no": "72313249G",
+    "name": "VIKAL THAKUR",
+    "in_sem": 19.0
+  },
+  {
+    "roll_no": "220",
+    "seat_no": "T400320589",
+    "prn_no": "72313250L",
+    "name": "VINEET YELLESWARAPU",
+    "in_sem": 17.0
+  },
+  {
+    "roll_no": "221",
+    "seat_no": "T400320590",
+    "prn_no": "72313252G",
+    "name": "VIVEK JADHAO",
+    "in_sem": 13.0
+  },
+  {
+    "roll_no": "222",
+    "seat_no": "T400320591",
+    "prn_no": "72313254C",
+    "name": "VYAVAHARE SHRAMIK RAJENDRA",
+    "in_sem": 12.0
+  },
+  {
+    "roll_no": "223",
+    "seat_no": "T400320592",
+    "prn_no": "72313256K",
+    "name": "WAGH ADITYA NARAYAN",
+    "in_sem": 23.0
+  },
+  {
+    "roll_no": "224",
+    "seat_no": "",
+    "prn_no": "72313257H",
+    "name": "WAGH YASH SURESH",
+    "in_sem": null
+  },
+  {
+    "roll_no": "225",
+    "seat_no": "T400320593",
+    "prn_no": "72313262D",
+    "name": "YASHVI MILIND JAGTAP",
+    "in_sem": 20.0
+  },
+  {
+    "roll_no": "226",
+    "seat_no": "T400320594",
+    "prn_no": "72313264L",
+    "name": "YELNE HRUSHIKESH ANANTKUMAR",
+    "in_sem": 19.0
+  },
+  {
+    "roll_no": "227",
+    "seat_no": "T400320595",
+    "prn_no": "72313265J",
+    "name": "YEWALE RITIK SUNIL",
+    "in_sem": 23.0
+  },
+  {
+    "roll_no": "228",
+    "seat_no": "T400320596",
+    "prn_no": "72313266G",
+    "name": "ZADE CHAITRALI ADINATH",
+    "in_sem": 23.0
+  },
+  {
+    "roll_no": "229",
+    "seat_no": "T400320597",
+    "prn_no": "72313267E",
+    "name": "ZAWARE UDAYKUMAR NANDKUMAR",
+    "in_sem": 14.0
+  },
+  {
+    "roll_no": "230",
+    "seat_no": "T400320598",
+    "prn_no": "72313268C",
+    "name": "ZURANGE JAYESH VIJAY",
+    "in_sem": 22.0
+  },
+  {
+    "roll_no": "231",
+    "seat_no": "T400320532",
+    "prn_no": "72237254L",
+    "name": "RASHI SINGH",
+    "in_sem": 27.0
+  },
+  {
+    "roll_no": "232",
+    "seat_no": "T400320441",
+    "prn_no": "72292534E",
+    "name": "JADHAV CHAITANYA VIJAYKUMAR",
+    "in_sem": 11.0
+  },
+  {
+    "roll_no": "233",
+    "seat_no": "",
+    "prn_no": "",
+    "name": "ROHINI NAVGHANE",
+    "in_sem": 6.0
+  },
+  {
+    "roll_no": "234",
+    "seat_no": "",
+    "prn_no": "",
+    "name": "AMRUTA JADHAV",
+    "in_sem": 4.0
+  },
+  {
+    "roll_no": "235",
+    "seat_no": "",
+    "prn_no": "",
+    "name": "PRIYANKA PATIL",
+    "in_sem": 12.0
+  },
+  {
+    "roll_no": "236",
+    "seat_no": "",
+    "prn_no": "",
+    "name": "UTKARSH MALI",
+    "in_sem": 12.0
+  },
+  {
+    "roll_no": "237",
+    "seat_no": "",
+    "prn_no": "",
+    "name": "RANJIT BHOI",
+    "in_sem": 8.0
+  },
+  {
+    "roll_no": "238",
+    "seat_no": "",
+    "prn_no": "",
+    "name": "SHUBHANGI PATIL",
+    "in_sem": 6.0
+  },
+  {
+    "roll_no": "239",
+    "seat_no": "",
+    "prn_no": "",
+    "name": "POOJA PAWAR",
+    "in_sem": 24.0
+  },
+  {
+    "roll_no": "240",
+    "seat_no": "",
+    "prn_no": "",
+    "name": "RUTUJA GAIKWAD",
+    "in_sem": 9.0
+  }
+]

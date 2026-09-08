@@ -1,0 +1,30 @@
+{
+  "name": "dept-automation",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "client": "npm --prefix client run dev",
+    "migrate": "node db/migrate.js",
+    "seed": "node db/seed.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "csv-parser": "^3.2.1",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-validator": "^7.3.2",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.3.0",
+    "nodemailer": "^10.0.1",
+    "pg": "^8.23.0",
+    "zod": "^4.5.4"
+  }
+}

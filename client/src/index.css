@@ -1,0 +1,284 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Base Resets & Design Tokens ──────────────────────────────────────────── */
+:root {
+  --ink:     #1A1F36;
+  --navy:    #1E2D5A;
+  --maroon:  #6B2737;
+  --paper:   #F5F3EE;
+  --rule:    #D4D0C8;
+  --surface: #FFFFFF;
+  --pass:    #3B6B47;
+  --fail:    #8B3A3A;
+  --pending: #7A6830;
+  --draft:   #4A5568;
+}
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+    color: var(--ink);
+    background-color: var(--paper);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  h1, h2, h3 {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  /* Tabular figures for all numeric data */
+  table, .tabular-num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  /* Hairline table borders — the defining visual primitive */
+  .result-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+  }
+
+  .result-table th {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 0.8125rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--navy);
+    background-color: #EEF0F7;
+    padding: 0.875rem 1.25rem;
+    border-bottom: 2px solid var(--navy);
+    text-align: left;
+  }
+
+  .result-table th.numeric {
+    text-align: right;
+  }
+
+  .result-table td {
+    padding: 0.875rem 1.25rem;
+    border-bottom: 1px solid var(--rule);
+    color: var(--ink);
+    text-align: left;
+    vertical-align: middle;
+    font-size: 0.95rem;
+  }
+
+  .result-table td.numeric {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .result-table tr:last-child td {
+    border-bottom: 2px solid var(--navy);
+  }
+
+  .result-table tbody tr:hover {
+    background-color: #F0EEF8;
+    transition: background-color 0.12s ease;
+  }
+}
+
+@layer components {
+  /* ─── Buttons ────────────────────────────────────────────────────────────── */
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-5 py-2.5 bg-maroon text-white font-medium text-sm
+           rounded-sm border border-maroon transition-colors duration-150;
+  }
+  .btn-primary:hover {
+    background-color: var(--maroon-dark, #4E1C27);
+    border-color: var(--maroon-dark, #4E1C27);
+  }
+  .btn-primary:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center gap-2 px-5 py-2.5 bg-transparent text-navy font-medium text-sm
+           rounded-sm border border-navy transition-colors duration-150;
+  }
+  .btn-secondary:hover {
+    @apply bg-navy text-white;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 px-4 py-2 text-navy font-medium text-sm
+           rounded-sm transition-colors duration-150;
+  }
+  .btn-ghost:hover {
+    @apply bg-rule;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center gap-2 px-5 py-2.5 bg-fail text-white font-medium text-sm
+           rounded-sm border border-fail transition-colors duration-150;
+  }
+  .btn-danger:hover {
+    background-color: #6B2828;
+  }
+
+  /* ─── Form Inputs ────────────────────────────────────────────────────────── */
+  .input-field {
+    @apply w-full px-3.5 py-2.5 bg-white border border-rule text-ink text-sm
+           focus:outline-none focus:border-navy focus:ring-1 focus:ring-navy
+           transition-colors duration-150 rounded-sm;
+  }
+
+  .input-field::placeholder {
+    @apply text-gray-400;
+  }
+
+  .input-label {
+    @apply block text-xs font-semibold uppercase tracking-wide text-draft mb-1.5;
+  }
+
+  /* ─── Status Badges ──────────────────────────────────────────────────────── */
+  .badge {
+    @apply inline-flex items-center px-3 py-1 text-xs font-semibold rounded border;
+  }
+
+  .badge-published {
+    @apply badge text-pass bg-green-50 border-pass;
+  }
+
+  .badge-approved {
+    @apply badge text-navy bg-blue-50 border-navy;
+  }
+
+  .badge-submitted {
+    @apply badge text-pending bg-amber-50 border-pending;
+  }
+
+  .badge-draft {
+    @apply badge text-draft bg-gray-100 border-gray-300;
+  }
+
+  .badge-not-started {
+    @apply badge text-gray-500 bg-gray-100 border-gray-300;
+  }
+
+  .badge-fail {
+    @apply badge text-fail bg-red-50 border-fail;
+  }
+
+  .badge-backlog {
+    @apply inline-flex items-center px-2.5 py-1 text-xs font-bold text-fail
+           bg-red-50 border border-fail rounded;
+  }
+
+  /* ─── Card / Panel ────────────────────────────────────────────────────────── */
+  .panel {
+    @apply bg-white border border-rule rounded shadow-sm;
+  }
+
+  .panel-header {
+    @apply px-8 py-5 border-b border-rule;
+  }
+
+  /* ─── Navigation Sidebar ─────────────────────────────────────────────────── */
+  .nav-link {
+    @apply flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-blue-100
+           rounded-sm transition-colors duration-150 cursor-pointer;
+  }
+
+  .nav-link:hover, .nav-link.active {
+    @apply bg-white bg-opacity-10 text-white;
+  }
+
+  /* ─── Grade display ──────────────────────────────────────────────────────── */
+  .grade-O { @apply font-bold text-pass; }
+  .grade-A { @apply font-semibold; }
+  .grade-B { @apply font-semibold; }
+  .grade-C { @apply font-semibold text-pending; }
+  .grade-P { @apply font-semibold text-pending; }
+  .grade-F { @apply font-bold text-fail; }
+
+  /* ─── Mark Entry Input ────────────────────────────────────────────────────── */
+  .mark-input {
+    @apply w-20 px-3 py-1.5 text-right text-base font-semibold bg-white border border-rule
+           focus:outline-none focus:border-maroon focus:ring-1 focus:ring-maroon
+           transition-colors rounded;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .mark-input.error {
+    @apply border-fail bg-red-50 ring-1 ring-fail;
+  }
+
+  /* ─── CGPA / SGPA Display ─────────────────────────────────────────────────── */
+  .gpa-display {
+    @apply font-serif text-4xl font-bold text-navy;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ─── Section Divider ────────────────────────────────────────────────────── */
+  .section-rule {
+    @apply w-full h-px bg-rule my-8;
+  }
+
+  /* ─── Notification Strip ─────────────────────────────────────────────────── */
+  .notification-strip {
+    @apply flex items-start gap-3.5 p-4 border-l-4 border-navy bg-blue-50 text-base text-ink rounded-r;
+  }
+
+  /* ─── Empty State ─────────────────────────────────────────────────────────── */
+  .empty-state {
+    @apply flex flex-col items-center justify-center py-16 text-center;
+  }
+
+  /* ─── Anomaly Flag ───────────────────────────────────────────────────────── */
+  .anomaly-flag {
+    @apply flex items-start gap-2 p-3 bg-amber-50 border border-pending rounded-sm text-sm;
+  }
+}
+
+/* ─── Row expand transition ──────────────────────────────────────────────────── */
+.row-expand-enter {
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+}
+.row-expand-enter-active {
+  opacity: 1;
+  max-height: 200px;
+  transition: opacity 200ms ease, max-height 200ms ease;
+}
+.row-expand-exit {
+  opacity: 1;
+  max-height: 200px;
+}
+.row-expand-exit-active {
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: opacity 150ms ease, max-height 150ms ease;
+}
+
+/* ─── Focus visible ──────────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--maroon);
+  outline-offset: 2px;
+}
+
+/* ─── Print styles for mark sheet PDF ───────────────────────────────────────── */
+@media print {
+  body {
+    background: white;
+    color: black;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
