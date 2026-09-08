@@ -206,6 +206,209 @@ async function seed() {
        ON CONFLICT (semester, academic_year, department, division) DO NOTHING`
     );
 
+    // ─── BE PROJECT EVALUATION SEEDING ────────────────────────────────────────
+    console.log('[Seed] Seeding BE Project Evaluation stages, criteria, and groups...');
+
+    // 1. Evaluation Stages
+    const stage1 = await client.query(`
+      INSERT INTO project_evaluation_stages (name, academic_year, sequence_order, scheduled_date_from, scheduled_date_to, max_marks_total, aggregation_rule, is_active)
+      VALUES ('Synopsis Review', '2025-26', 1, '2025-08-01', '2025-08-15', 100, 'AVERAGE', true)
+      RETURNING id
+    `);
+    const stage1Id = stage1.rows[0].id;
+
+    const stage2 = await client.query(`
+      INSERT INTO project_evaluation_stages (name, academic_year, sequence_order, scheduled_date_from, scheduled_date_to, max_marks_total, aggregation_rule, is_active)
+      VALUES ('Mid-Term Review (Phase I)', '2025-26', 2, '2025-10-15', '2025-10-30', 100, 'AVERAGE', true)
+      RETURNING id
+    `);
+    const stage2Id = stage2.rows[0].id;
+
+    const stage3 = await client.query(`
+      INSERT INTO project_evaluation_stages (name, academic_year, sequence_order, scheduled_date_from, scheduled_date_to, max_marks_total, aggregation_rule, is_active)
+      VALUES ('Final Presentation & Viva (Phase II)', '2025-26', 3, '2026-04-10', '2026-04-25', 100, 'AVERAGE', true)
+      RETURNING id
+    `);
+    const stage3Id = stage3.rows[0].id;
+
+    // 2. Stage Criteria
+    // Stage 1 Criteria
+    const s1c1 = await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'Problem Statement & Objectives', 25, 1) RETURNING id`, [stage1Id]);
+    const s1c2 = await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'Literature Review & Scope', 25, 2) RETURNING id`, [stage1Id]);
+    const s1c3 = await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'Proposed Methodology', 30, 3) RETURNING id`, [stage1Id]);
+    const s1c4 = await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'Presentation & Viva', 20, 4) RETURNING id`, [stage1Id]);
+
+    // Stage 2 Criteria
+    const s2c1 = await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'System Architecture & Design', 30, 1) RETURNING id`, [stage2Id]);
+    const s2c2 = await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'Module Implementation Progress', 30, 2) RETURNING id`, [stage2Id]);
+    const s2c3 = await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'Toolchain & Test Bench Setup', 20, 3) RETURNING id`, [stage2Id]);
+    const s2c4 = await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'Viva & Q&A', 20, 4) RETURNING id`, [stage2Id]);
+
+    // Stage 3 Criteria
+    await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'Full Prototype & Working Demo', 35, 1)`, [stage3Id]);
+    await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'Code Quality & Performance', 25, 2)`, [stage3Id]);
+    await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'Final Project Report / Paper', 20, 3)`, [stage3Id]);
+    await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'Comprehensive Viva', 20, 4)`, [stage3Id]);
+
+    // 3. Project Groups
+    // Group 1: Autonomous Drone Navigation (Guide: Rajan Mehta - facultyIds[0])
+    const grp1User = await client.query(`SELECT user_id FROM students WHERE id=$1`, [studentIds[0]]);
+    const g1 = await client.query(`
+      INSERT INTO project_groups (group_code, academic_year, batch, title, domain, abstract, status, guide_id, created_by)
+      VALUES ('GRP-2026-01', '2025-26', 'BE-CE-A', 'Autonomous Drone Navigation using Edge AI and Computer Vision', 'AI / Edge Computing', 'Real-time obstacle avoidance and path planning using Jetson Nano and MobileNetV3.', 'ACTIVE', $1, $2)
+      RETURNING id
+    `, [facultyIds[0], grp1User.rows[0].user_id]);
+    const g1Id = g1.rows[0].id;
+    await client.query(`INSERT INTO project_group_members (group_id, student_id, roll_no, is_leader) VALUES ($1, $2, 'CE6A001', true)`, [g1Id, studentIds[0]]);
+    await client.query(`INSERT INTO project_group_members (group_id, student_id, roll_no, is_leader) VALUES ($1, $2, 'CE6A002', false)`, [g1Id, studentIds[1]]);
+    await client.query(`INSERT INTO project_group_members (group_id, student_id, roll_no, is_leader) VALUES ($1, $2, 'CE6A003', false)`, [g1Id, studentIds[2]]);
+
+    // Guide request for G1 (approved)
+    await client.query(`
+      INSERT INTO project_guide_requests (group_id, requested_guide_id, status, decided_at, decided_by, remarks)
+      VALUES ($1, $2, 'APPROVED', NOW(), $3, 'Approved. Strong technical proposal.')
+    `, [g1Id, facultyIds[0], facultyIds[0]]);
+
+    // Group 2: ZK Proof Identity (Guide: Sunita Patil - facultyIds[1])
+    const grp2User = await client.query(`SELECT user_id FROM students WHERE id=$1`, [studentIds[3]]);
+    const g2 = await client.query(`
+      INSERT INTO project_groups (group_code, academic_year, batch, title, domain, abstract, status, guide_id, created_by)
+      VALUES ('GRP-2026-02', '2025-26', 'BE-CE-A', 'Zero-Knowledge Proof Identity Verification on Decentralized Ledgers', 'Blockchain & Cryptography', 'Privacy-preserving SSI architecture using zk-SNARKs and Ethereum smart contracts.', 'ACTIVE', $1, $2)
+      RETURNING id
+    `, [facultyIds[1], grp2User.rows[0].user_id]);
+    const g2Id = g2.rows[0].id;
+    await client.query(`INSERT INTO project_group_members (group_id, student_id, roll_no, is_leader) VALUES ($1, $2, 'CE6A004', true)`, [g2Id, studentIds[3]]);
+    await client.query(`INSERT INTO project_group_members (group_id, student_id, roll_no, is_leader) VALUES ($1, $2, 'CE6A005', false)`, [g2Id, studentIds[4]]);
+    await client.query(`INSERT INTO project_group_members (group_id, student_id, roll_no, is_leader) VALUES ($1, $2, 'CE6A006', false)`, [g2Id, studentIds[5]]);
+
+    await client.query(`
+      INSERT INTO project_guide_requests (group_id, requested_guide_id, status, decided_at, decided_by, remarks)
+      VALUES ($1, $2, 'APPROVED', NOW(), $3, 'Approved guide request.')
+    `, [g2Id, facultyIds[1], facultyIds[1]]);
+
+    // Group 3: K8s Autoscaling (Guide: Arjun Sharma - facultyIds[2])
+    const grp3User = await client.query(`SELECT user_id FROM students WHERE id=$1`, [studentIds[6]]);
+    const g3 = await client.query(`
+      INSERT INTO project_groups (group_code, academic_year, batch, title, domain, abstract, status, guide_id, created_by)
+      VALUES ('GRP-2026-03', '2025-26', 'BE-CE-A', 'Multi-Tenant Kubernetes Autoscaling via Predictive Traffic Loaders', 'Cloud & Distributed Systems', 'LSTM-driven predictive autoscaler for microservice clusters in hybrid cloud.', 'ACTIVE', $1, $2)
+      RETURNING id
+    `, [facultyIds[2], grp3User.rows[0].user_id]);
+    const g3Id = g3.rows[0].id;
+    await client.query(`INSERT INTO project_group_members (group_id, student_id, roll_no, is_leader) VALUES ($1, $2, 'CE6A007', true)`, [g3Id, studentIds[6]]);
+    await client.query(`INSERT INTO project_group_members (group_id, student_id, roll_no, is_leader) VALUES ($1, $2, 'CE6A008', false)`, [g3Id, studentIds[7]]);
+    await client.query(`INSERT INTO project_group_members (group_id, student_id, roll_no, is_leader) VALUES ($1, $2, 'CE6A009', false)`, [g3Id, studentIds[8]]);
+
+    // Group 4: Legal Doc Summarization (Pending Guide Request to Rajan Mehta)
+    const grp4User = await client.query(`SELECT user_id FROM students WHERE id=$1`, [studentIds[9]]);
+    const g4 = await client.query(`
+      INSERT INTO project_groups (group_code, academic_year, batch, title, domain, abstract, status, guide_id, created_by)
+      VALUES ('GRP-2026-04', '2025-26', 'BE-CE-A', 'Cross-lingual Indian Legal Document Summarization using LLMs', 'NLP & Generative AI', 'Fine-tuning LLaMA 3 for Marathi & Hindi high court judgment summarization.', 'PENDING_GUIDE_APPROVAL', NULL, $1)
+      RETURNING id
+    `, [grp4User.rows[0].user_id]);
+    const g4Id = g4.rows[0].id;
+    await client.query(`INSERT INTO project_group_members (group_id, student_id, roll_no, is_leader) VALUES ($1, $2, 'CE6A010', true)`, [g4Id, studentIds[9]]);
+    await client.query(`INSERT INTO project_group_members (group_id, student_id, roll_no, is_leader) VALUES ($1, $2, 'CE6A011', false)`, [g4Id, studentIds[10]]);
+
+    await client.query(`
+      INSERT INTO project_guide_requests (group_id, requested_guide_id, status)
+      VALUES ($1, $2, 'PENDING')
+    `, [g4Id, facultyIds[0]]);
+
+    // 4. Panel Assignments (Respecting Conflict of Interest: Guide cannot evaluate own group!)
+    // For G1 (Guide = Rajan Mehta/facultyIds[0]), Panelists = Sunita Patil (facultyIds[1]) & Arjun Sharma (facultyIds[2])
+    const paG1S1_P1 = await client.query(`
+      INSERT INTO project_panel_assignments (stage_id, group_id, panel_member_id, assigned_by, status)
+      VALUES ($1, $2, $3, $4, 'COMPLETED') RETURNING id
+    `, [stage1Id, g1Id, facultyIds[1], hodUser.rows[0].id]);
+    const paG1S1_P2 = await client.query(`
+      INSERT INTO project_panel_assignments (stage_id, group_id, panel_member_id, assigned_by, status)
+      VALUES ($1, $2, $3, $4, 'COMPLETED') RETURNING id
+    `, [stage1Id, g1Id, facultyIds[2], hodUser.rows[0].id]);
+
+    const paG1S2_P1 = await client.query(`
+      INSERT INTO project_panel_assignments (stage_id, group_id, panel_member_id, assigned_by, status)
+      VALUES ($1, $2, $3, $4, 'ASSIGNED') RETURNING id
+    `, [stage2Id, g1Id, facultyIds[1], hodUser.rows[0].id]);
+
+    // For G2 (Guide = Sunita Patil/facultyIds[1]), Panelists = Rajan Mehta & Arjun Sharma
+    const paG2S1_P1 = await client.query(`
+      INSERT INTO project_panel_assignments (stage_id, group_id, panel_member_id, assigned_by, status)
+      VALUES ($1, $2, $3, $4, 'COMPLETED') RETURNING id
+    `, [stage1Id, g2Id, facultyIds[0], hodUser.rows[0].id]);
+
+    // For G3 (Guide = Arjun Sharma/facultyIds[2]), Panelists = Rajan Mehta & Sunita Patil
+    const paG3S1_P1 = await client.query(`
+      INSERT INTO project_panel_assignments (stage_id, group_id, panel_member_id, assigned_by, status)
+      VALUES ($1, $2, $3, $4, 'COMPLETED') RETURNING id
+    `, [stage1Id, g3Id, facultyIds[0], hodUser.rows[0].id]);
+
+    // 5. Evaluations & Criteria Scores
+    // G1 Stage 1 - Evaluator Sunita Patil
+    const eval1 = await client.query(`
+      INSERT INTO project_evaluations (panel_assignment_id, status, submitted_at, overall_remarks)
+      VALUES ($1, 'SUBMITTED', NOW(), 'Excellent problem definition and clear hardware design specifications.')
+      RETURNING id
+    `, [paG1S1_P1.rows[0].id]);
+    const eval1Id = eval1.rows[0].id;
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 23, 'Clear objectives')`, [eval1Id, s1c1.rows[0].id]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 22, 'Comprehensive survey')`, [eval1Id, s1c2.rows[0].id]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 26, 'Solid architecture')`, [eval1Id, s1c3.rows[0].id]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 18, 'Good viva performance')`, [eval1Id, s1c4.rows[0].id]);
+
+    // G1 Stage 1 - Evaluator Arjun Sharma
+    const eval2 = await client.query(`
+      INSERT INTO project_evaluations (panel_assignment_id, status, submitted_at, overall_remarks)
+      VALUES ($1, 'SUBMITTED', NOW(), 'Very impressive AI model pruning approach for edge board deployment.')
+      RETURNING id
+    `, [paG1S1_P2.rows[0].id]);
+    const eval2Id = eval2.rows[0].id;
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 24, 'Well stated')`, [eval2Id, s1c1.rows[0].id]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 23, 'Good references')`, [eval2Id, s1c2.rows[0].id]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 27, 'Strong methodology')`, [eval2Id, s1c3.rows[0].id]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 19, 'Confident defense')`, [eval2Id, s1c4.rows[0].id]);
+
+    // G1 Stage 2 - Evaluator Sunita Patil (Draft)
+    const eval3 = await client.query(`
+      INSERT INTO project_evaluations (panel_assignment_id, status, overall_remarks)
+      VALUES ($1, 'DRAFT', 'Initial test bench demo observed, waiting for hardware benchmark numbers.')
+      RETURNING id
+    `, [paG1S2_P1.rows[0].id]);
+    const eval3Id = eval3.rows[0].id;
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 27, 'Clean modular design')`, [eval3Id, s2c1.rows[0].id]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 25, 'Pipeline 70% complete')`, [eval3Id, s2c2.rows[0].id]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 17, 'Jetson board configured')`, [eval3Id, s2c3.rows[0].id]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 17, 'Satisfactory Q&A')`, [eval3Id, s2c4.rows[0].id]);
+
+    // G2 Stage 1 - Evaluator Rajan Mehta
+    const eval4 = await client.query(`
+      INSERT INTO project_evaluations (panel_assignment_id, status, submitted_at, overall_remarks)
+      VALUES ($1, 'SUBMITTED', NOW(), 'Sound cryptographic foundation, good understanding of zk-SNARK constraints.')
+      RETURNING id
+    `, [paG2S1_P1.rows[0].id]);
+    const eval4Id = eval4.rows[0].id;
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 22, 'Realistic problem statement')`, [eval4Id, s1c1.rows[0].id]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 21, 'Thorough lit survey')`, [eval4Id, s1c2.rows[0].id]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 24, 'Circuit design solid')`, [eval4Id, s1c3.rows[0].id]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 17, 'Clear slides')`, [eval4Id, s1c4.rows[0].id]);
+
+    // G3 Stage 1 - Evaluator Rajan Mehta
+    const eval5 = await client.query(`
+      INSERT INTO project_evaluations (panel_assignment_id, status, submitted_at, overall_remarks)
+      VALUES ($1, 'SUBMITTED', NOW(), 'Outstanding architecture proposal and clear benchmark plan.')
+      RETURNING id
+    `, [paG3S1_P1.rows[0].id]);
+    const eval5Id = eval5.rows[0].id;
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 24, 'High industry relevance')`, [eval5Id, s1c1.rows[0].id]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 24, 'Thorough baseline comparison')`, [eval5Id, s1c2.rows[0].id]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 28, 'Excellent LSTM model choice')`, [eval5Id, s1c3.rows[0].id]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 18, 'Great presentation')`, [eval5Id, s1c4.rows[0].id]);
+
+    // 6. Release Scores for Stage 1 (Synopsis Review)
+    await client.query(`
+      INSERT INTO project_score_releases (stage_id, released_by)
+      VALUES ($1, $2)
+    `, [stage1Id, hodUser.rows[0].id]);
+
     await client.query('COMMIT');
     console.log(`[Seed] Successfully seeded ${studentIds.length} MES Wadia students!`);
   } catch (err) {
@@ -218,3 +421,15 @@ async function seed() {
 }
 
 module.exports = { seed };
+
+if (require.main === module) {
+  seed()
+    .then(() => {
+      console.log('[Seed] Seeding completed successfully');
+      process.exit(0);
+    })
+    .catch((err) => {
+      console.error('[Seed] Seeding failed:', err);
+      process.exit(1);
+    });
+}

@@ -13,6 +13,7 @@ import StudentDashboard  from './pages/student/StudentDashboard'
 import StudentResults    from './pages/student/StudentResults'
 import CGPAView          from './pages/student/CGPAView'
 import StudentRevaluation from './pages/student/StudentRevaluation'
+import StudentProject    from './pages/student/StudentProject'
 
 // Faculty
 import FacultyDashboard  from './pages/faculty/FacultyDashboard'
@@ -29,6 +30,7 @@ import MarksApproval  from './pages/hod/MarksApproval'
 import PublishResults from './pages/hod/PublishResults'
 import HODAnalytics   from './pages/hod/HODAnalytics'
 import HODRevaluation from './pages/hod/HODRevaluation'
+import HODProjectMgmt from './pages/hod/HODProjectMgmt'
 import AuditLog       from './pages/hod/AuditLog'
 
 // Alumni
@@ -69,6 +71,7 @@ export default function App() {
           <Route path="/student/results" element={<StudentLayout><StudentResults /></StudentLayout>} />
           <Route path="/student/cgpa" element={<StudentLayout><CGPAView /></StudentLayout>} />
           <Route path="/student/revaluation" element={<StudentLayout><StudentRevaluation /></StudentLayout>} />
+          <Route path="/student/project" element={<StudentLayout><StudentProject /></StudentLayout>} />
 
           {/* Faculty */}
           <Route path="/faculty" element={<FacultyLayout><FacultyDashboard /></FacultyLayout>} />
@@ -86,6 +89,7 @@ export default function App() {
           <Route path="/hod/publish" element={<HODLayout><PublishResults /></HODLayout>} />
           <Route path="/hod/analytics" element={<HODLayout><HODAnalytics /></HODLayout>} />
           <Route path="/hod/revaluation" element={<HODLayout><HODRevaluation /></HODLayout>} />
+          <Route path="/hod/projects" element={<HODLayout><HODProjectMgmt /></HODLayout>} />
           <Route path="/hod/audit" element={<HODLayout><AuditLog /></HODLayout>} />
 
           {/* Alumni */}
