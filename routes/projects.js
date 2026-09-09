@@ -35,9 +35,9 @@ router.get('/student/my-group', verifyToken, requireRole('student'), async (req,
        JOIN project_group_members gm ON g.id = gm.group_id
        LEFT JOIN faculty f ON g.guide_id = f.id
        LEFT JOIN users u ON f.user_id = u.id
-       WHERE gm.student_id = $1 AND g.status != 'WITHDRAWN'
+       WHERE (gm.student_id = $1 OR gm.email = $2) AND g.status != 'WITHDRAWN'
        ORDER BY g.created_at DESC LIMIT 1`,
-      [student.id]
+      [student.id, req.user.email]
     );
 
     if (groupRes.rows.length === 0) {
@@ -48,12 +48,18 @@ router.get('/student/my-group', verifyToken, requireRole('student'), async (req,
 
     // Fetch team members
     const membersRes = await pool.query(
-      `SELECT gm.id, gm.student_id, gm.roll_no, gm.is_leader, u.name, u.email, s.enrollment_no, s.batch, s.division
+      `SELECT gm.id, gm.student_id, gm.roll_no, gm.is_leader, gm.mobile_no,
+              COALESCE(u.name, gm.student_name, 'Student') as name,
+              COALESCE(u.email, gm.email, '') as email,
+              COALESCE(s.enrollment_no, gm.roll_no) as enrollment_no,
+              COALESCE(s.batch, g.batch) as batch,
+              COALESCE(s.division, gm.division, g.batch) as division
        FROM project_group_members gm
-       JOIN students s ON gm.student_id = s.id
-       JOIN users u ON s.user_id = u.id
+       JOIN project_groups g ON gm.group_id = g.id
+       LEFT JOIN students s ON gm.student_id = s.id
+       LEFT JOIN users u ON s.user_id = u.id
        WHERE gm.group_id = $1
-       ORDER BY gm.is_leader DESC, gm.roll_no ASC`,
+       ORDER BY gm.is_leader DESC, gm.id ASC`,
       [group.id]
     );
 
@@ -155,7 +161,7 @@ router.get('/student/my-group', verifyToken, requireRole('student'), async (req,
       members: membersRes.rows,
       guideRequests: guideReqRes.rows,
       stages: stagesWithScores,
-      isLeader: membersRes.rows.some(m => m.student_id === student.id && m.is_leader)
+      isLeader: membersRes.rows.some(m => (m.student_id === student.id || m.email === req.user.email) && m.is_leader)
     });
   } catch (err) {
     console.error('[Projects Student API Error]', err);
@@ -165,32 +171,43 @@ router.get('/student/my-group', verifyToken, requireRole('student'), async (req,
 
 /**
  * POST /api/projects/student/groups
- * Create a new project group. Creator becomes group leader.
+ * Register a new project group with full PDF-sheet-style member list and 3 project title choices.
  */
 router.post('/student/groups', verifyToken, requireRole('student'), async (req, res) => {
   try {
-    const { title, domain, abstract, academic_year, batch } = req.body;
-    if (!title || !domain) {
-      return res.status(400).json({ error: 'Title and Domain are required' });
+    const { title, title_1, title_2, title_3, domain, abstract, academic_year, batch, members } = req.body;
+    
+    const projTitle1 = title_1 || title;
+    if (!projTitle1 || !domain) {
+      return res.status(400).json({ error: 'Project Domain and Project Title 1 are required' });
+    }
+
+    if (!Array.isArray(members) || members.length < 2) {
+      return res.status(400).json({ error: 'Project group must consist of at least 2 student members (similar to PDF sheet)' });
+    }
+
+    if (members.length > 4) {
+      return res.status(400).json({ error: 'Project group cannot exceed 4 student members' });
     }
 
     const student = await getStudentId(req.user.id);
     if (!student) return res.status(404).json({ error: 'Student record not found' });
 
     const acadYear = academic_year || '2025-26';
-    const studentBatch = batch || student.batch || 'BE-CE-A';
+    const studentBatch = batch || members[0]?.division || student.batch || 'BE-CE-A';
 
-    // Check if student is already in an active group
+    // Check if leader or any member in the list is already in an active group
     const existingGroup = await pool.query(
       `SELECT g.id, g.group_code FROM project_groups g
        JOIN project_group_members gm ON g.id = gm.group_id
-       WHERE gm.student_id = $1 AND g.academic_year = $2 AND g.status != 'WITHDRAWN'`,
-      [student.id, acadYear]
+       WHERE (gm.student_id = $1 OR gm.email = $2 OR gm.roll_no = $3)
+         AND g.academic_year = $4 AND g.status != 'WITHDRAWN'`,
+      [student.id, req.user.email, student.roll_no, acadYear]
     );
 
     if (existingGroup.rows.length > 0) {
       return res.status(400).json({
-        error: `You are already a member of active group ${existingGroup.rows[0].group_code}`
+        error: `You or one of your team members is already registered in active group ${existingGroup.rows[0].group_code}`
       });
     }
 
@@ -209,21 +226,49 @@ router.post('/student/groups', verifyToken, requireRole('student'), async (req, 
       await client.query('BEGIN');
 
       const groupRes = await client.query(
-        `INSERT INTO project_groups (group_code, academic_year, batch, title, domain, abstract, status, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, 'DRAFT', $7)
+        `INSERT INTO project_groups (group_code, academic_year, batch, title, title_2, title_3, domain, abstract, status, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'DRAFT', $9)
          RETURNING *`,
-        [groupCode, acadYear, studentBatch, title, domain, abstract || '', req.user.id]
+        [groupCode, acadYear, studentBatch, projTitle1, title_2 || '', title_3 || '', domain, abstract || '', req.user.id]
       );
       const newGroup = groupRes.rows[0];
 
-      await client.query(
-        `INSERT INTO project_group_members (group_id, student_id, roll_no, is_leader)
-         VALUES ($1, $2, $3, true)`,
-        [newGroup.id, student.id, student.roll_no]
-      );
+      // Insert all members from form payload
+      for (let i = 0; i < members.length; i++) {
+        const m = members[i];
+        const isLeader = i === 0 || !!m.is_leader;
+        
+        let matchedStudentId = isLeader ? student.id : null;
+        if (!matchedStudentId && (m.email || m.roll_no)) {
+          const matchRes = await client.query(
+            `SELECT s.id FROM students s
+             JOIN users u ON s.user_id = u.id
+             WHERE u.email = $1 OR s.roll_no = $2 LIMIT 1`,
+            [m.email || '', m.roll_no || '']
+          );
+          if (matchRes.rows.length > 0) {
+            matchedStudentId = matchRes.rows[0].id;
+          }
+        }
+
+        await client.query(
+          `INSERT INTO project_group_members (group_id, student_id, roll_no, student_name, email, mobile_no, division, is_leader)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [
+            newGroup.id,
+            matchedStudentId,
+            m.roll_no || m.prn || '',
+            m.name || m.student_name || '',
+            m.email || '',
+            m.mobile_no || '',
+            m.division || 'BE-1',
+            isLeader
+          ]
+        );
+      }
 
       await client.query('COMMIT');
-      res.status(201).json({ message: 'Project group created successfully', group: newGroup });
+      res.status(201).json({ message: 'Project group registered successfully', group: newGroup });
     } catch (e) {
       await client.query('ROLLBACK');
       throw e;
@@ -232,7 +277,7 @@ router.post('/student/groups', verifyToken, requireRole('student'), async (req, 
     }
   } catch (err) {
     console.error('[Create Group Error]', err);
-    res.status(500).json({ error: 'Failed to create group' });
+    res.status(500).json({ error: 'Failed to register project group' });
   }
 });
 

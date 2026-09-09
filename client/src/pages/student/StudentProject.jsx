@@ -7,10 +7,20 @@ export default function StudentProject() {
   const [groupData, setGroupData] = useState(null);
   const [availableGuides, setAvailableGuides] = useState([]);
   
-  // Forms state
-  const [activeForm, setActiveForm] = useState('none'); // 'create' | 'join' | 'none'
-  const [createForm, setCreateForm] = useState({ title: '', domain: '', abstract: '', batch: 'BE-CE-A' });
-  const [joinCode, setJoinCode] = useState('');
+  // Registration form state matching PDF sheet layout
+  const [domain, setDomain] = useState('');
+  const [title1, setTitle1] = useState('');
+  const [title2, setTitle2] = useState('');
+  const [title3, setTitle3] = useState('');
+  const [abstract, setAbstract] = useState('');
+  
+  const [members, setMembers] = useState([
+    { name: '', roll_no: '', division: 'BE-1', mobile_no: '', email: '', is_leader: true },
+    { name: '', roll_no: '', division: 'BE-1', mobile_no: '', email: '', is_leader: false },
+    { name: '', roll_no: '', division: 'BE-1', mobile_no: '', email: '', is_leader: false },
+    { name: '', roll_no: '', division: 'BE-1', mobile_no: '', email: '', is_leader: false },
+  ]);
+
   const [selectedGuideId, setSelectedGuideId] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -20,7 +30,6 @@ export default function StudentProject() {
       const res = await api.get('/projects/student/my-group');
       setGroupData(res.data);
       if (!res.data.hasGroup) {
-        // Fetch available guides if user might create a group
         const gRes = await api.get('/projects/student/available-guides');
         setAvailableGuides(gRes.data);
       } else if (!res.data.group.guide_id && res.data.isLeader) {
@@ -38,31 +47,52 @@ export default function StudentProject() {
     fetchProjectData();
   }, []);
 
-  const handleCreateGroup = async (e) => {
-    e.preventDefault();
-    setSubmitting(true);
-    try {
-      const res = await api.post('/projects/student/groups', createForm);
-      toast.success(res.data.message);
-      setActiveForm('none');
-      fetchProjectData();
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to create group');
-    } finally {
-      setSubmitting(false);
-    }
+  const handleMemberChange = (index, field, value) => {
+    const updated = [...members];
+    updated[index][field] = value;
+    setMembers(updated);
   };
 
-  const handleJoinGroup = async (e) => {
+  const handleRegisterGroup = async (e) => {
     e.preventDefault();
+
+    if (!domain.trim()) return toast.error('Please specify Project Domain Name');
+    if (!title1.trim()) return toast.error('Please specify Project Title 1');
+    if (!title2.trim()) return toast.error('Please specify Project Title 2');
+    if (!title3.trim()) return toast.error('Please specify Project Title 3');
+
+    // Filter active members (Student 1 and 2 mandatory, Student 3 & 4 optional unless filled)
+    const validMembers = members.filter((m, idx) => {
+      if (idx < 2) return true;
+      return m.name.trim() !== '' || m.roll_no.trim() !== '' || m.email.trim() !== '';
+    });
+
+    for (let i = 0; i < validMembers.length; i++) {
+      const m = validMembers[i];
+      const sNum = i + 1;
+      if (!m.name.trim()) return toast.error(`Please enter Name for Student ${sNum}`);
+      if (!m.roll_no.trim()) return toast.error(`Please enter College PRN for Student ${sNum}`);
+      if (!m.division.trim()) return toast.error(`Please select Division for Student ${sNum}`);
+      if (!m.mobile_no.trim()) return toast.error(`Please enter Mobile No for Student ${sNum}`);
+      if (!m.email.trim()) return toast.error(`Please enter Email Address for Student ${sNum}`);
+    }
+
     setSubmitting(true);
     try {
-      const res = await api.post('/projects/student/groups/join', { group_code: joinCode });
-      toast.success(res.data.message);
-      setActiveForm('none');
+      const payload = {
+        domain: domain.trim(),
+        title_1: title1.trim(),
+        title_2: title2.trim(),
+        title_3: title3.trim(),
+        abstract: abstract.trim(),
+        members: validMembers,
+      };
+
+      const res = await api.post('/projects/student/groups', payload);
+      toast.success(res.data.message || 'Project group registered successfully!');
       fetchProjectData();
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to join group');
+      toast.error(err.response?.data?.error || 'Failed to register project group');
     } finally {
       setSubmitting(false);
     }
@@ -91,252 +121,374 @@ export default function StudentProject() {
       <div className="p-8 max-w-7xl mx-auto flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-4 border-navy border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-sm font-medium text-draft">Loading BE Project details...</p>
+          <p className="text-sm font-medium text-draft">Loading BE Capstone Project details...</p>
         </div>
       </div>
     );
   }
 
-  // ─── NO GROUP VIEW ────────────────────────────────────────────────────────
+  // ─── NO GROUP / REGISTRATION FORM VIEW ────────────────────────────────────
   if (!groupData?.hasGroup) {
     return (
-      <div className="p-8 lg:p-10 w-full max-w-5xl mx-auto">
-        <div className="mb-8 pb-5 border-b border-rule">
-          <h1 className="font-serif text-3xl font-bold text-ink">BE Capstone Project</h1>
-          <p className="text-base text-draft mt-1 font-medium">
-            Final Year (BE) Project Group Registration &amp; Continuous Assessment Portal
-          </p>
-        </div>
-
-        {activeForm === 'none' ? (
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Create Group Box */}
-            <div className="bg-white p-6 border border-rule rounded shadow-sm hover:border-navy transition-all flex flex-col justify-between">
-              <div>
-                <div className="w-12 h-12 rounded bg-blue-50 border border-blue-200 flex items-center justify-center text-navy mb-4">
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M12 4.5v15m7.5-7.5h-15" />
-                  </svg>
-                </div>
-                <h2 className="font-serif text-xl font-bold text-ink">Form a New Project Group</h2>
-                <p className="text-sm text-draft mt-2">
-                  Create a new BE Project group, define your project title, domain track, and abstract. You will become the group leader and can invite team members.
-                </p>
+      <div className="p-6 lg:p-10 w-full max-w-6xl mx-auto space-y-6">
+        {/* Header Banner */}
+        <div className="bg-white p-6 border border-rule rounded shadow-xs">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-200 text-navy font-mono text-xs font-bold rounded mb-2">
+                BE CAPSTONE PROJECT REGISTRATION
               </div>
-              <button
-                onClick={() => setActiveForm('create')}
-                className="mt-6 w-full btn-primary py-2.5 text-center font-semibold"
-              >
-                Create Group →
-              </button>
+              <h1 className="font-serif text-2xl lg:text-3xl font-bold text-ink">Project Group Registration Form</h1>
+              <p className="text-sm text-draft mt-1 font-medium">
+                Submit team member details and 3 project domain choices (matching departmental PDF sheet format).
+              </p>
             </div>
-
-            {/* Join Group Box */}
-            <div className="bg-white p-6 border border-rule rounded shadow-sm hover:border-navy transition-all flex flex-col justify-between">
-              <div>
-                <div className="w-12 h-12 rounded bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-800 mb-4">
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a5.97 5.97 0 00-.942 3.197m0 0A9.094 9.094 0 012.25 18.24" />
-                  </svg>
-                </div>
-                <h2 className="font-serif text-xl font-bold text-ink">Join Existing Group</h2>
-                <p className="text-sm text-draft mt-2">
-                  Already have a group created by your team leader? Enter the unique Group Code (e.g. <code className="font-mono text-navy">GRP-2026-01</code>) to join instantly.
-                </p>
-              </div>
-              <button
-                onClick={() => setActiveForm('join')}
-                className="mt-6 w-full px-4 py-2.5 bg-paper border border-rule font-semibold text-ink hover:bg-gray-100 rounded transition-colors text-center"
-              >
-                Join with Code →
-              </button>
+            <div className="text-right hidden md:block">
+              <span className="text-xs text-draft font-mono block">Academic Year 2025-26</span>
+              <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded inline-block mt-1">
+                Portal Open for Registration
+              </span>
             </div>
           </div>
-        ) : activeForm === 'create' ? (
-          <div className="bg-white p-6 border border-rule rounded shadow-md max-w-2xl mx-auto">
-            <div className="flex items-center justify-between border-b border-rule pb-3 mb-4">
-              <h2 className="font-serif text-xl font-bold text-ink">Register Project Group</h2>
-              <button onClick={() => setActiveForm('none')} className="text-xs text-draft hover:text-ink">✕ Cancel</button>
-            </div>
-            <form onSubmit={handleCreateGroup} className="space-y-4">
+        </div>
+
+        {/* Full PDF Sheet Format Registration Form */}
+        <form onSubmit={handleRegisterGroup} className="space-y-6">
+          {/* PART A: STUDENT TEAM MEMBERS DETAILS */}
+          <div className="bg-white border border-rule rounded shadow-sm p-6 space-y-6">
+            <div className="border-b border-rule pb-3 flex items-center justify-between">
               <div>
-                <label className="input-label">Project Title *</label>
+                <h2 className="font-serif text-xl font-bold text-ink flex items-center gap-2">
+                  <span className="w-6 h-6 rounded bg-navy text-white text-xs flex items-center justify-center font-sans font-bold">1</span>
+                  Student Team Members Details
+                </h2>
+                <p className="text-xs text-draft mt-0.5">Minimum 2 students · Maximum 4 students per group</p>
+              </div>
+              <span className="text-xs font-mono text-draft bg-paper px-3 py-1 border border-rule rounded">
+                Table Format (Sheet Upload)
+              </span>
+            </div>
+
+            <div className="space-y-6 divide-y divide-rule">
+              {members.map((m, idx) => {
+                const sNum = idx + 1;
+                const isRequired = idx < 2;
+                return (
+                  <div key={idx} className={idx > 0 ? 'pt-6' : ''}>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-serif text-base font-bold text-ink flex items-center gap-2">
+                        <span className={`px-2.5 py-0.5 rounded text-xs font-bold font-mono ${
+                          isRequired ? 'bg-navy/10 text-navy border border-navy/20' : 'bg-gray-100 text-draft border border-rule'
+                        }`}>
+                          Student-{sNum} {idx === 0 && '(Group Leader)'}
+                        </span>
+                        {isRequired ? (
+                          <span className="text-xs text-red-600 font-semibold">* Mandatory</span>
+                        ) : (
+                          <span className="text-xs text-draft italic">(Optional Member {sNum})</span>
+                        )}
+                      </h3>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                      {/* Name of Student */}
+                      <div className="md:col-span-1 lg:col-span-1">
+                        <label className="input-label text-xs font-semibold">
+                          Name of Student-{sNum} {isRequired && '*'}
+                        </label>
+                        <input
+                          type="text"
+                          required={isRequired}
+                          placeholder={`Full Name of Student ${sNum}`}
+                          value={m.name}
+                          onChange={(e) => handleMemberChange(idx, 'name', e.target.value)}
+                          className="input-field text-sm"
+                        />
+                      </div>
+
+                      {/* College PRN */}
+                      <div>
+                        <label className="input-label text-xs font-semibold">
+                          PRN No (College PRN) {isRequired && '*'}
+                        </label>
+                        <input
+                          type="text"
+                          required={isRequired}
+                          placeholder="e.g. F23111031"
+                          value={m.roll_no}
+                          onChange={(e) => handleMemberChange(idx, 'roll_no', e.target.value)}
+                          className="input-field text-sm uppercase font-mono"
+                        />
+                      </div>
+
+                      {/* Division */}
+                      <div>
+                        <label className="input-label text-xs font-semibold">
+                          Student-{sNum} Division {isRequired && '*'}
+                        </label>
+                        <select
+                          value={m.division}
+                          onChange={(e) => handleMemberChange(idx, 'division', e.target.value)}
+                          className="input-field text-sm"
+                          required={isRequired}
+                        >
+                          <option value="BE-1">BE-1</option>
+                          <option value="BE-2">BE-2</option>
+                          <option value="BE-3">BE-3</option>
+                        </select>
+                      </div>
+
+                      {/* Mobile No */}
+                      <div>
+                        <label className="input-label text-xs font-semibold">
+                          Student-{sNum} Mobile No {isRequired && '*'}
+                        </label>
+                        <input
+                          type="tel"
+                          required={isRequired}
+                          placeholder="10-digit mobile"
+                          value={m.mobile_no}
+                          onChange={(e) => handleMemberChange(idx, 'mobile_no', e.target.value)}
+                          className="input-field text-sm font-mono"
+                        />
+                      </div>
+
+                      {/* Email Address */}
+                      <div>
+                        <label className="input-label text-xs font-semibold">
+                          Student-{sNum} Email ID {isRequired && '*'}
+                        </label>
+                        <input
+                          type="email"
+                          required={isRequired}
+                          placeholder="student@gmail.com"
+                          value={m.email}
+                          onChange={(e) => handleMemberChange(idx, 'email', e.target.value)}
+                          className="input-field text-sm font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* PART B: PROJECT DOMAIN & TITLE PREFERENCES */}
+          <div className="bg-white border border-rule rounded shadow-sm p-6 space-y-6">
+            <div className="border-b border-rule pb-3">
+              <h2 className="font-serif text-xl font-bold text-ink flex items-center gap-2">
+                <span className="w-6 h-6 rounded bg-navy text-white text-xs flex items-center justify-center font-sans font-bold">2</span>
+                Project Domain &amp; Topic Preferences
+              </h2>
+              <p className="text-xs text-draft mt-0.5">Specify your project domain and 3 distinct project title choices in order of preference.</p>
+            </div>
+
+            <div className="space-y-4">
+              {/* Domain Name */}
+              <div>
+                <label className="input-label font-bold text-ink">
+                  Project Domain (Write project Domain Name) *
+                </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Autonomous Drone Navigation using Edge AI"
-                  value={createForm.title}
-                  onChange={(e) => setCreateForm({ ...createForm, title: e.target.value })}
+                  placeholder="e.g. Artificial Intelligence, AIML, Data Science, Cyber Security, Full Stack Web Development, Blockchain, Cloud Computing, AIDS"
+                  value={domain}
+                  onChange={(e) => setDomain(e.target.value)}
                   className="input-field"
                 />
+                <p className="text-[11px] text-draft mt-1">
+                  Suggestions: Artificial Intelligence &amp; Machine Learning (AIML), Cyber Security &amp; Cryptography, Full Stack Web Development, Cloud &amp; DevOps, Data Science &amp; Data Analytics.
+                </p>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+
+              {/* 3 Project Titles */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
                 <div>
-                  <label className="input-label">Domain / Track *</label>
-                  <select
-                    value={createForm.domain}
-                    onChange={(e) => setCreateForm({ ...createForm, domain: e.target.value })}
-                    className="input-field"
+                  <label className="input-label font-bold text-ink">Project Title 1 (Preference 1) *</label>
+                  <textarea
+                    rows={3}
                     required
-                  >
-                    <option value="">Select Domain...</option>
-                    <option value="AI / Edge Computing">AI / Edge Computing</option>
-                    <option value="Blockchain & Cryptography">Blockchain &amp; Cryptography</option>
-                    <option value="Cloud & Distributed Systems">Cloud &amp; Distributed Systems</option>
-                    <option value="Embedded Systems & IoT">Embedded Systems &amp; IoT</option>
-                    <option value="NLP & Generative AI">NLP &amp; Generative AI</option>
-                    <option value="Cybersecurity">Cybersecurity</option>
-                  </select>
+                    placeholder="Enter Primary Project Title Topic..."
+                    value={title1}
+                    onChange={(e) => setTitle1(e.target.value)}
+                    className="input-field text-sm"
+                  />
                 </div>
+
                 <div>
-                  <label className="input-label">Division / Batch</label>
-                  <input
-                    type="text"
-                    value={createForm.batch}
-                    onChange={(e) => setCreateForm({ ...createForm, batch: e.target.value })}
-                    className="input-field"
+                  <label className="input-label font-bold text-ink">Project Title 2 (Preference 2) *</label>
+                  <textarea
+                    rows={3}
                     required
+                    placeholder="Enter Secondary Project Title Topic..."
+                    value={title2}
+                    onChange={(e) => setTitle2(e.target.value)}
+                    className="input-field text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="input-label font-bold text-ink">Project Title 3 (Preference 3) *</label>
+                  <textarea
+                    rows={3}
+                    required
+                    placeholder="Enter Tertiary Project Title Topic..."
+                    value={title3}
+                    onChange={(e) => setTitle3(e.target.value)}
+                    className="input-field text-sm"
                   />
                 </div>
               </div>
-              <div>
-                <label className="input-label">Abstract / Brief Summary</label>
-                <textarea
-                  rows={4}
-                  placeholder="Outline the core problem statement, proposed methodology, and expected outcomes..."
-                  value={createForm.abstract}
-                  onChange={(e) => setCreateForm({ ...createForm, abstract: e.target.value })}
-                  className="input-field"
-                />
-              </div>
-              <div className="flex justify-end gap-3 pt-3 border-t border-rule">
-                <button
-                  type="button"
-                  onClick={() => setActiveForm('none')}
-                  className="px-4 py-2 border border-rule text-xs font-semibold rounded hover:bg-paper"
-                >
-                  Cancel
-                </button>
-                <button type="submit" disabled={submitting} className="btn-primary">
-                  {submitting ? 'Creating...' : 'Register Group'}
-                </button>
-              </div>
-            </form>
-          </div>
-        ) : (
-          <div className="bg-white p-6 border border-rule rounded shadow-md max-w-md mx-auto">
-            <div className="flex items-center justify-between border-b border-rule pb-3 mb-4">
-              <h2 className="font-serif text-xl font-bold text-ink">Join Project Group</h2>
-              <button onClick={() => setActiveForm('none')} className="text-xs text-draft hover:text-ink">✕ Cancel</button>
             </div>
-            <form onSubmit={handleJoinGroup} className="space-y-4">
-              <div>
-                <label className="input-label">Enter Group Code *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. GRP-2026-01"
-                  value={joinCode}
-                  onChange={(e) => setJoinCode(e.target.value)}
-                  className="input-field uppercase font-mono tracking-wider font-bold"
-                />
-                <p className="text-xs text-draft mt-1">Get this code from your project group leader.</p>
-              </div>
-              <div className="flex justify-end gap-3 pt-3 border-t border-rule">
-                <button
-                  type="button"
-                  onClick={() => setActiveForm('none')}
-                  className="px-4 py-2 border border-rule text-xs font-semibold rounded hover:bg-paper"
-                >
-                  Cancel
-                </button>
-                <button type="submit" disabled={submitting} className="btn-primary">
-                  {submitting ? 'Joining...' : 'Join Group'}
-                </button>
-              </div>
-            </form>
           </div>
-        )}
+
+          {/* Form Actions */}
+          <div className="flex items-center justify-end gap-4 p-4 bg-white border border-rule rounded shadow-xs">
+            <button
+              type="submit"
+              disabled={submitting}
+              className="btn-primary px-8 py-3 font-bold text-base flex items-center gap-2"
+            >
+              {submitting ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                  Registering Project Group...
+                </>
+              ) : (
+                <>Submit Project Registration →</>
+              )}
+            </button>
+          </div>
+        </form>
       </div>
     );
   }
 
-  // ─── ACTIVE GROUP VIEW ────────────────────────────────────────────────────
-  const { group, members, guideRequests, stages, isLeader } = groupData;
+  // ─── REGISTERED / ACTIVE GROUP DASHBOARD VIEW ──────────────────────────────
+  const { group, members: groupMembers, guideRequests, stages, isLeader } = groupData;
   const latestGuideReq = guideRequests.length > 0 ? guideRequests[0] : null;
 
   return (
-    <div className="p-8 lg:p-10 w-full max-w-7xl mx-auto space-y-8">
-      {/* Header */}
-      <div className="pb-5 border-b border-rule flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="p-6 lg:p-10 w-full max-w-7xl mx-auto space-y-8">
+      {/* Header Banner */}
+      <div className="bg-white p-6 border border-rule rounded shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <span className="font-mono text-sm font-bold text-navy bg-blue-50 border border-blue-200 px-3 py-1 rounded">
               {group.group_code}
             </span>
             <span className="text-xs font-mono font-medium text-draft bg-white border border-rule px-2.5 py-1 rounded">
-              {group.academic_year} · {group.batch}
+              Academic Year: {group.academic_year} · {group.batch}
             </span>
             <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-xs font-bold ${
               group.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
             }`}>
-              {group.status}
+              Status: {group.status}
             </span>
           </div>
-          <h1 className="font-serif text-2xl lg:text-3xl font-bold text-ink mt-2">{group.title}</h1>
-          <p className="text-sm text-draft mt-1 font-medium">Domain: <span className="text-ink font-semibold">{group.domain}</span></p>
+
+          <h1 className="font-serif text-2xl lg:text-3xl font-bold text-ink mt-3">
+            {group.title}
+          </h1>
+
+          <div className="flex flex-wrap items-center gap-4 text-xs font-medium text-draft mt-2">
+            <span>Project Domain: <strong className="text-ink">{group.domain}</strong></span>
+          </div>
         </div>
       </div>
 
-      {/* Grid Layout: Group Roster & Guide Status */}
+      {/* Grid Layout: Titles, Roster & Guide */}
       <div className="grid lg:grid-cols-3 gap-6">
-        {/* Left 2 Cols: Group Members & Abstract */}
+        {/* Left 2 Cols: 3 Project Titles & Team Roster */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Abstract */}
+          {/* Project Title Preferences */}
           <div className="panel">
             <div className="panel-header">
-              <h2 className="font-serif text-lg font-bold">Project Abstract &amp; Scope</h2>
+              <h2 className="font-serif text-lg font-bold">Registered Project Topic Choices</h2>
             </div>
-            <div className="p-5 text-sm text-ink leading-relaxed">
-              {group.abstract || <span className="text-draft italic">No abstract provided yet.</span>}
+            <div className="p-5 space-y-3 divide-y divide-rule">
+              <div>
+                <span className="text-[10px] font-mono font-bold text-navy uppercase tracking-wider bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
+                  Project Title 1 (Primary Topic)
+                </span>
+                <p className="text-sm font-semibold text-ink mt-1">{group.title}</p>
+              </div>
+
+              {group.title_2 && (
+                <div className="pt-3">
+                  <span className="text-[10px] font-mono font-bold text-draft uppercase tracking-wider bg-gray-100 border border-rule px-2 py-0.5 rounded">
+                    Project Title 2 (Secondary Topic)
+                  </span>
+                  <p className="text-sm text-ink mt-1">{group.title_2}</p>
+                </div>
+              )}
+
+              {group.title_3 && (
+                <div className="pt-3">
+                  <span className="text-[10px] font-mono font-bold text-draft uppercase tracking-wider bg-gray-100 border border-rule px-2 py-0.5 rounded">
+                    Project Title 3 (Tertiary Topic)
+                  </span>
+                  <p className="text-sm text-ink mt-1">{group.title_3}</p>
+                </div>
+              )}
+
+              {group.abstract && (
+                <div className="pt-3">
+                  <span className="text-xs font-bold text-draft uppercase tracking-wide">Abstract Summary:</span>
+                  <p className="text-xs text-ink leading-relaxed mt-1">{group.abstract}</p>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Roster */}
+          {/* Team Members Roster (PDF Sheet Table Format) */}
           <div className="panel">
             <div className="panel-header flex items-center justify-between">
-              <h2 className="font-serif text-lg font-bold">Team Members ({members.length}/4)</h2>
-              <span className="text-xs text-draft font-mono">Min 2 · Max 4</span>
+              <h2 className="font-serif text-lg font-bold">Student Team Roster ({groupMembers.length}/4)</h2>
+              <span className="text-xs text-draft font-mono">Departmental Format</span>
             </div>
-            <div className="divide-y divide-rule">
-              {members.map((m) => (
-                <div key={m.id} className="p-4 flex items-center justify-between hover:bg-paper/50">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-navy/10 border border-navy/20 flex items-center justify-center font-bold text-navy text-xs">
-                      {m.name.charAt(0)}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-sm text-ink">{m.name}</span>
-                        {m.is_leader && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead>
+                  <tr className="bg-paper border-b border-rule font-bold text-draft">
+                    <th className="p-3">Role</th>
+                    <th className="p-3">Name of Student</th>
+                    <th className="p-3">College PRN</th>
+                    <th className="p-3">Division</th>
+                    <th className="p-3">Mobile No</th>
+                    <th className="p-3">Email Address</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-rule">
+                  {groupMembers.map((m, idx) => (
+                    <tr key={m.id || idx} className="hover:bg-paper/50 font-medium">
+                      <td className="p-3 whitespace-nowrap">
+                        {m.is_leader ? (
                           <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded border border-amber-300">
                             LEADER
                           </span>
+                        ) : (
+                          <span className="bg-gray-100 text-draft text-[10px] font-bold px-2 py-0.5 rounded border border-rule">
+                            MEMBER #{idx + 1}
+                          </span>
                         )}
-                      </div>
-                      <p className="text-xs text-draft font-mono mt-0.5">{m.roll_no} · {m.email}</p>
-                    </div>
-                  </div>
-                  <span className="text-xs font-mono font-medium text-draft bg-gray-100 px-2 py-1 rounded">
-                    {m.division}
-                  </span>
-                </div>
-              ))}
+                      </td>
+                      <td className="p-3 font-semibold text-ink whitespace-nowrap">{m.name}</td>
+                      <td className="p-3 font-mono text-navy whitespace-nowrap">{m.roll_no || m.enrollment_no}</td>
+                      <td className="p-3 font-mono whitespace-nowrap">{m.division}</td>
+                      <td className="p-3 font-mono whitespace-nowrap">{m.mobile_no || '—'}</td>
+                      <td className="p-3 font-mono text-draft whitespace-nowrap">{m.email}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
 
-        {/* Right 1 Col: Guide Allocation Status */}
+        {/* Right 1 Col: Project Guide Allocation */}
         <div className="space-y-6">
           <div className="panel">
             <div className="panel-header">
@@ -373,7 +525,7 @@ export default function StudentProject() {
               ) : isLeader ? (
                 <form onSubmit={handleRequestGuide} className="space-y-4">
                   <div>
-                    <label className="input-label">Select Project Guide *</label>
+                    <label className="input-label">Select Faculty Guide *</label>
                     <select
                       value={selectedGuideId}
                       onChange={(e) => setSelectedGuideId(e.target.value)}
@@ -404,11 +556,9 @@ export default function StudentProject() {
 
       {/* Section: Stage Continuous Evaluations & Released Scores */}
       <div className="space-y-6">
-        <div className="border-b border-rule pb-3 flex items-center justify-between">
-          <div>
-            <h2 className="font-serif text-2xl font-bold text-ink">Evaluation Stages &amp; Score Cards</h2>
-            <p className="text-xs text-draft mt-0.5">Continuous assessment scores are visible once officially released by HOD.</p>
-          </div>
+        <div className="border-b border-rule pb-3">
+          <h2 className="font-serif text-2xl font-bold text-ink">Evaluation Stages &amp; Continuous Assessment Scores</h2>
+          <p className="text-xs text-draft mt-0.5">Continuous assessment scores are visible once officially released by HOD.</p>
         </div>
 
         <div className="space-y-6">
@@ -505,3 +655,4 @@ export default function StudentProject() {
     </div>
   );
 }
+

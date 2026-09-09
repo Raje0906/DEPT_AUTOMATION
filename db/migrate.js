@@ -181,6 +181,8 @@ async function runMigrations() {
         academic_year VARCHAR(20) NOT NULL,
         batch         VARCHAR(20) NOT NULL,
         title         TEXT NOT NULL,
+        title_2       TEXT,
+        title_3       TEXT,
         domain        VARCHAR(150) NOT NULL,
         abstract      TEXT,
         status        VARCHAR(30) NOT NULL DEFAULT 'DRAFT'
@@ -194,14 +196,26 @@ async function runMigrations() {
     // ─── PROJECT GROUP MEMBERS ────────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS project_group_members (
-        id          SERIAL PRIMARY KEY,
-        group_id    INTEGER NOT NULL REFERENCES project_groups(id) ON DELETE CASCADE,
-        student_id  INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
-        roll_no     VARCHAR(20) NOT NULL,
-        is_leader   BOOLEAN DEFAULT FALSE,
-        UNIQUE(group_id, student_id)
+        id           SERIAL PRIMARY KEY,
+        group_id     INTEGER NOT NULL REFERENCES project_groups(id) ON DELETE CASCADE,
+        student_id   INTEGER REFERENCES students(id) ON DELETE CASCADE,
+        roll_no      VARCHAR(50) NOT NULL,
+        student_name VARCHAR(150),
+        email        VARCHAR(200),
+        mobile_no    VARCHAR(30),
+        division     VARCHAR(30),
+        is_leader    BOOLEAN DEFAULT FALSE
       )
     `);
+
+    // Alter queries for existing database tables upgrade
+    await client.query(`ALTER TABLE project_groups ADD COLUMN IF NOT EXISTS title_2 TEXT`);
+    await client.query(`ALTER TABLE project_groups ADD COLUMN IF NOT EXISTS title_3 TEXT`);
+    await client.query(`ALTER TABLE project_group_members ALTER COLUMN student_id DROP NOT NULL`);
+    await client.query(`ALTER TABLE project_group_members ADD COLUMN IF NOT EXISTS student_name VARCHAR(150)`);
+    await client.query(`ALTER TABLE project_group_members ADD COLUMN IF NOT EXISTS email VARCHAR(200)`);
+    await client.query(`ALTER TABLE project_group_members ADD COLUMN IF NOT EXISTS mobile_no VARCHAR(30)`);
+    await client.query(`ALTER TABLE project_group_members ADD COLUMN IF NOT EXISTS division VARCHAR(30)`);
 
     // ─── PROJECT GUIDE REQUESTS ───────────────────────────────────────────────
     await client.query(`
