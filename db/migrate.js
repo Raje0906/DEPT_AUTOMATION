@@ -31,7 +31,7 @@ async function runMigrations() {
         enrollment_no     VARCHAR(30)  UNIQUE NOT NULL,
         batch             VARCHAR(20)  NOT NULL,
         current_semester  INTEGER      NOT NULL CHECK (current_semester BETWEEN 1 AND 8),
-        division          VARCHAR(5)   NOT NULL
+        division          VARCHAR(30)  NOT NULL
       )
     `);
 
@@ -71,8 +71,20 @@ async function runMigrations() {
         subject_id      INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
         semester        INTEGER NOT NULL,
         academic_year   VARCHAR(20) NOT NULL,
-        division        VARCHAR(5)  NOT NULL,
+        division        VARCHAR(30) NOT NULL,
         UNIQUE(faculty_id, subject_id, semester, academic_year, division)
+      )
+    `);
+
+    // ─── CLASS TEACHERS ───────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS class_teachers (
+        id            SERIAL PRIMARY KEY,
+        faculty_id    INTEGER NOT NULL REFERENCES faculty(id) ON DELETE CASCADE,
+        class_name    VARCHAR(30) NOT NULL,
+        academic_year VARCHAR(20) NOT NULL,
+        assigned_at   TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(class_name, academic_year)
       )
     `);
 
@@ -140,7 +152,7 @@ async function runMigrations() {
         semester      INTEGER NOT NULL,
         academic_year VARCHAR(20) NOT NULL,
         department    VARCHAR(100) NOT NULL,
-        division      VARCHAR(5)  NOT NULL,
+        division      VARCHAR(30) NOT NULL,
         status        VARCHAR(20) NOT NULL DEFAULT 'open'
                       CHECK (status IN ('open','locked','published')),
         published_by  INTEGER REFERENCES users(id),

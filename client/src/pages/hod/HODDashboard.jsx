@@ -73,7 +73,7 @@ export default function HODDashboard() {
                 <th>Subject</th>
                 <th>Code</th>
                 <th>Faculty</th>
-                <th>Division</th>
+                <th>Class</th>
                 <th className="numeric">Enrolled</th>
                 <th className="numeric">Entered</th>
                 <th>Status</th>
@@ -86,7 +86,11 @@ export default function HODDashboard() {
                   <td className="font-medium">{s.subject_name}</td>
                   <td className="font-mono text-xs text-draft">{s.code}</td>
                   <td>{s.faculty_name}</td>
-                  <td>{s.division}</td>
+                  <td>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-50 text-blue-900 border border-blue-200">
+                      {s.division}
+                    </span>
+                  </td>
                   <td className="numeric">{s.enrolled}</td>
                   <td className="numeric">{s.marks_entered}</td>
                   <td><StatusBadge status={s.status} /></td>
@@ -106,8 +110,14 @@ export default function HODDashboard() {
       ))}
 
       {subjects.length === 0 && (
-        <div className="empty-state">
-          <p className="text-sm text-draft">No subjects found for this department.</p>
+        <div className="panel p-10 text-center">
+          <p className="text-lg font-serif font-bold text-ink">No course allocations yet</p>
+          <p className="text-sm text-draft mt-1 mb-5 max-w-md mx-auto">
+            You can assign subjects and classes (SE, TE, and BE Comp 1 to 4) to the 10 department teachers anytime.
+          </p>
+          <Link to="/hod/teachers" className="btn-primary inline-flex items-center gap-2 shadow-sm">
+            <span>+</span> Allocate Faculty &amp; Subjects
+          </Link>
         </div>
       )}
     </div>

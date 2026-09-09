@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 
 export default function ClassReports() {
   const [selectedSubject, setSelectedSubject] = useState('DSBDA');
+  const [selectedClass, setSelectedClass]     = useState('TE Comp 1');
 
   const reportStats = {
     totalStudents: 79,
@@ -39,6 +40,30 @@ export default function ClassReports() {
         </div>
         <div className="flex items-center gap-3">
           <select
+            value={selectedClass}
+            onChange={(e) => setSelectedClass(e.target.value)}
+            className="input-field text-sm font-semibold"
+          >
+            <optgroup label="Second Year (SE)">
+              <option value="SE Comp 1">SE Comp 1</option>
+              <option value="SE Comp 2">SE Comp 2</option>
+              <option value="SE Comp 3">SE Comp 3</option>
+              <option value="SE Comp 4">SE Comp 4</option>
+            </optgroup>
+            <optgroup label="Third Year (TE)">
+              <option value="TE Comp 1">TE Comp 1</option>
+              <option value="TE Comp 2">TE Comp 2</option>
+              <option value="TE Comp 3">TE Comp 3</option>
+              <option value="TE Comp 4">TE Comp 4</option>
+            </optgroup>
+            <optgroup label="Final Year (BE)">
+              <option value="BE Comp 1">BE Comp 1</option>
+              <option value="BE Comp 2">BE Comp 2</option>
+              <option value="BE Comp 3">BE Comp 3</option>
+              <option value="BE Comp 4">BE Comp 4</option>
+            </optgroup>
+          </select>
+          <select
             value={selectedSubject}
             onChange={(e) => setSelectedSubject(e.target.value)}
             className="input-field text-sm font-semibold"
@@ -49,7 +74,7 @@ export default function ClassReports() {
             <option value="CE601">CE601 — Software Engineering (Sem 6)</option>
           </select>
           <button
-            onClick={() => toast.success('Exporting official departmental report as PDF...')}
+            onClick={() => toast.success(`Exporting ${selectedSubject} (${selectedClass}) report as PDF...`)}
             className="btn-primary flex-shrink-0"
           >
             Export PDF ↓

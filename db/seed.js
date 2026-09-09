@@ -38,11 +38,18 @@ async function seed() {
       [hodUser.rows[0].id, 'Computer Engineering', 'Head of Department', 'FAC001']
     );
 
-    // ─── FACULTY ──────────────────────────────────────────────────────────────
+    // ─── FACULTY (10 Default Teachers) ─────────────────────────────────────────
     const facultyData = [
-      { name: 'Prof. Rajan Mehta',   email: 'rajan@meswadiacoe.edu',   emp: 'FAC002', desig: 'Associate Professor' },
-      { name: 'Prof. Sunita Patil',  email: 'sunita@meswadiacoe.edu',  emp: 'FAC003', desig: 'Assistant Professor' },
-      { name: 'Prof. Arjun Sharma',  email: 'arjun@meswadiacoe.edu',   emp: 'FAC004', desig: 'Assistant Professor' },
+      { name: 'Prof. Rajan Mehta',      email: 'rajan@meswadiacoe.edu',            emp: 'FAC002', desig: 'Associate Professor' },
+      { name: 'Prof. Sunita Patil',     email: 'sunita@meswadiacoe.edu',           emp: 'FAC003', desig: 'Associate Professor' },
+      { name: 'Prof. Arjun Sharma',     email: 'arjun@meswadiacoe.edu',            emp: 'FAC004', desig: 'Assistant Professor' },
+      { name: 'Prof. Priya Kulkarni',   email: 'priya.kulkarni@meswadiacoe.edu',   emp: 'FAC005', desig: 'Assistant Professor' },
+      { name: 'Prof. Rajesh Deshpande', email: 'rajesh.deshpande@meswadiacoe.edu', emp: 'FAC006', desig: 'Associate Professor' },
+      { name: 'Prof. Neha Joshi',       email: 'neha.joshi@meswadiacoe.edu',       emp: 'FAC007', desig: 'Assistant Professor' },
+      { name: 'Prof. Vikram Shinde',    email: 'vikram.shinde@meswadiacoe.edu',    emp: 'FAC008', desig: 'Assistant Professor' },
+      { name: 'Prof. Anjali Gokhale',   email: 'anjali.gokhale@meswadiacoe.edu',   emp: 'FAC009', desig: 'Assistant Professor' },
+      { name: 'Prof. Sachin Kadam',     email: 'sachin.kadam@meswadiacoe.edu',     emp: 'FAC010', desig: 'Assistant Professor' },
+      { name: 'Prof. Pooja More',       email: 'pooja.more@meswadiacoe.edu',       emp: 'FAC011', desig: 'Assistant Professor' },
     ];
     const facultyIds = [];
     for (const f of facultyData) {

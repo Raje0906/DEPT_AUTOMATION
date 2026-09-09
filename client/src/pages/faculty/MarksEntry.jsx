@@ -270,7 +270,7 @@ export default function MarksEntry() {
         <div>
           <h1 className="font-serif text-3xl font-bold text-ink">{subject.name}</h1>
           <p className="text-base text-draft mt-1 font-medium">
-            {subject.code} · Semester {semester} · Division {division} · {academicYear}
+            {subject.code} · Semester {semester} · Class {division} · {academicYear}
           </p>
           <p className="text-sm text-draft mt-1.5 font-medium">
             Max marks — CIE: <span className="font-bold text-ink">{subject.max_cie}</span>

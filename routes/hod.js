@@ -433,4 +433,266 @@ router.post('/manual-override', async (req, res) => {
   }
 });
 
+// ─── GET /api/hod/teachers ────────────────────────────────────────────────────
+router.get('/teachers', async (req, res) => {
+  try {
+    const facultyRes = await pool.query(
+      `SELECT f.id, f.employee_id, f.designation, f.department, u.name, u.email
+       FROM faculty f
+       JOIN users u ON u.id = f.user_id
+       WHERE u.role = 'faculty' OR u.role = 'hod'
+       ORDER BY f.id`
+    );
+
+    const mappingsRes = await pool.query(
+      `SELECT fsm.id AS mapping_id, fsm.faculty_id, fsm.subject_id, fsm.semester,
+              fsm.academic_year, fsm.division,
+              s.name AS subject_name, s.code AS subject_code, s.credits
+       FROM faculty_subject_map fsm
+       JOIN subjects s ON s.id = fsm.subject_id
+       ORDER BY fsm.academic_year DESC, fsm.semester, s.code, fsm.division`
+    );
+
+    // Get class teachers
+    const ctRes = await pool.query(
+      `SELECT id AS class_teacher_id, faculty_id, class_name, academic_year, assigned_at
+       FROM class_teachers
+       ORDER BY academic_year DESC, class_name`
+    );
+
+    // Group mappings by faculty_id
+    const mappingsByFaculty = {};
+    for (const m of mappingsRes.rows) {
+      if (!mappingsByFaculty[m.faculty_id]) mappingsByFaculty[m.faculty_id] = [];
+      mappingsByFaculty[m.faculty_id].push(m);
+    }
+
+    // Group class teachers by faculty_id
+    const ctByFaculty = {};
+    for (const ct of ctRes.rows) {
+      if (!ctByFaculty[ct.faculty_id]) ctByFaculty[ct.faculty_id] = [];
+      ctByFaculty[ct.faculty_id].push(ct);
+    }
+
+    const teachers = facultyRes.rows.map(f => ({
+      ...f,
+      assignments: mappingsByFaculty[f.id] || [],
+      classTeacherOf: ctByFaculty[f.id] || [],
+    }));
+
+    res.json({ teachers, classTeachers: ctRes.rows });
+  } catch (err) {
+    console.error('[HOD] Get teachers error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── GET /api/hod/all-subjects ────────────────────────────────────────────────
+router.get('/all-subjects', async (req, res) => {
+  try {
+    const subjectsRes = await pool.query(
+      `SELECT id, name, code, semester, credits, has_practical, subject_type
+       FROM subjects
+       WHERE department = $1
+       ORDER BY semester, code`,
+      [req.user.dept]
+    );
+    res.json({ subjects: subjectsRes.rows });
+  } catch (err) {
+    console.error('[HOD] Get all-subjects error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── POST /api/hod/teachers/assign ────────────────────────────────────────────
+router.post('/teachers/assign', async (req, res) => {
+  try {
+    const {
+      facultyId,
+      subjectId,
+      semester,
+      academicYear,
+      division,
+      isClassTeacher,
+      classTeacherFor,
+      assignments,
+    } = req.body;
+
+    if (!facultyId) {
+      return res.status(400).json({ error: 'Faculty is required' });
+    }
+
+    const year = academicYear || '2025-26';
+
+    // Support both batch assignment (assignments: [...]) and single assignment
+    const itemsToAssign = Array.isArray(assignments) && assignments.length > 0
+      ? assignments
+      : (subjectId && division ? [{ subjectId, division, semester }] : []);
+
+    if (itemsToAssign.length === 0) {
+      return res.status(400).json({ error: 'At least one subject and class must be selected' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      let insertedCount = 0;
+      let alreadyAssignedCount = 0;
+      const insertedIds = [];
+
+      for (const item of itemsToAssign) {
+        if (!item.subjectId || !item.division) continue;
+
+        const subRes = await client.query(`SELECT semester, name, code FROM subjects WHERE id = $1`, [item.subjectId]);
+        if (subRes.rows.length === 0) continue;
+        const actualSemester = item.semester || subRes.rows[0].semester;
+
+        const insertRes = await client.query(
+          `INSERT INTO faculty_subject_map (faculty_id, subject_id, semester, academic_year, division)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (faculty_id, subject_id, semester, academic_year, division) DO NOTHING
+           RETURNING id`,
+          [facultyId, item.subjectId, actualSemester, year, item.division]
+        );
+
+        if (insertRes.rows.length > 0) {
+          insertedCount++;
+          insertedIds.push(insertRes.rows[0].id);
+        } else {
+          alreadyAssignedCount++;
+        }
+      }
+
+      // If marked as Class Teacher, record in class_teachers
+      const ctTargetClass = classTeacherFor || (itemsToAssign[0] && itemsToAssign[0].division);
+      if (isClassTeacher && ctTargetClass) {
+        await client.query(
+          `INSERT INTO class_teachers (faculty_id, class_name, academic_year)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (class_name, academic_year)
+           DO UPDATE SET faculty_id = EXCLUDED.faculty_id, assigned_at = NOW()`,
+          [facultyId, ctTargetClass, year]
+        );
+      }
+
+      await client.query('COMMIT');
+
+      if (insertedCount === 0 && alreadyAssignedCount > 0) {
+        return res.status(409).json({
+          error: 'The selected subject(s) are already assigned to this teacher for the chosen class(es)',
+        });
+      }
+
+      auditRecord({
+        tableName: 'faculty_subject_map',
+        recordId: insertedIds[0] || parseInt(facultyId, 10),
+        changedBy: req.user.id,
+        oldValue: null,
+        newValue: { facultyId, insertedCount, academicYear: year, isClassTeacher, ctTargetClass },
+        action: 'INSERT',
+        reason: `HOD assigned ${insertedCount} course(s) to faculty #${facultyId}${isClassTeacher && ctTargetClass ? ` [Class Teacher for ${ctTargetClass}]` : ''}`,
+      });
+
+      let msg = `Successfully assigned ${insertedCount} subject(s)!`;
+      if (alreadyAssignedCount > 0) {
+        msg += ` (${alreadyAssignedCount} already assigned).`;
+      }
+      if (isClassTeacher && ctTargetClass) {
+        msg += ` Also designated as Class Teacher for ${ctTargetClass}.`;
+      }
+
+      res.json({
+        message: msg,
+        insertedCount,
+        mappingId: insertedIds[0] || null,
+      });
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error('[HOD] Assign teacher error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── POST /api/hod/teachers/set-class-teacher ─────────────────────────────────
+router.post('/teachers/set-class-teacher', async (req, res) => {
+  try {
+    const { facultyId, className, academicYear } = req.body;
+    if (!facultyId || !className) {
+      return res.status(400).json({ error: 'Faculty and class name are required' });
+    }
+    const year = academicYear || '2025-26';
+
+    await pool.query(
+      `INSERT INTO class_teachers (faculty_id, class_name, academic_year)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (class_name, academic_year)
+       DO UPDATE SET faculty_id = EXCLUDED.faculty_id, assigned_at = NOW()`,
+      [facultyId, className, year]
+    );
+
+    auditRecord({
+      tableName: 'class_teachers',
+      recordId: parseInt(facultyId, 10),
+      changedBy: req.user.id,
+      oldValue: null,
+      newValue: { facultyId, className, year },
+      action: 'UPDATE',
+      reason: `HOD appointed faculty #${facultyId} as Class Teacher for ${className}`,
+    });
+
+    res.json({ message: `Successfully appointed as Class Teacher for ${className}!` });
+  } catch (err) {
+    console.error('[HOD] Set class teacher error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── DELETE /api/hod/teachers/remove-class-teacher/:id ────────────────────────
+router.delete('/teachers/remove-class-teacher/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query(`DELETE FROM class_teachers WHERE id = $1`, [id]);
+    res.json({ message: 'Class teacher designation removed' });
+  } catch (err) {
+    console.error('[HOD] Remove class teacher error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── DELETE /api/hod/teachers/unassign/:mappingId ──────────────────────────────
+router.delete('/teachers/unassign/:mappingId', async (req, res) => {
+  try {
+    const { mappingId } = req.params;
+
+    const existing = await pool.query(`SELECT * FROM faculty_subject_map WHERE id = $1`, [mappingId]);
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: 'Assignment mapping not found' });
+    }
+
+    await pool.query(`DELETE FROM faculty_subject_map WHERE id = $1`, [mappingId]);
+
+    auditRecord({
+      tableName: 'faculty_subject_map',
+      recordId: parseInt(mappingId, 10),
+      changedBy: req.user.id,
+      oldValue: existing.rows[0],
+      newValue: null,
+      action: 'DELETE',
+      reason: `HOD removed faculty subject mapping #${mappingId}`,
+    });
+
+    res.json({ message: 'Assignment removed successfully' });
+  } catch (err) {
+    console.error('[HOD] Unassign teacher error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 module.exports = router;
+
