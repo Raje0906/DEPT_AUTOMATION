@@ -17,6 +17,7 @@ import StudentProject    from './pages/student/StudentProject'
 
 // Faculty
 import FacultyDashboard  from './pages/faculty/FacultyDashboard'
+import ResultGeneration  from './pages/faculty/ResultGeneration'
 import MarksEntry        from './pages/faculty/MarksEntry'
 import FacultyRevaluation from './pages/faculty/FacultyRevaluation'
 import ClassReports      from './pages/faculty/ClassReports'
@@ -26,6 +27,7 @@ import Magazines         from './pages/faculty/Magazines'
 
 // HOD
 import HODDashboard   from './pages/hod/HODDashboard'
+import TeacherManagement from './pages/hod/TeacherManagement'
 import MarksApproval  from './pages/hod/MarksApproval'
 import PublishResults from './pages/hod/PublishResults'
 import HODAnalytics   from './pages/hod/HODAnalytics'
@@ -75,7 +77,7 @@ export default function App() {
 
           {/* Faculty */}
           <Route path="/faculty" element={<FacultyLayout><FacultyDashboard /></FacultyLayout>} />
-          <Route path="/faculty/subjects" element={<FacultyLayout><FacultyDashboard /></FacultyLayout>} />
+          <Route path="/faculty/subjects" element={<FacultyLayout><ResultGeneration /></FacultyLayout>} />
           <Route path="/faculty/marks/:subjectId" element={<FacultyLayout><MarksEntry /></FacultyLayout>} />
           <Route path="/faculty/revaluation" element={<FacultyLayout><FacultyRevaluation /></FacultyLayout>} />
           <Route path="/faculty/reports" element={<FacultyLayout><ClassReports /></FacultyLayout>} />
@@ -85,6 +87,7 @@ export default function App() {
 
           {/* HOD */}
           <Route path="/hod" element={<HODLayout><HODDashboard /></HODLayout>} />
+          <Route path="/hod/teachers" element={<HODLayout><TeacherManagement /></HODLayout>} />
           <Route path="/hod/approval" element={<HODLayout><MarksApproval /></HODLayout>} />
           <Route path="/hod/publish" element={<HODLayout><PublishResults /></HODLayout>} />
           <Route path="/hod/analytics" element={<HODLayout><HODAnalytics /></HODLayout>} />

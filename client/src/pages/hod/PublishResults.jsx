@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
+import { getClassesForSemester } from '../../utils/academicClasses';
 
 export default function PublishResults() {
   const [dashData, setDashData] = useState(null);
   const [loading, setLoading]   = useState(true);
   const [publishing, setPublishing] = useState(false);
   const [confirm, setConfirm]   = useState(false);
-  const [target, setTarget]     = useState({ semester: '6', academicYear: '2024-25', division: 'A' });
+  const [target, setTarget]     = useState({ semester: '6', academicYear: '2025-26', division: 'TE Comp 1' });
 
   useEffect(() => {
     api.get('/hod/dashboard')
@@ -39,6 +40,7 @@ export default function PublishResults() {
   if (loading) return <div className="p-8 text-sm text-draft">Loading…</div>;
 
   const subjects = dashData?.subjects || [];
+  const currentClasses = getClassesForSemester(target.semester);
 
   // Check if all submitted/approved for the selected semester
   const targetSubjects = subjects.filter(s =>
@@ -60,27 +62,42 @@ export default function PublishResults() {
 
       {/* Target selection */}
       <div className="panel mb-6 p-5">
-        <h2 className="font-serif text-base font-semibold mb-4">Select semester to publish</h2>
+        <h2 className="font-serif text-base font-semibold mb-4">Select semester &amp; class to publish</h2>
         <div className="grid grid-cols-3 gap-4 mb-4">
           <div>
             <label className="input-label">Semester</label>
-            <select className="input-field" value={target.semester}
-              onChange={e => setTarget(t => ({ ...t, semester: e.target.value }))}>
-              {[1,2,3,4,5,6,7,8].map(s => <option key={s} value={s}>Semester {s}</option>)}
+            <select
+              className="input-field"
+              value={target.semester}
+              onChange={e => {
+                const newSem = e.target.value;
+                const classes = getClassesForSemester(newSem);
+                setTarget(t => ({
+                  ...t,
+                  semester: newSem,
+                  division: classes.includes(t.division) ? t.division : classes[0],
+                }));
+              }}
+            >
+              {[3,4,5,6,7,8].map(s => (
+                <option key={s} value={s}>
+                  Sem {s} {s <= 4 ? '(SE)' : s <= 6 ? '(TE)' : '(BE)'}
+                </option>
+              ))}
             </select>
           </div>
           <div>
             <label className="input-label">Academic year</label>
             <select className="input-field" value={target.academicYear}
               onChange={e => setTarget(t => ({ ...t, academicYear: e.target.value }))}>
-              {['2024-25','2023-24','2022-23'].map(y => <option key={y} value={y}>{y}</option>)}
+              {['2025-26','2024-25','2023-24'].map(y => <option key={y} value={y}>{y}</option>)}
             </select>
           </div>
           <div>
-            <label className="input-label">Division</label>
+            <label className="input-label">Class</label>
             <select className="input-field" value={target.division}
               onChange={e => setTarget(t => ({ ...t, division: e.target.value }))}>
-              {['A','B','C'].map(d => <option key={d} value={d}>{d}</option>)}
+              {currentClasses.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
           </div>
         </div>

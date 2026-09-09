@@ -22,11 +22,86 @@ async function getFaculty(userId) {
   return res.rows[0] || null;
 }
 
+// ─── GET /api/faculty/dashboard ───────────────────────────────────────────────
+router.get('/dashboard', async (req, res) => {
+  try {
+    const faculty = await getFaculty(req.user.id);
+    if (!faculty) return res.status(404).json({ error: 'Faculty record not found' });
+
+    // Available academic years
+    const yearsRes = await pool.query(
+      `SELECT DISTINCT academic_year FROM faculty_subject_map WHERE faculty_id = $1 ORDER BY academic_year DESC`,
+      [faculty.id]
+    );
+    const academicYears = yearsRes.rows.map(r => r.academic_year);
+    const selectedYear = req.query.academic_year || academicYears[0] || '2025-26';
+
+    // Assigned subjects for selected year
+    const subjectsRes = await pool.query(
+      `SELECT fsm.id AS map_id, s.id, s.name, s.code, s.semester, s.credits,
+              s.max_cie, s.max_practical, s.max_end_sem, s.has_practical, s.subject_type,
+              fsm.academic_year, fsm.division,
+              COUNT(m.id) AS marks_entered,
+              (SELECT COUNT(*) FROM students st WHERE st.division = fsm.division) AS enrolled_count,
+              CASE
+                WHEN COUNT(m.id) = 0 THEN 'not_started'
+                WHEN COUNT(m.id) FILTER (WHERE m.status = 'published') > 0 THEN 'published'
+                WHEN COUNT(m.id) FILTER (WHERE m.status = 'approved') = COUNT(m.id) AND COUNT(m.id) > 0 THEN 'approved'
+                WHEN COUNT(m.id) FILTER (WHERE m.status = 'submitted') > 0 THEN 'submitted'
+                ELSE 'draft'
+              END AS submission_status
+       FROM faculty_subject_map fsm
+       JOIN subjects s ON s.id = fsm.subject_id
+       LEFT JOIN marks m ON m.subject_id = s.id AND m.semester = fsm.semester AND m.academic_year = fsm.academic_year
+       WHERE fsm.faculty_id = $1 AND fsm.academic_year = $2
+       GROUP BY fsm.id, s.id, fsm.academic_year, fsm.division
+       ORDER BY s.semester, s.code`,
+      [faculty.id, selectedYear]
+    );
+
+    // Pending revaluations
+    const revalRes = await pool.query(
+      `SELECT COUNT(DISTINCT r.id) AS count
+       FROM revaluation_requests r
+       JOIN faculty_subject_map fsm ON fsm.subject_id = r.subject_id
+       WHERE fsm.faculty_id = $1 AND r.status = 'pending'`,
+      [faculty.id]
+    );
+
+    // Check if class teacher
+    const ctRes = await pool.query(
+      `SELECT class_name, academic_year FROM class_teachers WHERE faculty_id = $1 AND academic_year = $2`,
+      [faculty.id, selectedYear]
+    );
+    const classTeacherOf = ctRes.rows.map(r => r.class_name);
+
+    res.json({
+      faculty,
+      academicYears,
+      selectedYear,
+      subjects: subjectsRes.rows,
+      classTeacherOf,
+      pendingRevaluations: parseInt(revalRes.rows[0]?.count || 0, 10),
+    });
+  } catch (err) {
+    console.error('[Faculty] Dashboard error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ─── GET /api/faculty/subjects ────────────────────────────────────────────────
 router.get('/subjects', async (req, res) => {
   try {
     const faculty = await getFaculty(req.user.id);
     if (!faculty) return res.status(404).json({ error: 'Faculty record not found' });
+
+    // Available academic years
+    const yearsRes = await pool.query(
+      `SELECT DISTINCT academic_year FROM faculty_subject_map WHERE faculty_id = $1 ORDER BY academic_year DESC`,
+      [faculty.id]
+    );
+    const academicYears = yearsRes.rows.map(r => r.academic_year);
+    const selectedYear = req.query.academic_year || academicYears[0] || '2025-26';
 
     const result = await pool.query(
       `SELECT fsm.id AS map_id, s.id, s.name, s.code, s.semester, s.credits,
@@ -45,13 +120,13 @@ router.get('/subjects', async (req, res) => {
        FROM faculty_subject_map fsm
        JOIN subjects s ON s.id = fsm.subject_id
        LEFT JOIN marks m ON m.subject_id = s.id AND m.semester = fsm.semester AND m.academic_year = fsm.academic_year
-       WHERE fsm.faculty_id = $1
+       WHERE fsm.faculty_id = $1 AND fsm.academic_year = $2
        GROUP BY fsm.id, s.id, fsm.academic_year, fsm.division
        ORDER BY s.semester, s.code`,
-      [faculty.id]
+      [faculty.id, selectedYear]
     );
 
-    res.json({ subjects: result.rows, faculty });
+    res.json({ subjects: result.rows, faculty, academicYears, selectedYear });
   } catch (err) {
     console.error('[Faculty] Subjects error:', err.message);
     res.status(500).json({ error: 'Internal server error' });
