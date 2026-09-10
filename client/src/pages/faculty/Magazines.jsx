@@ -1,270 +1,143 @@
 import React, { useState } from 'react';
-import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
+import { useMagazine } from '../../contexts/MagazineContext';
+import MagazineCard from '../../components/magazine/MagazineCard';
+import { useAuth } from '../../contexts/AuthContext';
 
-const publications = [
-  {
-    id: 'MAG-2024-02',
-    title: 'BYTE — The Annual Tech Magazine (Vol. XII)',
-    tag: 'Annual Department Magazine',
-    year: '2024–25 Edition',
-    editors: 'Prof. Rajan Mehta (Chief Editor), Anuja Aher (Student Editor)',
-    theme: 'Frontiers of Generative AI and Quantum Paradigms',
-    articlesCount: 24,
-    downloads: 412,
-    badge: 'Latest Issue',
-    status: 'Published',
-  },
-  {
-    id: 'MAG-2024-01',
-    title: 'TechnoWadia Research Bulletin (Issue 8)',
-    tag: 'Peer-Reviewed Department Journal',
-    year: 'Winter 2024',
-    editors: 'Dr. Meera Krishnan (HOD), Prof. Sunita Patil',
-    theme: 'Edge Computing, Distributed Systems & Green Cloud',
-    articlesCount: 16,
-    downloads: 328,
-    badge: 'Research Digest',
-    status: 'Published',
-  },
-  {
-    id: 'MAG-2023-02',
-    title: 'Algorithmica — Coding Club & Hackathon Chronicles',
-    tag: 'Quarterly Technical Newsletter',
-    year: 'Term I 2024',
-    editors: 'Prof. Arjun Sharma, Aditya Mishra (TE Comp)',
-    theme: 'Smart India Hackathon Winning Submissions & Project Case Studies',
-    articlesCount: 18,
-    downloads: 290,
-    badge: 'Student Special',
-    status: 'Archived',
-  },
-  {
-    id: 'MAG-2023-01',
-    title: 'CyberChronicle — Information Security Quarterly',
-    tag: 'Special Domain Digest',
-    year: 'Fall 2023',
-    editors: 'Prof. Rajan Mehta, Student Cyber Cell',
-    theme: 'Zero-Day Vulnerability Disclosures and Defensive Architecture',
-    articlesCount: 14,
-    downloads: 195,
-    badge: 'Security Cell',
-    status: 'Archived',
-  },
-];
+export default function MagazineDashboard() {
+  const { magazines } = useMagazine();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [filter, setFilter] = useState('All');
 
-export default function Magazines() {
-  const [showSubmitModal, setShowSubmitModal] = useState(false);
-  const [article, setArticle] = useState({
-    title: '',
-    author: '',
-    magazine: 'BYTE — The Annual Tech Magazine (Vol. XIII)',
-    category: 'Technical Article',
-    abstract: '',
-  });
+  const FILTERS = ['All', 'Published', 'Draft', 'Under Review', 'Archived'];
 
-  const handleSubmitArticle = (e) => {
-    e.preventDefault();
-    if (!article.title.trim() || !article.abstract.trim()) {
-      toast.error('Please complete all article fields');
-      return;
-    }
-    toast.success('Manuscript submitted successfully for editorial review!');
-    setShowSubmitModal(false);
-    setArticle({
-      title: '',
-      author: '',
-      magazine: 'BYTE — The Annual Tech Magazine (Vol. XIII)',
-      category: 'Technical Article',
-      abstract: '',
-    });
-  };
+  const filtered = filter === 'All' ? magazines : magazines.filter(m => m.status === filter);
+
+  const published = magazines.filter(m => m.status === 'Published').length;
+  const drafts    = magazines.filter(m => m.status === 'Draft' || m.status === 'Under Review').length;
 
   return (
     <div className="p-8 lg:p-10 w-full max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="mb-8 pb-5 border-b border-rule flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Page Header */}
+      <div className="mb-8 pb-5 border-b border-rule flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
-          <h1 className="font-serif text-3xl font-bold text-ink">Department Magazines &amp; Publications</h1>
-          <p className="text-base text-draft mt-1 font-medium">
-            MES Wadia COE Computer Engineering · Technical Periodicals, Bulletins &amp; Research Chronicles
+          <p className="text-[10px] font-bold text-draft uppercase tracking-widest mb-1">Department Publications</p>
+          <h1 className="font-serif text-3xl font-bold text-ink">College Magazine</h1>
+          <p className="text-sm text-draft mt-1 font-medium">
+            Manage previous issues and create a new magazine.
           </p>
         </div>
-        <button
-          onClick={() => setShowSubmitModal(true)}
-          className="btn-primary self-start sm:self-auto"
-        >
-          + Submit Article / Manuscript
-        </button>
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-center flex-shrink-0">
+          <span className="text-xs text-draft hidden sm:block">
+            Welcome, <span className="font-semibold text-ink">{user?.name}</span>
+          </span>
+          <button
+            onClick={() => navigate('/faculty/magazines/create')}
+            className="btn-primary self-start sm:self-auto"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Create New Magazine
+          </button>
+        </div>
       </div>
 
-      {/* Metrics */}
+      {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <div className="p-4 bg-white border border-rule rounded-sm">
-          <p className="text-xs uppercase tracking-wider text-draft font-semibold">Published Editions</p>
-          <p className="font-serif text-3xl font-bold text-ink mt-1">12</p>
-          <p className="text-xs text-draft mt-1 font-medium">Vol. I through Vol. XII</p>
+          <p className="text-xs uppercase tracking-wider text-draft font-semibold">Total Issues</p>
+          <p className="font-serif text-3xl font-bold text-ink mt-1">{magazines.length}</p>
+          <p className="text-xs text-draft mt-1 font-medium">All editions</p>
         </div>
         <div className="p-4 bg-white border border-rule rounded-sm">
-          <p className="text-xs uppercase tracking-wider text-draft font-semibold">Active Editorial Call</p>
-          <p className="font-serif text-3xl font-bold text-pass mt-1">Vol. XIII</p>
-          <p className="text-xs text-pass mt-1 font-medium">Submissions open till 30 Mar</p>
+          <p className="text-xs uppercase tracking-wider text-draft font-semibold">Published</p>
+          <p className="font-serif text-3xl font-bold text-pass mt-1">{published}</p>
+          <p className="text-xs text-pass mt-1 font-medium">Live on website</p>
         </div>
         <div className="p-4 bg-white border border-rule rounded-sm">
-          <p className="text-xs uppercase tracking-wider text-draft font-semibold">Faculty Papers</p>
-          <p className="font-serif text-3xl font-bold text-navy mt-1">48</p>
-          <p className="text-xs text-draft mt-1 font-medium">Indexed publications</p>
+          <p className="text-xs uppercase tracking-wider text-draft font-semibold">In Progress</p>
+          <p className="font-serif text-3xl font-bold text-pending mt-1">{drafts}</p>
+          <p className="text-xs text-pending mt-1 font-medium">Draft / Under review</p>
         </div>
         <div className="p-4 bg-white border border-rule rounded-sm">
-          <p className="text-xs uppercase tracking-wider text-draft font-semibold">Total Reads &amp; DLs</p>
-          <p className="font-serif text-3xl font-bold text-ink mt-1">1,225</p>
-          <p className="text-xs text-draft mt-1 font-medium">Academic Year 2024–25</p>
+          <p className="text-xs uppercase tracking-wider text-draft font-semibold">Latest Issue</p>
+          <p className="font-serif text-xl font-bold text-navy mt-1">Issue 32</p>
+          <p className="text-xs text-draft mt-1 font-medium">Reflection · 2025–26</p>
         </div>
       </div>
 
-      {/* Magazine Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {publications.map((item) => (
-          <div
-            key={item.id}
-            className="bg-white border border-rule rounded-sm p-6 flex flex-col justify-between hover:shadow-md transition-shadow"
-          >
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-mono font-bold text-navy uppercase tracking-wider">
-                  {item.year}
-                </span>
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-navy">
-                  {item.badge}
-                </span>
-              </div>
-              <h2 className="font-serif text-xl font-bold text-ink mb-2 leading-snug">
-                {item.title}
-              </h2>
-              <p className="text-xs font-medium text-maroon mb-3 uppercase tracking-wider">
-                Theme: {item.theme}
-              </p>
-              <p className="text-xs text-draft leading-relaxed mb-4">
-                <span className="font-semibold text-ink">Editorial Board:</span> {item.editors}
-              </p>
-            </div>
-
-            <div className="pt-4 border-t border-rule flex items-center justify-between">
-              <div className="flex items-center gap-3 text-xs text-draft font-mono">
-                <span>{item.articlesCount} Articles</span>
-                <span>·</span>
-                <span>{item.downloads} Downloads</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => toast.success(`Opening digital reader for ${item.title}`)}
-                  className="px-3 py-1.5 border border-rule hover:bg-paper text-ink text-xs font-medium rounded transition-colors"
-                >
-                  Read Issue
-                </button>
-                <button
-                  onClick={() => toast.success(`Initiating PDF download for ${item.title}`)}
-                  className="px-3 py-1.5 bg-navy hover:bg-[#162142] text-white text-xs font-semibold rounded shadow-sm transition-colors"
-                >
-                  Download PDF ↓
-                </button>
-              </div>
-            </div>
+      {/* Primary action cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        <div
+          onClick={() => navigate('/faculty/magazines/create')}
+          className="border-2 border-dashed border-navy rounded-sm p-6 flex items-center gap-5 cursor-pointer hover:bg-blue-50/30 transition-colors group"
+        >
+          <div className="w-12 h-12 rounded-sm bg-navy text-white flex items-center justify-center flex-shrink-0 group-hover:bg-[#162142] transition-colors">
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
           </div>
-        ))}
-      </div>
-
-      {/* Manuscript Submission Modal */}
-      {showSubmitModal && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-sm border border-rule max-w-lg w-full p-6 shadow-xl animate-fade-in">
-            <h3 className="font-serif text-xl font-bold text-ink mb-2">
-              Submit Manuscript to Department Magazine
-            </h3>
-            <p className="text-xs text-draft mb-4">
-              All submissions undergo double-blind review by the Faculty Editorial Board.
-            </p>
-
-            <form onSubmit={handleSubmitArticle} className="space-y-4">
-              <div>
-                <label className="input-label">Article / Paper Title</label>
-                <input
-                  type="text"
-                  value={article.title}
-                  onChange={(e) => setArticle({ ...article, title: e.target.value })}
-                  placeholder="e.g. Advancements in Quantum Key Distribution Protocols"
-                  className="input-field"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="input-label">Select Publication</label>
-                  <select
-                    value={article.magazine}
-                    onChange={(e) => setArticle({ ...article, magazine: e.target.value })}
-                    className="input-field"
-                  >
-                    <option>BYTE — Annual Tech Magazine (Vol. XIII)</option>
-                    <option>TechnoWadia Research Bulletin (Issue 9)</option>
-                    <option>Algorithmica Chronicles</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="input-label">Category</label>
-                  <select
-                    value={article.category}
-                    onChange={(e) => setArticle({ ...article, category: e.target.value })}
-                    className="input-field"
-                  >
-                    <option>Technical Article</option>
-                    <option>Faculty Research Paper</option>
-                    <option>Student Project Showcase</option>
-                    <option>Industry Case Study</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="input-label">Primary Author(s) &amp; Designation</label>
-                <input
-                  type="text"
-                  value={article.author}
-                  onChange={(e) => setArticle({ ...article, author: e.target.value })}
-                  placeholder="e.g. Prof. Rajan Mehta &amp; TE Group 02"
-                  className="input-field"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="input-label">Abstract / Summary (Max 250 words)</label>
-                <textarea
-                  rows={4}
-                  value={article.abstract}
-                  onChange={(e) => setArticle({ ...article, abstract: e.target.value })}
-                  placeholder="Briefly state objectives, methodology, key findings, and technical significance..."
-                  className="input-field"
-                  required
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-3 border-t border-rule">
-                <button
-                  type="button"
-                  onClick={() => setShowSubmitModal(false)}
-                  className="px-4 py-2 border border-rule rounded-sm text-xs font-medium text-draft hover:bg-paper transition-colors"
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="btn-primary">
-                  Submit for Editorial Review
-                </button>
-              </div>
-            </form>
+          <div>
+            <p className="text-base font-bold text-navy">Create New Magazine</p>
+            <p className="text-xs text-draft mt-0.5">Start a new edition of Reflection or any departmental publication.</p>
           </div>
         </div>
-      )}
+
+        <div
+          onClick={() => document.getElementById('previous-issues')?.scrollIntoView({ behavior: 'smooth' })}
+          className="border border-rule rounded-sm p-6 flex items-center gap-5 cursor-pointer hover:bg-paper transition-colors group bg-white"
+        >
+          <div className="w-12 h-12 rounded-sm bg-paper border border-rule text-navy flex items-center justify-center flex-shrink-0">
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+            </svg>
+          </div>
+          <div>
+            <p className="text-base font-bold text-ink">Browse Previous Issues</p>
+            <p className="text-xs text-draft mt-0.5">View, edit, or download previously published editions.</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Previous Issues */}
+      <div id="previous-issues">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-serif text-xl font-bold text-ink">Previous Issues</h2>
+          {/* Filter pills */}
+          <div className="flex gap-1.5 flex-wrap">
+            {FILTERS.map(f => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-3 py-1 text-xs font-semibold rounded-sm border transition-colors ${filter === f ? 'bg-navy text-white border-navy' : 'border-rule text-draft hover:border-navy'}`}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {filtered.length === 0 ? (
+          <div className="empty-state">
+            <svg className="w-12 h-12 text-draft mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+            </svg>
+            <p className="text-sm font-medium text-draft">No magazines found for "{filter}"</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {filtered.map(magazine => (
+              <MagazineCard
+                key={magazine.id}
+                magazine={magazine}
+                onEdit={m => navigate(`/faculty/magazines/editor/${m.id}`)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

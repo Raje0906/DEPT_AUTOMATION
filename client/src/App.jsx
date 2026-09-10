@@ -2,6 +2,7 @@ import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from './contexts/AuthContext'
+import { MagazineProvider } from './contexts/MagazineContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Layout from './components/Layout'
 
@@ -24,6 +25,10 @@ import ClassReports      from './pages/faculty/ClassReports'
 import LabMaintenance   from './pages/faculty/LabMaintenance'
 import ProjectEval       from './pages/faculty/ProjectEval'
 import Magazines         from './pages/faculty/Magazines'
+import CreateMagazineForm from './pages/faculty/magazine/CreateMagazineForm'
+import MagazineEditor    from './pages/faculty/magazine/MagazineEditor'
+import MagazinePreview   from './pages/faculty/magazine/MagazinePreview'
+import OnlineMagazineViewer from './pages/faculty/magazine/OnlineMagazineViewer'
 
 // HOD
 import HODDashboard   from './pages/hod/HODDashboard'
@@ -57,6 +62,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <MagazineProvider>
         <Toaster
           position="top-right"
           toastOptions={{
@@ -84,6 +90,10 @@ export default function App() {
           <Route path="/faculty/lab-maintenance" element={<FacultyLayout><LabMaintenance /></FacultyLayout>} />
           <Route path="/faculty/project-eval" element={<FacultyLayout><ProjectEval /></FacultyLayout>} />
           <Route path="/faculty/magazines" element={<FacultyLayout><Magazines /></FacultyLayout>} />
+          <Route path="/faculty/magazines/create" element={<FacultyLayout><CreateMagazineForm /></FacultyLayout>} />
+          <Route path="/faculty/magazines/editor/:id" element={<MagazineEditor />} />
+          <Route path="/faculty/magazines/preview/:id" element={<MagazinePreview />} />
+          <Route path="/faculty/magazines/view/:id" element={<OnlineMagazineViewer />} />
 
           {/* HOD */}
           <Route path="/hod" element={<HODLayout><HODDashboard /></HODLayout>} />
@@ -102,6 +112,7 @@ export default function App() {
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
+        </MagazineProvider>
       </AuthProvider>
     </BrowserRouter>
   )
