@@ -40,6 +40,14 @@ import HODRevaluation from './pages/hod/HODRevaluation'
 import HODProjectMgmt from './pages/hod/HODProjectMgmt'
 import AuditLog       from './pages/hod/AuditLog'
 
+// Seminar Tool
+import SeminarSessions   from './pages/seminar/SeminarSessions'
+import SeminarUpload     from './pages/seminar/SeminarUpload'
+import SeminarAssignment from './pages/seminar/SeminarAssignment'
+import SeminarReview     from './pages/seminar/SeminarReview'
+import SeminarGuideView  from './pages/seminar/SeminarGuideView'
+import SeminarAuditLog   from './pages/seminar/SeminarAuditLog'
+
 // Alumni
 import AlumniFeedback      from './pages/alumni/AlumniFeedback'
 import DistinguishedAlumni from './pages/alumni/DistinguishedAlumni'
@@ -94,6 +102,17 @@ export default function App() {
           <Route path="/faculty/magazines/editor/:id" element={<MagazineEditor />} />
           <Route path="/faculty/magazines/preview/:id" element={<MagazinePreview />} />
           <Route path="/faculty/magazines/view/:id" element={<OnlineMagazineViewer />} />
+
+          {/* Seminar Tool — Coordinator */}
+          <Route path="/faculty/seminar"              element={<FacultyLayout><SeminarSessions /></FacultyLayout>} />
+          <Route path="/faculty/seminar/:id/upload"   element={<FacultyLayout><SeminarUpload /></FacultyLayout>} />
+          <Route path="/faculty/seminar/:id/assign"   element={<FacultyLayout><SeminarAssignment /></FacultyLayout>} />
+          <Route path="/faculty/seminar/:id/review"   element={<FacultyLayout><SeminarReview /></FacultyLayout>} />
+          <Route path="/faculty/seminar/:id/audit"    element={<FacultyLayout><SeminarAuditLog /></FacultyLayout>} />
+          {/* Seminar Tool — Guide view */}
+          <Route path="/faculty/seminar/my-groups"    element={<FacultyLayout><SeminarGuideView /></FacultyLayout>} />
+          {/* HOD also accesses seminar */}
+          <Route path="/hod/seminar"                  element={<HODLayout><SeminarSessions /></HODLayout>} />
 
           {/* HOD */}
           <Route path="/hod" element={<HODLayout><HODDashboard /></HODLayout>} />

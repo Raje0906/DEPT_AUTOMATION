@@ -1,7 +1,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { parseGroups, validateGroups, sequentialFill, normPrn, normText } = require('./services/seminarParser');
+const { parseGroups, validateGroups, sequentialFill, normPrn, normText } = require('./seminarParser');
 
 // ─── Helper: build a raw rows array (no timestamp column) ─────────────────
 // Columns: Name, PRN, Div, Mobile, Email, T1, T2, T3  x4 students, then Domain
