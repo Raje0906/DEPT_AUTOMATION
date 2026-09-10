@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMagazine } from '../../../contexts/MagazineContext';
+import { generateMagazinePages } from '../../../components/magazine/PagePreview';
+import MagazinePrintContainer from '../../../components/magazine/MagazinePrintContainer';
+import { generateMagazinePDF } from '../../../services/pdfGenerator';
 import toast from 'react-hot-toast';
 
 const SAMPLE_PAGES_VIEW = [
@@ -8,16 +11,17 @@ const SAMPLE_PAGES_VIEW = [
   { id: 2, label: "Principal's Message",      bg: '#F5F3EE', color: '#1A1F36' },
   { id: 3, label: "HOD's Message",            bg: '#F5F3EE', color: '#1A1F36' },
   { id: 4, label: 'Class Toppers — SE',       bg: '#FFFFFF', color: '#1A1F36' },
-  { id: 5, label: 'Class Toppers — TE & BE',  bg: '#FFFFFF', color: '#1A1F36' },
-  { id: 6, label: 'Department Events',        bg: '#F5F3EE', color: '#1A1F36' },
-  { id: 7, label: 'Events Gallery',           bg: '#FFFFFF', color: '#1A1F36' },
-  { id: 8, label: 'Student Workshops',        bg: '#F5F3EE', color: '#1A1F36' },
-  { id: 9, label: 'Guest Lectures',           bg: '#FFFFFF', color: '#1A1F36' },
-  { id: 10, label: 'Student Achievements',    bg: '#F5F3EE', color: '#1A1F36' },
-  { id: 11, label: 'Centre of Excellence',    bg: '#1E2D5A', color: '#fff' },
-  { id: 12, label: 'Staff Achievements',      bg: '#FFFFFF', color: '#1A1F36' },
-  { id: 13, label: 'FDP / STTP',             bg: '#F5F3EE', color: '#1A1F36' },
-  { id: 14, label: 'Publications',            bg: '#FFFFFF', color: '#1A1F36' },
+  { id: 5, label: 'Class Toppers — TE',       bg: '#FFFFFF', color: '#1A1F36' },
+  { id: 6, label: 'Class Toppers — BE',       bg: '#FFFFFF', color: '#1A1F36' },
+  { id: 7, label: 'Department Events',        bg: '#F5F3EE', color: '#1A1F36' },
+  { id: 8, label: 'Events Gallery',           bg: '#FFFFFF', color: '#1A1F36' },
+  { id: 9, label: 'Student Workshops',        bg: '#F5F3EE', color: '#1A1F36' },
+  { id: 10, label: 'Guest Lectures',          bg: '#FFFFFF', color: '#1A1F36' },
+  { id: 11, label: 'Student Achievements',    bg: '#F5F3EE', color: '#1A1F36' },
+  { id: 12, label: 'Centre of Excellence',    bg: '#1E2D5A', color: '#fff' },
+  { id: 13, label: 'Staff Achievements',      bg: '#FFFFFF', color: '#1A1F36' },
+  { id: 14, label: 'FDP / STTP',             bg: '#F5F3EE', color: '#1A1F36' },
+  { id: 15, label: 'Publications',            bg: '#FFFFFF', color: '#1A1F36' },
 ];
 
 function PageCard({ page, isActive, onClick }) {
@@ -46,16 +50,23 @@ function PageCard({ page, isActive, onClick }) {
 export default function OnlineMagazineViewer() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { magazines } = useMagazine();
+  const { magazines, sectionData } = useMagazine();
   const [currentPage, setCurrentPage] = useState(1);
   const [zoom, setZoom] = useState(100);
   const [fullscreen, setFullscreen] = useState(false);
   const [search, setSearch] = useState('');
   const [showSearch, setShowSearch] = useState(false);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+
+  const printContainerRef = useRef(null);
 
   const totalPages = SAMPLE_PAGES_VIEW.length;
   const page = SAMPLE_PAGES_VIEW[currentPage - 1];
   const magazine = magazines.find(m => m.id === id) || magazines[0];
+
+  const pages = useMemo(() => {
+    return generateMagazinePages(magazine, sectionData);
+  }, [magazine, sectionData]);
 
   const changeZoom = (delta) => setZoom(z => Math.min(150, Math.max(60, z + delta)));
 
@@ -64,8 +75,35 @@ export default function OnlineMagazineViewer() {
     setCurrentPage(clamped);
   };
 
+  const handleDownloadPdf = async () => {
+    if (isGeneratingPdf) return;
+    setIsGeneratingPdf(true);
+    const toastId = toast.loading('Generating magazine PDF (A4)...');
+    try {
+      const filename = await generateMagazinePDF({
+        containerElement: printContainerRef.current,
+        magazineTitle: magazine?.title || 'Reflection',
+        issueNumber: magazine?.issueNumber || '32',
+        onProgress: (msg) => toast.loading(msg, { id: toastId }),
+      });
+      toast.success(`Downloaded ${filename}`, { id: toastId });
+    } catch (err) {
+      console.error('PDF error:', err);
+      toast.error(err.message || 'Failed to generate PDF.', { id: toastId });
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
   return (
     <div className={`flex flex-col ${fullscreen ? 'fixed inset-0 z-50' : 'h-screen'} bg-gray-800`}>
+      {/* Off-screen A4 container for 1:1 PDF printing */}
+      <MagazinePrintContainer
+        pages={pages}
+        currentMagazine={magazine}
+        containerRef={printContainerRef}
+      />
+
       {/* Top toolbar */}
       <header className="flex items-center gap-3 px-4 py-2.5 bg-white border-b border-rule flex-shrink-0 flex-wrap">
         <button
@@ -119,10 +157,11 @@ export default function OnlineMagazineViewer() {
           </button>
 
           <button
-            onClick={() => toast('PDF download starting…')}
-            className="btn-primary text-xs py-1.5 px-3"
+            onClick={handleDownloadPdf}
+            disabled={isGeneratingPdf}
+            className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5 disabled:opacity-50"
           >
-            ↓ Download PDF
+            {isGeneratingPdf ? 'Generating PDF...' : '↓ Download PDF'}
           </button>
         </div>
       </header>

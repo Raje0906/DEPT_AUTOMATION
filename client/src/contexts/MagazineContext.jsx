@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
+import { parseClassAndDivision } from '../utils/toppersUtils';
 
 const MagazineContext = createContext(null);
 
@@ -92,7 +93,14 @@ const SAMPLE_MAGAZINES = [
 
 // ── Default section data for a new magazine ───────────────────────────────────
 // ── Default section data for a new magazine ───────────────────────────────────
-export const CLASS_OPTIONS = ['SE I', 'SE II', 'SE III', 'TE I', 'TE II', 'TE III', 'BE I', 'BE II', 'BE III'];
+export const CLASS_OPTIONS = [
+  'SE - Div A', 'SE - Div B', 'SE - Div C',
+  'TE - Div A', 'TE - Div B', 'TE - Div C',
+  'BE - Div A', 'BE - Div B', 'BE - Div C',
+  'SE I', 'SE II', 'SE III',
+  'TE I', 'TE II', 'TE III',
+  'BE I', 'BE II', 'BE III'
+];
 
 export function normalizeToppersData(toppersInput) {
   if (!toppersInput) {
@@ -125,14 +133,21 @@ export function normalizeToppersData(toppersInput) {
     const id = s.id || `student-${idx + 1}-${Date.now()}`;
     if (!seenIds.has(id)) {
       seenIds.add(id);
-      const cls = s.className || s.class || 'SE I';
+      const { year, division } = parseClassAndDivision(s);
+      const rawRank = s.rank !== undefined && s.rank !== null && s.rank !== ''
+        ? s.rank
+        : (s.position !== undefined && s.position !== null && s.position !== '' ? s.position : '');
+      const parsedRank = rawRank !== '' ? parseInt(rawRank, 10) : '';
+
       cleanStudents.push({
         id,
         name: s.name || '',
-        class: cls,
-        className: cls,
+        class: year,
+        division,
+        className: `${year} - Div ${division}`,
         cgpa: s.cgpa !== undefined && s.cgpa !== null ? String(s.cgpa) : '',
-        position: s.position !== undefined && s.position !== null ? Number(s.position) || s.position : '',
+        position: parsedRank,
+        rank: parsedRank,
         photo: s.photo || s.photoUrl || null,
         photoUrl: s.photo || s.photoUrl || null,
       });
@@ -141,7 +156,10 @@ export function normalizeToppersData(toppersInput) {
 
   const classes = {};
   CLASS_OPTIONS.forEach(c => {
-    classes[c] = cleanStudents.filter(s => (s.className || s.class) === c);
+    classes[c] = cleanStudents.filter(s => {
+      const formatted = `${s.class} - Div ${s.division}`;
+      return s.className === c || s.class === c || formatted === c;
+    });
   });
 
   return {
@@ -162,6 +180,13 @@ const defaultSectionData = () => {
       tagline: 'Knowledge grows when it is shared with others',
       collegeLogo: null,
       coverImage: null,
+      overlay: {
+        type: 'none',
+        color: '#000000',
+        opacity: 0,
+        gradientStart: '#1E2D5A',
+        gradientEnd: '#0D1B2A',
+      },
     },
     message: {
       principal: {
@@ -355,13 +380,21 @@ export function MagazineProvider({ children }) {
   const addTopperStudent = useCallback((student) => {
     setSectionData(prev => {
       const currentToppers = normalizeToppersData(prev.toppers);
+      const { year, division } = parseClassAndDivision(student);
+      const rawRank = student.rank !== undefined && student.rank !== null && student.rank !== ''
+        ? student.rank
+        : (student.position !== undefined && student.position !== null && student.position !== '' ? student.position : '');
+      const parsedRank = rawRank !== '' ? parseInt(rawRank, 10) : '';
+
       const newStudent = {
         id: student.id || `student-${Date.now()}`,
         name: student.name || '',
-        class: student.className || student.class || 'SE I',
-        className: student.className || student.class || 'SE I',
+        class: year,
+        division,
+        className: `${year} - Div ${division}`,
         cgpa: String(student.cgpa || ''),
-        position: student.position !== undefined ? Number(student.position) || student.position : '',
+        position: parsedRank,
+        rank: parsedRank,
         photo: student.photo || student.photoUrl || null,
         photoUrl: student.photo || student.photoUrl || null,
       };
@@ -383,12 +416,20 @@ export function MagazineProvider({ children }) {
       const currentToppers = normalizeToppersData(prev.toppers);
       const updatedStudents = currentToppers.students.map(s => {
         if (s.id === studentId) {
-          const cls = updatedFields.className || updatedFields.class || s.className || s.class;
+          const merged = { ...s, ...updatedFields };
+          const { year, division } = parseClassAndDivision(merged);
+          const rawRank = merged.rank !== undefined && merged.rank !== null && merged.rank !== ''
+            ? merged.rank
+            : (merged.position !== undefined && merged.position !== null && merged.position !== '' ? merged.position : '');
+          const parsedRank = rawRank !== '' ? parseInt(rawRank, 10) : '';
+
           return {
-            ...s,
-            ...updatedFields,
-            class: cls,
-            className: cls,
+            ...merged,
+            class: year,
+            division,
+            className: `${year} - Div ${division}`,
+            position: parsedRank,
+            rank: parsedRank,
             photo: updatedFields.photo !== undefined ? updatedFields.photo : s.photo,
             photoUrl: updatedFields.photo !== undefined ? updatedFields.photo : s.photoUrl,
           };

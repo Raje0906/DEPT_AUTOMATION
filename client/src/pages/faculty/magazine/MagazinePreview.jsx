@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMagazine } from '../../../contexts/MagazineContext';
-import PagePreview from '../../../components/magazine/PagePreview';
+import PagePreview, { generateMagazinePages } from '../../../components/magazine/PagePreview';
 import PageEditorModal from '../../../components/magazine/PageEditorModal';
+import MagazinePrintContainer from '../../../components/magazine/MagazinePrintContainer';
+import { generateMagazinePDF } from '../../../services/pdfGenerator';
 import toast from 'react-hot-toast';
 
 const APPROVAL_STATUS = [
@@ -16,10 +18,18 @@ const APPROVAL_STATUS = [
 export default function MagazinePreview() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { currentMagazine, loadMagazine, magazineStatus, submitForApproval, saveDraft } = useMagazine();
+  const { currentMagazine, sectionData, loadMagazine, magazineStatus, submitForApproval, saveDraft } = useMagazine();
   const [editingPage, setEditingPage] = useState(null);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [submitted, setSubmitted] = useState(magazineStatus === 'under_review');
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [pdfProgress, setPdfProgress] = useState('');
+
+  const printContainerRef = useRef(null);
+
+  const pages = useMemo(() => {
+    return generateMagazinePages(currentMagazine, sectionData);
+  }, [currentMagazine, sectionData]);
 
   React.useEffect(() => {
     if (id && (!currentMagazine || currentMagazine.id !== id)) {
@@ -34,12 +44,45 @@ export default function MagazinePreview() {
     toast.success('Magazine submitted for HOD approval.');
   };
 
+  const handleGeneratePdf = async () => {
+    if (isGeneratingPdf) return;
+    setIsGeneratingPdf(true);
+    setPdfProgress('Initializing PDF generation...');
+    const toastId = toast.loading('Generating magazine PDF (A4)...');
+
+    try {
+      const filename = await generateMagazinePDF({
+        containerElement: printContainerRef.current,
+        magazineTitle: currentMagazine?.title || 'Reflection',
+        issueNumber: currentMagazine?.issueNumber || '32',
+        onProgress: (msg) => {
+          setPdfProgress(msg);
+          toast.loading(msg, { id: toastId });
+        },
+      });
+      toast.success(`PDF downloaded: ${filename}`, { id: toastId });
+    } catch (err) {
+      console.error('PDF generation failed:', err);
+      toast.error(err.message || 'Failed to generate PDF.', { id: toastId });
+    } finally {
+      setIsGeneratingPdf(false);
+      setPdfProgress('');
+    }
+  };
+
   const currentStatusIndex = APPROVAL_STATUS.findIndex(s =>
     submitted ? s.id === 'under_review' : s.id === (magazineStatus || 'draft')
   );
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-paper">
+      {/* Off-screen A4 container for 1:1 PDF printing */}
+      <MagazinePrintContainer
+        pages={pages}
+        currentMagazine={currentMagazine}
+        containerRef={printContainerRef}
+      />
+
       {/* Top toolbar */}
       <header className="flex items-center gap-3 px-4 py-2.5 bg-white border-b border-rule flex-shrink-0 flex-wrap">
         <button
@@ -53,7 +96,7 @@ export default function MagazinePreview() {
           {currentMagazine?.title || 'Reflection'} — Preview
         </span>
 
-        <div className="flex gap-2 flex-shrink-0">
+        <div className="flex gap-2 flex-shrink-0 items-center">
           <button
             onClick={() => { saveDraft(); toast.success('Draft saved.'); }}
             className="text-xs border border-rule rounded-sm px-3 py-1.5 hover:bg-paper text-draft transition-colors"
@@ -61,10 +104,27 @@ export default function MagazinePreview() {
             Save
           </button>
           <button
-            onClick={() => toast('PDF generation starts here.')}
-            className="btn-secondary text-xs py-1.5 px-3"
+            onClick={handleGeneratePdf}
+            disabled={isGeneratingPdf}
+            className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 disabled:opacity-50"
+            title="Generate high-fidelity A4 PDF with all magazine sections"
           >
-            Generate PDF
+            {isGeneratingPdf ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-1 h-3.5 w-3.5 text-navy" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                {pdfProgress || 'Generating PDF...'}
+              </>
+            ) : (
+              <>
+                <svg className="w-3.5 h-3.5 text-navy" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                </svg>
+                Generate PDF
+              </>
+            )}
           </button>
           {!submitted ? (
             <button
