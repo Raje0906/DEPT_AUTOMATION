@@ -1,0 +1,595 @@
+'use strict';
+const express  = require('express');
+const multer   = require('multer');
+const pool     = require('../db/pool');
+const { verifyToken, requireRole } = require('../middleware/auth');
+const { auditRecord } = require('../middleware/auditLogger');
+const { parseSpreadsheet, parseGroups, validateGroups, sequentialFill } = require('../services/seminarParser');
+const { buildWorkbook } = require('../services/seminarExporter');
+
+const router = express.Router();
+
+// multer: memory storage only — file never hits disk
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+  fileFilter: (_req, file, cb) => {
+    const ok = /\.(xlsx|xls|csv)$/i.test(file.originalname);
+    cb(ok ? null : new Error('Only .xlsx, .xls, or .csv files are accepted'), ok);
+  },
+});
+
+// ─── Auth helpers ──────────────────────────────────────────────────────────────
+
+function requireCoordinator(req, res, next) {
+  if (req.user && (req.user.role === 'faculty' || req.user.role === 'hod' || req.user.role === 'admin')) {
+    return next();
+  }
+  return res.status(403).json({ error: 'Faculty or HOD access required' });
+}
+
+async function getFacultyId(userId) {
+  const r = await pool.query('SELECT id FROM faculty WHERE user_id = $1', [userId]);
+  return r.rows[0]?.id ?? null;
+}
+
+// ─── Sessions ─────────────────────────────────────────────────────────────────
+
+// GET /api/seminar/sessions
+router.get('/sessions', verifyToken, requireCoordinator, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT s.*, u.name as created_by_name,
+              (SELECT COUNT(*) FROM seminar_groups sg WHERE sg.session_id = s.id) AS group_count,
+              (SELECT COUNT(*) FROM seminar_groups sg WHERE sg.session_id = s.id AND sg.guide_id IS NOT NULL) AS assigned_count
+       FROM seminar_sessions s
+       JOIN users u ON s.created_by = u.id
+       ORDER BY s.created_at DESC`
+    );
+    res.json({ sessions: r.rows });
+  } catch (err) {
+    console.error('[Seminar] GET /sessions:', err.message);
+    res.status(500).json({ error: 'Failed to fetch sessions' });
+  }
+});
+
+// POST /api/seminar/sessions
+router.post('/sessions', verifyToken, requireCoordinator, async (req, res) => {
+  try {
+    const { name, academic_year, batch } = req.body;
+    if (!name || !academic_year || !batch) {
+      return res.status(400).json({ error: 'name, academic_year, and batch are required' });
+    }
+    const r = await pool.query(
+      `INSERT INTO seminar_sessions (name, academic_year, batch, created_by)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [name.trim(), academic_year.trim(), batch.trim(), req.user.id]
+    );
+    const session = r.rows[0];
+    await auditRecord({ tableName: 'seminar_sessions', recordId: session.id, changedBy: req.user.id, oldValue: null, newValue: session, action: 'INSERT' });
+    res.status(201).json({ session });
+  } catch (err) {
+    console.error('[Seminar] POST /sessions:', err.message);
+    res.status(500).json({ error: 'Failed to create session' });
+  }
+});
+
+// GET /api/seminar/sessions/:id
+router.get('/sessions/:id', verifyToken, requireCoordinator, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT s.*, u.name as created_by_name, pu.name as published_by_name
+       FROM seminar_sessions s
+       JOIN users u ON s.created_by = u.id
+       LEFT JOIN users pu ON s.published_by = pu.id
+       WHERE s.id = $1`,
+      [req.params.id]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'Session not found' });
+    res.json({ session: r.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch session' });
+  }
+});
+
+// ─── Upload & Parse ───────────────────────────────────────────────────────────
+
+// POST /api/seminar/sessions/:id/upload
+router.post('/sessions/:id/upload', verifyToken, requireCoordinator,
+  upload.single('file'),
+  async (req, res) => {
+    const sessionId = parseInt(req.params.id, 10);
+    try {
+      // Verify session exists and is not published
+      const sess = await pool.query('SELECT * FROM seminar_sessions WHERE id = $1', [sessionId]);
+      if (!sess.rows.length) return res.status(404).json({ error: 'Session not found' });
+      if (sess.rows[0].status === 'PUBLISHED') {
+        return res.status(409).json({ error: 'Session is published — uploads are locked' });
+      }
+
+      if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+      // Check if an upload already exists for this session — warn coordinator
+      const existing = await pool.query(
+        'SELECT id FROM seminar_uploads WHERE session_id = $1 ORDER BY uploaded_at DESC LIMIT 1',
+        [sessionId]
+      );
+      const hasExisting = existing.rows.length > 0;
+
+      // Parse
+      let rows, parseResult, parseError = null;
+      try {
+        rows = parseSpreadsheet(req.file.buffer, req.file.mimetype);
+        const { groups } = parseGroups(rows);
+        const { issues } = validateGroups(groups);
+        parseResult = { groupCount: groups.length, groups, issues };
+      } catch (parseErr) {
+        parseError = parseErr.message;
+      }
+
+      // Store upload record (raw bytes in DB)
+      const uploadRec = await pool.query(
+        `INSERT INTO seminar_uploads (session_id, original_filename, file_data, uploaded_by, parse_status, parse_result, parse_error)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, uploaded_at, parse_status`,
+        [
+          sessionId,
+          req.file.originalname,
+          req.file.buffer,
+          req.user.id,
+          parseError ? 'ERROR' : 'PARSED',
+          parseResult ? JSON.stringify(parseResult) : null,
+          parseError,
+        ]
+      );
+
+      // Update session status to UPLOAD (or VALIDATION if parse succeeded)
+      const newStatus = parseError ? 'UPLOAD' : 'VALIDATION';
+      await pool.query('UPDATE seminar_sessions SET status = $1 WHERE id = $2', [newStatus, sessionId]);
+
+      await auditRecord({
+        tableName: 'seminar_uploads', recordId: uploadRec.rows[0].id,
+        changedBy: req.user.id, oldValue: null,
+        newValue: { filename: req.file.originalname, sessionId, parseStatus: uploadRec.rows[0].parse_status },
+        action: 'INSERT',
+      });
+
+      res.json({
+        uploadId: uploadRec.rows[0].id,
+        hadExistingUpload: hasExisting,
+        parseStatus: uploadRec.rows[0].parse_status,
+        groupCount: parseResult?.groupCount ?? 0,
+        issues: parseResult?.issues ?? [],
+        error: parseError,
+      });
+    } catch (err) {
+      console.error('[Seminar] upload:', err.message);
+      res.status(500).json({ error: 'Upload failed: ' + err.message });
+    }
+  }
+);
+
+// GET /api/seminar/sessions/:id/parse-result
+router.get('/sessions/:id/parse-result', verifyToken, requireCoordinator, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT su.id, su.original_filename, su.uploaded_at, su.parse_status, su.parse_result, su.parse_error, u.name as uploaded_by_name
+       FROM seminar_uploads su JOIN users u ON su.uploaded_by = u.id
+       WHERE su.session_id = $1 ORDER BY su.uploaded_at DESC LIMIT 1`,
+      [req.params.id]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'No upload found for this session' });
+    const row = r.rows[0];
+    // Don't return raw file bytes
+    res.json({
+      uploadId: row.id,
+      filename: row.original_filename,
+      uploadedAt: row.uploaded_at,
+      uploadedByName: row.uploaded_by_name,
+      parseStatus: row.parse_status,
+      parseError: row.parse_error,
+      result: row.parse_result,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch parse result' });
+  }
+});
+
+// POST /api/seminar/sessions/:id/override-issue
+router.post('/sessions/:id/override-issue', verifyToken, requireCoordinator, async (req, res) => {
+  try {
+    const { issueKey, note } = req.body;
+    if (!issueKey) return res.status(400).json({ error: 'issueKey is required' });
+    const r = await pool.query(
+      `INSERT INTO seminar_issue_overrides (session_id, issue_key, acknowledged_by, note)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (session_id, issue_key) DO UPDATE SET note = EXCLUDED.note, acknowledged_by = EXCLUDED.acknowledged_by, created_at = NOW()
+       RETURNING *`,
+      [req.params.id, issueKey, req.user.id, note || null]
+    );
+    await auditRecord({
+      tableName: 'seminar_issue_overrides', recordId: r.rows[0].id,
+      changedBy: req.user.id, oldValue: null, newValue: { issueKey, note }, action: 'INSERT',
+    });
+    res.json({ override: r.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to save override' });
+  }
+});
+
+// GET /api/seminar/sessions/:id/overrides
+router.get('/sessions/:id/overrides', verifyToken, requireCoordinator, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT o.*, u.name as acknowledged_by_name FROM seminar_issue_overrides o
+       JOIN users u ON o.acknowledged_by = u.id WHERE o.session_id = $1`,
+      [req.params.id]
+    );
+    res.json({ overrides: r.rows });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch overrides' });
+  }
+});
+
+// ─── Commit parsed groups to DB ───────────────────────────────────────────────
+
+// POST /api/seminar/sessions/:id/commit
+// Saves parsed groups + members to DB (replaces existing groups for this session)
+router.post('/sessions/:id/commit', verifyToken, requireCoordinator, async (req, res) => {
+  const sessionId = parseInt(req.params.id, 10);
+  const client = await pool.connect();
+  try {
+    // Load latest parse result
+    const upRow = await client.query(
+      `SELECT parse_result FROM seminar_uploads WHERE session_id = $1 AND parse_status = 'PARSED' ORDER BY uploaded_at DESC LIMIT 1`,
+      [sessionId]
+    );
+    if (!upRow.rows.length) return res.status(400).json({ error: 'No successfully parsed upload found' });
+
+    const { groups, issues } = upRow.rows[0].parse_result;
+    const errorIssues = issues.filter(i => i.severity === 'error');
+
+    // Check all errors acknowledged
+    if (errorIssues.length > 0) {
+      const ackRes = await client.query(
+        'SELECT issue_key FROM seminar_issue_overrides WHERE session_id = $1',
+        [sessionId]
+      );
+      const acked = new Set(ackRes.rows.map(r => r.issue_key));
+      const unacked = errorIssues.filter(i => !acked.has(i.key));
+      if (unacked.length > 0) {
+        return res.status(409).json({
+          error: `${unacked.length} validation error(s) must be acknowledged before committing.`,
+          unacknowledged: unacked,
+        });
+      }
+    }
+
+    await client.query('BEGIN');
+
+    // Delete old groups for this session (cascades to members)
+    await client.query('DELETE FROM seminar_groups WHERE session_id = $1', [sessionId]);
+
+    // Insert groups + members
+    for (let gi = 0; gi < groups.length; gi++) {
+      const g = groups[gi];
+      const gRow = await client.query(
+        `INSERT INTO seminar_groups (session_id, group_no, domain, source_row_index)
+         VALUES ($1, $2, $3, $4) RETURNING id`,
+        [sessionId, gi + 1, g.domain || '', g.sourceRowIndex]
+      );
+      const groupId = gRow.rows[0].id;
+      for (const m of g.members) {
+        await client.query(
+          `INSERT INTO seminar_group_members (group_id, member_index, student_name, prn, division, mobile, email, topic1, topic2, topic3, is_leader)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+          [groupId, m.memberIndex, m.student_name, m.prn, m.division, m.mobile, m.email, m.topic1, m.topic2, m.topic3, m.is_leader]
+        );
+      }
+    }
+
+    await client.query(`UPDATE seminar_sessions SET status = 'ASSIGNMENT' WHERE id = $1`, [sessionId]);
+    await client.query('COMMIT');
+    await auditRecord({ tableName: 'seminar_sessions', recordId: sessionId, changedBy: req.user.id, oldValue: { status: 'VALIDATION' }, newValue: { status: 'ASSIGNMENT', groupCount: groups.length }, action: 'UPDATE' });
+
+    res.json({ committed: true, groupCount: groups.length });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[Seminar] commit:', err.message);
+    res.status(500).json({ error: 'Commit failed: ' + err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// ─── Guides ───────────────────────────────────────────────────────────────────
+
+// GET /api/seminar/sessions/:id/guides
+router.get('/sessions/:id/guides', verifyToken, requireCoordinator, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT sg.*, u.name as faculty_name, f.designation, f.employee_id
+       FROM seminar_guides sg
+       JOIN faculty f ON sg.faculty_id = f.id
+       JOIN users u ON f.user_id = u.id
+       WHERE sg.session_id = $1
+       ORDER BY sg.display_order ASC, sg.id ASC`,
+      [req.params.id]
+    );
+    res.json({ guides: r.rows });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch guides' });
+  }
+});
+
+// GET /api/seminar/faculty-list — all faculty for dropdown
+router.get('/faculty-list', verifyToken, requireCoordinator, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT f.id, u.name, f.designation, f.employee_id FROM faculty f JOIN users u ON f.user_id = u.id WHERE u.is_active = true ORDER BY u.name`
+    );
+    res.json({ faculty: r.rows });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch faculty list' });
+  }
+});
+
+// POST /api/seminar/sessions/:id/guides
+router.post('/sessions/:id/guides', verifyToken, requireCoordinator, async (req, res) => {
+  try {
+    const { faculty_id, quota, display_order } = req.body;
+    if (!faculty_id || quota == null) return res.status(400).json({ error: 'faculty_id and quota are required' });
+    const r = await pool.query(
+      `INSERT INTO seminar_guides (session_id, faculty_id, quota, display_order)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (session_id, faculty_id) DO UPDATE SET quota = EXCLUDED.quota, display_order = EXCLUDED.display_order
+       RETURNING *`,
+      [req.params.id, faculty_id, quota, display_order ?? 1]
+    );
+    res.json({ guide: r.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to save guide' });
+  }
+});
+
+// DELETE /api/seminar/sessions/:id/guides/:gid
+router.delete('/sessions/:id/guides/:gid', verifyToken, requireCoordinator, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM seminar_guides WHERE id = $1 AND session_id = $2', [req.params.gid, req.params.id]);
+    res.json({ deleted: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete guide' });
+  }
+});
+
+// ─── Assignment ───────────────────────────────────────────────────────────────
+
+// GET /api/seminar/sessions/:id/assignments
+router.get('/sessions/:id/assignments', verifyToken, requireCoordinator, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT sg.id, sg.group_no, sg.domain, sg.guide_id,
+              u.name as guide_name, f.designation as guide_designation,
+              (SELECT json_agg(json_build_object('name', m.student_name,'prn',m.prn,'division',m.division,'is_leader',m.is_leader,'topic1',m.topic1,'topic2',m.topic2,'topic3',m.topic3) ORDER BY m.member_index)
+               FROM seminar_group_members m WHERE m.group_id = sg.id) as members
+       FROM seminar_groups sg
+       LEFT JOIN faculty f ON sg.guide_id = f.id
+       LEFT JOIN users u ON f.user_id = u.id
+       WHERE sg.session_id = $1
+       ORDER BY sg.group_no ASC`,
+      [req.params.id]
+    );
+    res.json({ groups: r.rows });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch assignments' });
+  }
+});
+
+// POST /api/seminar/sessions/:id/assign  — run sequential fill
+router.post('/sessions/:id/assign', verifyToken, requireCoordinator, async (req, res) => {
+  const sessionId = parseInt(req.params.id, 10);
+  const { confirm } = req.body; // must be true if assignments already exist
+
+  try {
+    // Check if assignments already exist
+    const existing = await pool.query(
+      'SELECT COUNT(*) FROM seminar_groups WHERE session_id = $1 AND guide_id IS NOT NULL',
+      [sessionId]
+    );
+    const hasAssignments = parseInt(existing.rows[0].count, 10) > 0;
+    if (hasAssignments && !confirm) {
+      return res.status(409).json({
+        conflict: true,
+        message: 'Groups already have guide assignments. Send confirm=true to overwrite.',
+      });
+    }
+
+    // Load groups
+    const groupsRes = await pool.query(
+      'SELECT id FROM seminar_groups WHERE session_id = $1 ORDER BY group_no ASC',
+      [sessionId]
+    );
+    // Load guides sorted by display_order
+    const guidesRes = await pool.query(
+      'SELECT * FROM seminar_guides WHERE session_id = $1 ORDER BY display_order ASC, id ASC',
+      [sessionId]
+    );
+
+    const { assignments, unassigned } = sequentialFill(groupsRes.rows, guidesRes.rows);
+
+    // Apply assignments
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const a of assignments) {
+        const group = groupsRes.rows[a.groupIndex];
+        await client.query(
+          'UPDATE seminar_groups SET guide_id = $1, updated_at = NOW() WHERE id = $2',
+          [a.guideId, group.id]
+        );
+      }
+      // Clear any groups not in new assignment (over-quota remainder)
+      if (unassigned.length > 0) {
+        for (const idx of unassigned) {
+          await client.query('UPDATE seminar_groups SET guide_id = NULL WHERE id = $1', [groupsRes.rows[idx].id]);
+        }
+      }
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+
+    await auditRecord({ tableName: 'seminar_sessions', recordId: sessionId, changedBy: req.user.id, oldValue: null, newValue: { autoAssigned: assignments.length, unassigned: unassigned.length }, action: 'UPDATE' });
+
+    res.json({ assigned: assignments.length, unassigned: unassigned.length });
+  } catch (err) {
+    console.error('[Seminar] assign:', err.message);
+    res.status(500).json({ error: 'Assignment failed: ' + err.message });
+  }
+});
+
+// PATCH /api/seminar/sessions/:id/assignments/:groupId  — manual reassign
+router.patch('/sessions/:id/assignments/:groupId', verifyToken, requireCoordinator, async (req, res) => {
+  try {
+    const { guide_id } = req.body; // null to unassign
+    const prev = await pool.query('SELECT guide_id FROM seminar_groups WHERE id = $1 AND session_id = $2', [req.params.groupId, req.params.id]);
+    if (!prev.rows.length) return res.status(404).json({ error: 'Group not found' });
+    const old = prev.rows[0].guide_id;
+    await pool.query('UPDATE seminar_groups SET guide_id = $1, updated_at = NOW() WHERE id = $2', [guide_id || null, req.params.groupId]);
+    await auditRecord({ tableName: 'seminar_groups', recordId: parseInt(req.params.groupId), changedBy: req.user.id, oldValue: { guide_id: old }, newValue: { guide_id: guide_id || null }, action: 'UPDATE', reason: 'Manual reassignment' });
+    res.json({ updated: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Reassignment failed' });
+  }
+});
+
+// ─── Publish ──────────────────────────────────────────────────────────────────
+
+// POST /api/seminar/sessions/:id/publish
+router.post('/sessions/:id/publish', verifyToken, requireCoordinator, async (req, res) => {
+  const sessionId = parseInt(req.params.id, 10);
+  try {
+    // Check no unassigned groups
+    const unassigned = await pool.query(
+      'SELECT COUNT(*) FROM seminar_groups WHERE session_id = $1 AND guide_id IS NULL',
+      [sessionId]
+    );
+    if (parseInt(unassigned.rows[0].count, 10) > 0) {
+      return res.status(409).json({ error: `${unassigned.rows[0].count} group(s) are not yet assigned to a guide` });
+    }
+    await pool.query(
+      `UPDATE seminar_sessions SET status = 'PUBLISHED', published_at = NOW(), published_by = $1 WHERE id = $2`,
+      [req.user.id, sessionId]
+    );
+    await auditRecord({ tableName: 'seminar_sessions', recordId: sessionId, changedBy: req.user.id, oldValue: { status: 'ASSIGNMENT' }, newValue: { status: 'PUBLISHED' }, action: 'UPDATE' });
+    res.json({ published: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Publish failed' });
+  }
+});
+
+// ─── Export ───────────────────────────────────────────────────────────────────
+
+// GET /api/seminar/sessions/:id/export
+router.get('/sessions/:id/export', verifyToken, requireCoordinator, async (req, res) => {
+  const sessionId = parseInt(req.params.id, 10);
+  try {
+    const sessRes = await pool.query('SELECT * FROM seminar_sessions WHERE id = $1', [sessionId]);
+    if (!sessRes.rows.length) return res.status(404).json({ error: 'Session not found' });
+    const session = sessRes.rows[0];
+
+    const groupsRes = await pool.query(
+      `SELECT sg.id, sg.group_no, sg.domain, u.name as guide_name
+       FROM seminar_groups sg
+       LEFT JOIN faculty f ON sg.guide_id = f.id
+       LEFT JOIN users u ON f.user_id = u.id
+       WHERE sg.session_id = $1 ORDER BY sg.group_no ASC`,
+      [sessionId]
+    );
+
+    const membersRes = await pool.query(
+      `SELECT m.* FROM seminar_group_members m
+       JOIN seminar_groups sg ON m.group_id = sg.id
+       WHERE sg.session_id = $1 ORDER BY sg.group_no ASC, m.member_index ASC`,
+      [sessionId]
+    );
+
+    const membersByGroupId = new Map();
+    for (const m of membersRes.rows) {
+      if (!membersByGroupId.has(m.group_id)) membersByGroupId.set(m.group_id, []);
+      membersByGroupId.get(m.group_id).push(m);
+    }
+
+    const buffer = buildWorkbook(session, groupsRes.rows, membersByGroupId);
+    const filename = `${session.name.replace(/[^a-z0-9]/gi, '_')}_GroupList.xlsx`;
+
+    await auditRecord({ tableName: 'seminar_sessions', recordId: sessionId, changedBy: req.user.id, oldValue: null, newValue: { exported: filename }, action: 'UPDATE' });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  } catch (err) {
+    console.error('[Seminar] export:', err.message);
+    res.status(500).json({ error: 'Export failed' });
+  }
+});
+
+// ─── Guide-facing view ────────────────────────────────────────────────────────
+
+// GET /api/seminar/my-groups  — guide sees only their own groups (any published session)
+router.get('/my-groups', verifyToken, requireRole('faculty', 'hod'), async (req, res) => {
+  try {
+    const fid = await getFacultyId(req.user.id);
+    if (!fid) return res.status(404).json({ error: 'Faculty record not found' });
+    const r = await pool.query(
+      `SELECT sg.id, sg.group_no, sg.domain, ss.name as session_name, ss.academic_year, ss.batch,
+              json_agg(json_build_object('name',m.student_name,'prn',m.prn,'division',m.division,'mobile',m.mobile,'email',m.email,'topic1',m.topic1,'topic2',m.topic2,'topic3',m.topic3,'is_leader',m.is_leader) ORDER BY m.member_index) as members
+       FROM seminar_groups sg
+       JOIN seminar_sessions ss ON sg.session_id = ss.id
+       LEFT JOIN seminar_group_members m ON m.group_id = sg.id
+       WHERE sg.guide_id = $1 AND ss.status = 'PUBLISHED'
+       GROUP BY sg.id, sg.group_no, sg.domain, ss.name, ss.academic_year, ss.batch
+       ORDER BY ss.id DESC, sg.group_no ASC`,
+      [fid]
+    );
+    res.json({ groups: r.rows });
+  } catch (err) {
+    console.error('[Seminar] my-groups:', err.message);
+    res.status(500).json({ error: 'Failed to fetch groups' });
+  }
+});
+
+// ─── Audit trail ─────────────────────────────────────────────────────────────
+
+// GET /api/seminar/sessions/:id/audit
+router.get('/sessions/:id/audit', verifyToken, requireCoordinator, async (req, res) => {
+  try {
+    const sessionId = parseInt(req.params.id, 10);
+    // Gather group IDs for this session
+    const groupIds = await pool.query(
+      'SELECT id FROM seminar_groups WHERE session_id = $1',
+      [sessionId]
+    );
+    const gids = groupIds.rows.map(r => r.id);
+
+    const logs = await pool.query(
+      `SELECT al.*, u.name as changed_by_name FROM audit_log al
+       JOIN users u ON al.changed_by = u.id
+       WHERE (al.table_name = 'seminar_sessions' AND al.record_id = $1)
+          OR (al.table_name = 'seminar_uploads' AND al.record_id IN (
+               SELECT id FROM seminar_uploads WHERE session_id = $1))
+          OR (al.table_name = 'seminar_groups' AND al.record_id = ANY($2))
+          OR (al.table_name = 'seminar_issue_overrides' AND al.record_id IN (
+               SELECT id FROM seminar_issue_overrides WHERE session_id = $1))
+       ORDER BY al.created_at DESC`,
+      [sessionId, gids]
+    );
+    res.json({ logs: logs.rows });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch audit log' });
+  }
+});
+
+module.exports = router;
