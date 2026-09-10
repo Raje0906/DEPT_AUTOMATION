@@ -58,6 +58,24 @@ export default function SeminarSessions() {
     }
   };
 
+  const [deletingId, setDeletingId] = useState(null);
+
+  const handleDelete = async (s) => {
+    if (!window.confirm(`Are you sure you want to remove session "${s.name}"?\n\nThis will permanently delete this session along with its uploads, parsed groups, and guide assignments.`)) {
+      return;
+    }
+    setDeletingId(s.id);
+    try {
+      await api.delete(`/seminar/sessions/${s.id}`);
+      setSessions(prev => prev.filter(x => x.id !== s.id));
+      toast.success('Session removed successfully');
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Failed to remove session');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const getNextStep = (s) => {
     if (s.status === 'SETUP')      return `/faculty/seminar/${s.id}/upload`;
     if (s.status === 'UPLOAD')     return `/faculty/seminar/${s.id}/upload`;
@@ -171,7 +189,7 @@ export default function SeminarSessions() {
                   </p>
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
                 {s.status === 'PUBLISHED' && (
                   <button
                     onClick={() => navigate(`/faculty/seminar/${s.id}/review`)}
@@ -185,6 +203,16 @@ export default function SeminarSessions() {
                   className="px-3 py-1.5 text-xs font-medium bg-[var(--navy)] text-white rounded-md hover:bg-[#2a3d7a] transition-colors"
                 >
                   {s.status === 'PUBLISHED' ? 'Audit Log' : 'Continue →'}
+                </button>
+                <button
+                  onClick={() => handleDelete(s)}
+                  disabled={deletingId === s.id}
+                  title="Remove Session"
+                  className="p-1.5 text-[var(--ink)]/40 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors border border-[var(--rule)] hover:border-red-200"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
                 </button>
               </div>
             </div>

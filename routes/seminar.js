@@ -92,6 +92,33 @@ router.get('/sessions/:id', verifyToken, requireCoordinator, async (req, res) =>
   }
 });
 
+// DELETE /api/seminar/sessions/:id
+router.delete('/sessions/:id', verifyToken, requireCoordinator, async (req, res) => {
+  const sessionId = parseInt(req.params.id, 10);
+  try {
+    const prev = await pool.query('SELECT * FROM seminar_sessions WHERE id = $1', [sessionId]);
+    if (!prev.rows.length) return res.status(404).json({ error: 'Session not found' });
+    const session = prev.rows[0];
+
+    await pool.query('DELETE FROM seminar_sessions WHERE id = $1', [sessionId]);
+
+    await auditRecord({
+      tableName: 'seminar_sessions',
+      recordId: sessionId,
+      changedBy: req.user.id,
+      oldValue: session,
+      newValue: null,
+      action: 'DELETE',
+      reason: 'Session deleted by user',
+    });
+
+    res.json({ deleted: true, sessionId });
+  } catch (err) {
+    console.error('[Seminar] DELETE /sessions/:id:', err.message);
+    res.status(500).json({ error: 'Failed to delete session: ' + err.message });
+  }
+});
+
 // ─── Upload & Parse ───────────────────────────────────────────────────────────
 
 // POST /api/seminar/sessions/:id/upload
@@ -307,16 +334,20 @@ router.post('/sessions/:id/commit', verifyToken, requireCoordinator, async (req,
 router.get('/sessions/:id/guides', verifyToken, requireCoordinator, async (req, res) => {
   try {
     const r = await pool.query(
-      `SELECT sg.*, u.name as faculty_name, f.designation, f.employee_id
+      `SELECT sg.id, sg.session_id, sg.faculty_id, sg.quota, sg.display_order,
+              COALESCE(sg.guide_name, u.name, 'Unknown Guide') as faculty_name,
+              COALESCE(sg.designation, f.designation, '') as designation,
+              f.employee_id
        FROM seminar_guides sg
-       JOIN faculty f ON sg.faculty_id = f.id
-       JOIN users u ON f.user_id = u.id
+       LEFT JOIN faculty f ON sg.faculty_id = f.id
+       LEFT JOIN users u ON f.user_id = u.id
        WHERE sg.session_id = $1
        ORDER BY sg.display_order ASC, sg.id ASC`,
       [req.params.id]
     );
     res.json({ guides: r.rows });
   } catch (err) {
+    console.error('[Seminar] get guides:', err.message);
     res.status(500).json({ error: 'Failed to fetch guides' });
   }
 });
@@ -336,18 +367,44 @@ router.get('/faculty-list', verifyToken, requireCoordinator, async (req, res) =>
 // POST /api/seminar/sessions/:id/guides
 router.post('/sessions/:id/guides', verifyToken, requireCoordinator, async (req, res) => {
   try {
-    const { faculty_id, quota, display_order } = req.body;
-    if (!faculty_id || quota == null) return res.status(400).json({ error: 'faculty_id and quota are required' });
-    const r = await pool.query(
-      `INSERT INTO seminar_guides (session_id, faculty_id, quota, display_order)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (session_id, faculty_id) DO UPDATE SET quota = EXCLUDED.quota, display_order = EXCLUDED.display_order
-       RETURNING *`,
-      [req.params.id, faculty_id, quota, display_order ?? 1]
-    );
-    res.json({ guide: r.rows[0] });
+    const { faculty_id, guide_name, designation, quota, display_order } = req.body;
+    const q = quota != null ? parseInt(quota, 10) : 4;
+    const order = display_order != null ? parseInt(display_order, 10) : 1;
+
+    if (faculty_id) {
+      const facRes = await pool.query(
+        'SELECT u.name, f.designation FROM faculty f JOIN users u ON f.user_id = u.id WHERE f.id = $1',
+        [faculty_id]
+      );
+      const name = facRes.rows[0]?.name || null;
+      const desig = designation || facRes.rows[0]?.designation || null;
+
+      const r = await pool.query(
+        `INSERT INTO seminar_guides (session_id, faculty_id, guide_name, designation, quota, display_order)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING *`,
+        [req.params.id, faculty_id, name, desig, q, order]
+      );
+      return res.json({ guide: r.rows[0] });
+    }
+
+    if (guide_name && String(guide_name).trim()) {
+      const cleanName = String(guide_name).trim();
+      const cleanDesig = designation ? String(designation).trim() : null;
+
+      const r = await pool.query(
+        `INSERT INTO seminar_guides (session_id, faculty_id, guide_name, designation, quota, display_order)
+         VALUES ($1, NULL, $2, $3, $4, $5)
+         RETURNING *`,
+        [req.params.id, cleanName, cleanDesig, q, order]
+      );
+      return res.json({ guide: r.rows[0] });
+    }
+
+    return res.status(400).json({ error: 'Either faculty_id or guide_name is required' });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to save guide' });
+    console.error('[Seminar] save guide:', err.message);
+    res.status(500).json({ error: 'Failed to save guide: ' + err.message });
   }
 });
 
@@ -367,12 +424,15 @@ router.delete('/sessions/:id/guides/:gid', verifyToken, requireCoordinator, asyn
 router.get('/sessions/:id/assignments', verifyToken, requireCoordinator, async (req, res) => {
   try {
     const r = await pool.query(
-      `SELECT sg.id, sg.group_no, sg.domain, sg.guide_id,
-              u.name as guide_name, f.designation as guide_designation,
+      `SELECT sg.id, sg.group_no, sg.domain,
+              COALESCE(sg.seminar_guide_id, sem_g.id) as guide_id,
+              COALESCE(sg.guide_name, sem_g.guide_name, u.name, 'Unassigned') as guide_name,
+              COALESCE(sem_g.designation, f.designation, '') as guide_designation,
               (SELECT json_agg(json_build_object('name', m.student_name,'prn',m.prn,'division',m.division,'is_leader',m.is_leader,'topic1',m.topic1,'topic2',m.topic2,'topic3',m.topic3) ORDER BY m.member_index)
                FROM seminar_group_members m WHERE m.group_id = sg.id) as members
        FROM seminar_groups sg
-       LEFT JOIN faculty f ON sg.guide_id = f.id
+       LEFT JOIN seminar_guides sem_g ON sg.seminar_guide_id = sem_g.id
+       LEFT JOIN faculty f ON (sg.guide_id = f.id OR sem_g.faculty_id = f.id)
        LEFT JOIN users u ON f.user_id = u.id
        WHERE sg.session_id = $1
        ORDER BY sg.group_no ASC`,
@@ -380,6 +440,7 @@ router.get('/sessions/:id/assignments', verifyToken, requireCoordinator, async (
     );
     res.json({ groups: r.rows });
   } catch (err) {
+    console.error('[Seminar] get assignments:', err.message);
     res.status(500).json({ error: 'Failed to fetch assignments' });
   }
 });
@@ -387,12 +448,11 @@ router.get('/sessions/:id/assignments', verifyToken, requireCoordinator, async (
 // POST /api/seminar/sessions/:id/assign  — run sequential fill
 router.post('/sessions/:id/assign', verifyToken, requireCoordinator, async (req, res) => {
   const sessionId = parseInt(req.params.id, 10);
-  const { confirm } = req.body; // must be true if assignments already exist
+  const { confirm } = req.body;
 
   try {
-    // Check if assignments already exist
     const existing = await pool.query(
-      'SELECT COUNT(*) FROM seminar_groups WHERE session_id = $1 AND guide_id IS NOT NULL',
+      'SELECT COUNT(*) FROM seminar_groups WHERE session_id = $1 AND (seminar_guide_id IS NOT NULL OR guide_id IS NOT NULL)',
       [sessionId]
     );
     const hasAssignments = parseInt(existing.rows[0].count, 10) > 0;
@@ -410,7 +470,12 @@ router.post('/sessions/:id/assign', verifyToken, requireCoordinator, async (req,
     );
     // Load guides sorted by display_order
     const guidesRes = await pool.query(
-      'SELECT * FROM seminar_guides WHERE session_id = $1 ORDER BY display_order ASC, id ASC',
+      `SELECT sg.id, sg.session_id, sg.faculty_id, sg.quota, sg.display_order,
+              COALESCE(sg.guide_name, u.name, 'Unknown Guide') as faculty_name
+       FROM seminar_guides sg
+       LEFT JOIN faculty f ON sg.faculty_id = f.id
+       LEFT JOIN users u ON f.user_id = u.id
+       WHERE sg.session_id = $1 ORDER BY sg.display_order ASC, sg.id ASC`,
       [sessionId]
     );
 
@@ -423,14 +488,20 @@ router.post('/sessions/:id/assign', verifyToken, requireCoordinator, async (req,
       for (const a of assignments) {
         const group = groupsRes.rows[a.groupIndex];
         await client.query(
-          'UPDATE seminar_groups SET guide_id = $1, updated_at = NOW() WHERE id = $2',
-          [a.guideId, group.id]
+          `UPDATE seminar_groups
+           SET seminar_guide_id = $1, guide_id = $2, guide_name = $3, updated_at = NOW()
+           WHERE id = $4`,
+          [a.seminarGuideId, a.facultyId, a.guideName, group.id]
         );
       }
-      // Clear any groups not in new assignment (over-quota remainder)
       if (unassigned.length > 0) {
         for (const idx of unassigned) {
-          await client.query('UPDATE seminar_groups SET guide_id = NULL WHERE id = $1', [groupsRes.rows[idx].id]);
+          await client.query(
+            `UPDATE seminar_groups
+             SET seminar_guide_id = NULL, guide_id = NULL, guide_name = NULL, updated_at = NOW()
+             WHERE id = $1`,
+            [groupsRes.rows[idx].id]
+          );
         }
       }
       await client.query('COMMIT');
@@ -453,14 +524,49 @@ router.post('/sessions/:id/assign', verifyToken, requireCoordinator, async (req,
 // PATCH /api/seminar/sessions/:id/assignments/:groupId  — manual reassign
 router.patch('/sessions/:id/assignments/:groupId', verifyToken, requireCoordinator, async (req, res) => {
   try {
-    const { guide_id } = req.body; // null to unassign
-    const prev = await pool.query('SELECT guide_id FROM seminar_groups WHERE id = $1 AND session_id = $2', [req.params.groupId, req.params.id]);
+    const { guide_id } = req.body;
+    const prev = await pool.query(
+      'SELECT guide_id, seminar_guide_id, guide_name FROM seminar_groups WHERE id = $1 AND session_id = $2',
+      [req.params.groupId, req.params.id]
+    );
     if (!prev.rows.length) return res.status(404).json({ error: 'Group not found' });
-    const old = prev.rows[0].guide_id;
-    await pool.query('UPDATE seminar_groups SET guide_id = $1, updated_at = NOW() WHERE id = $2', [guide_id || null, req.params.groupId]);
-    await auditRecord({ tableName: 'seminar_groups', recordId: parseInt(req.params.groupId), changedBy: req.user.id, oldValue: { guide_id: old }, newValue: { guide_id: guide_id || null }, action: 'UPDATE', reason: 'Manual reassignment' });
+    const old = prev.rows[0];
+
+    if (!guide_id) {
+      await pool.query(
+        'UPDATE seminar_groups SET seminar_guide_id = NULL, guide_id = NULL, guide_name = NULL, updated_at = NOW() WHERE id = $1',
+        [req.params.groupId]
+      );
+    } else {
+      const guideRes = await pool.query(
+        `SELECT sg.*, COALESCE(sg.guide_name, u.name) as final_name
+         FROM seminar_guides sg
+         LEFT JOIN faculty f ON sg.faculty_id = f.id
+         LEFT JOIN users u ON f.user_id = u.id
+         WHERE sg.id = $1 AND sg.session_id = $2`,
+        [parseInt(guide_id, 10), req.params.id]
+      );
+      if (!guideRes.rows.length) return res.status(404).json({ error: 'Guide not found in session roster' });
+      const g = guideRes.rows[0];
+
+      await pool.query(
+        'UPDATE seminar_groups SET seminar_guide_id = $1, guide_id = $2, guide_name = $3, updated_at = NOW() WHERE id = $4',
+        [g.id, g.faculty_id, g.final_name, req.params.groupId]
+      );
+    }
+
+    await auditRecord({
+      tableName: 'seminar_groups',
+      recordId: parseInt(req.params.groupId, 10),
+      changedBy: req.user.id,
+      oldValue: { guide_id: old.seminar_guide_id, guide_name: old.guide_name },
+      newValue: { guide_id: guide_id || null },
+      action: 'UPDATE',
+      reason: 'Manual reassignment'
+    });
     res.json({ updated: true });
   } catch (err) {
+    console.error('[Seminar] reassign:', err.message);
     res.status(500).json({ error: 'Reassignment failed' });
   }
 });
@@ -471,9 +577,9 @@ router.patch('/sessions/:id/assignments/:groupId', verifyToken, requireCoordinat
 router.post('/sessions/:id/publish', verifyToken, requireCoordinator, async (req, res) => {
   const sessionId = parseInt(req.params.id, 10);
   try {
-    // Check no unassigned groups
     const unassigned = await pool.query(
-      'SELECT COUNT(*) FROM seminar_groups WHERE session_id = $1 AND guide_id IS NULL',
+      `SELECT COUNT(*) FROM seminar_groups
+       WHERE session_id = $1 AND seminar_guide_id IS NULL AND guide_id IS NULL AND (guide_name IS NULL OR guide_name = '')`,
       [sessionId]
     );
     if (parseInt(unassigned.rows[0].count, 10) > 0) {
@@ -501,9 +607,11 @@ router.get('/sessions/:id/export', verifyToken, requireCoordinator, async (req, 
     const session = sessRes.rows[0];
 
     const groupsRes = await pool.query(
-      `SELECT sg.id, sg.group_no, sg.domain, u.name as guide_name
+      `SELECT sg.id, sg.group_no, sg.domain,
+              COALESCE(sg.guide_name, sem_g.guide_name, u.name, 'Unassigned') as guide_name
        FROM seminar_groups sg
-       LEFT JOIN faculty f ON sg.guide_id = f.id
+       LEFT JOIN seminar_guides sem_g ON sg.seminar_guide_id = sem_g.id
+       LEFT JOIN faculty f ON (sg.guide_id = f.id OR sem_g.faculty_id = f.id)
        LEFT JOIN users u ON f.user_id = u.id
        WHERE sg.session_id = $1 ORDER BY sg.group_no ASC`,
       [sessionId]

@@ -423,7 +423,17 @@ async function runMigrations() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_sem_group_guide    ON seminar_groups(guide_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_sem_member_group   ON seminar_group_members(group_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_sem_member_prn     ON seminar_group_members(prn)`);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_sem_guide_session  ON seminar_guides(session_id)`);
+    // ─── SEMINAR GUIDES & GROUPS ENHANCEMENTS (Direct guide names) ───────────
+    await client.query(`
+      ALTER TABLE seminar_guides ALTER COLUMN faculty_id DROP NOT NULL;
+      ALTER TABLE seminar_guides ADD COLUMN IF NOT EXISTS guide_name VARCHAR(200);
+      ALTER TABLE seminar_guides ADD COLUMN IF NOT EXISTS designation VARCHAR(100);
+      ALTER TABLE seminar_guides DROP CONSTRAINT IF EXISTS seminar_guides_session_id_faculty_id_key;
+
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS guide_name VARCHAR(200);
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS seminar_guide_id INTEGER REFERENCES seminar_guides(id) ON DELETE SET NULL;
+      CREATE INDEX IF NOT EXISTS idx_sem_group_sem_guide ON seminar_groups(seminar_guide_id);
+    `);
 
     await client.query('COMMIT');
     console.log('[Migration] All tables created successfully');
