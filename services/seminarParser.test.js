@@ -219,3 +219,62 @@ test('sequentialFill: off-by-one check — quota fills exactly (no extra)', () =
   assert.equal(unassigned.length, 0);
   assert.ok(assignments.every(a => a.guideId === 1), 'All groups should go to the single guide');
 });
+
+test('parseGroups: Google Form layout (leader email first, name in name, prn in prn, email in email)', () => {
+  const headers = [
+    'Timestamp',
+    'E-mail ID of group leader (Student-1)',
+    'Name of student -1',
+    'College PRN -student-1',
+    'Division of Student-1',
+    'Mobile no. of Student-1',
+    'Topic1 of student1',
+    'Topic2 of student1',
+    'Topic3 of student1',
+    'Name of Student-2',
+    'College PRN of Student-2',
+    'Division of student -2',
+    'Mobile no. of student-2',
+    'E mail-Id student-2',
+    'Topic1 of student2',
+    'Topic2 of student2',
+    'Topic3 of student2',
+    'Domain Name'
+  ];
+
+  const row1 = [
+    '45852.59',
+    'leader@gmail.com',
+    'Anvesha Goydani',
+    'F23112008',
+    'TE2',
+    '8999347955',
+    'Topic A', 'Topic B', 'Topic C',
+    'Pranalee Raut',
+    'F23112036',
+    'TE2',
+    '9420477274',
+    'pranalee@gmail.com',
+    'Topic D', 'Topic E', 'Topic F',
+    'Data Science'
+  ];
+
+  const { groups } = parseGroups([headers, row1]);
+  assert.equal(groups.length, 1);
+  const m1 = groups[0].members[0];
+  const m2 = groups[0].members[1];
+
+  assert.equal(m1.student_name, 'Anvesha Goydani');
+  assert.equal(m1.prn, 'F23112008');
+  assert.equal(m1.email, 'leader@gmail.com');
+  assert.equal(m1.division, 'TE2');
+  assert.equal(m1.mobile, '8999347955');
+
+  assert.equal(m2.student_name, 'Pranalee Raut');
+  assert.equal(m2.prn, 'F23112036');
+  assert.equal(m2.email, 'pranalee@gmail.com');
+  assert.equal(m2.division, 'TE2');
+
+  assert.equal(groups[0].domain, 'Data Science');
+});
+

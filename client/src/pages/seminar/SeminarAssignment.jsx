@@ -36,6 +36,12 @@ export default function SeminarAssignment() {
 
   useEffect(() => { load(); }, [load]);
 
+  const [showCustomGuide, setShowCustomGuide] = useState(false);
+  const [customName, setCustomName]           = useState('');
+  const [customDesig, setCustomDesig]         = useState('');
+  const [customQuota, setCustomQuota]         = useState(4);
+  const [addingGuide, setAddingGuide]         = useState(false);
+
   // Guide roster management
   const handleAddGuide = async (facultyId) => {
     if (!facultyId) return;
@@ -45,6 +51,30 @@ export default function SeminarAssignment() {
       await load();
       toast.success('Guide added');
     } catch (err) { toast.error(err?.response?.data?.error || 'Failed'); }
+  };
+
+  const handleAddCustomGuide = async (e) => {
+    if (e) e.preventDefault();
+    if (!customName.trim()) return toast.error('Please enter a guide name');
+    setAddingGuide(true);
+    try {
+      await api.post(`/seminar/sessions/${id}/guides`, {
+        guide_name: customName.trim(),
+        designation: customDesig.trim() || 'Faculty Guide',
+        quota: parseInt(customQuota, 10) || 4,
+        display_order: guides.length + 1,
+      });
+      setCustomName('');
+      setCustomDesig('');
+      setCustomQuota(4);
+      setShowCustomGuide(false);
+      await load();
+      toast.success('Guide added to roster');
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Failed to add guide');
+    } finally {
+      setAddingGuide(false);
+    }
   };
 
   const handleQuotaChange = async (guideId, newQuota) => {
@@ -182,17 +212,76 @@ export default function SeminarAssignment() {
               ))}
               {guides.length === 0 && <p className="px-4 py-4 text-xs text-[var(--ink)]/40 text-center">No guides added yet.</p>}
             </div>
-            <div className="px-4 py-3 border-t border-[var(--rule)] bg-[var(--paper)]">
-              <select
-                onChange={e => { handleAddGuide(e.target.value); e.target.value = ''; }}
-                defaultValue=""
-                className="w-full border border-[var(--rule)] rounded-md px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30"
-              >
-                <option value="">+ Add guide…</option>
-                {allFaculty.filter(f => !guides.find(g => g.faculty_id === f.id)).map(f => (
-                  <option key={f.id} value={f.id}>{f.name} ({f.designation})</option>
-                ))}
-              </select>
+            <div className="p-3 border-t border-[var(--rule)] bg-[var(--paper)]">
+              <div className="flex gap-2 mb-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCustomGuide(false)}
+                  className={`flex-1 py-1 text-[11px] font-medium rounded transition-colors ${!showCustomGuide ? 'bg-[var(--navy)] text-white' : 'bg-white text-[var(--ink)]/60 border border-[var(--rule)] hover:bg-slate-50'}`}
+                >
+                  Choose Faculty
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCustomGuide(true)}
+                  className={`flex-1 py-1 text-[11px] font-medium rounded transition-colors ${showCustomGuide ? 'bg-[var(--navy)] text-white' : 'bg-white text-[var(--ink)]/60 border border-[var(--rule)] hover:bg-slate-50'}`}
+                >
+                  + Type Guide Name
+                </button>
+              </div>
+
+              {!showCustomGuide ? (
+                <select
+                  onChange={e => { handleAddGuide(e.target.value); e.target.value = ''; }}
+                  defaultValue=""
+                  className="w-full border border-[var(--rule)] rounded-md px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30 bg-white"
+                >
+                  <option value="">Select registered faculty…</option>
+                  {allFaculty.filter(f => !guides.find(g => g.faculty_id === f.id)).map(f => (
+                    <option key={f.id} value={f.id}>{f.name} ({f.designation})</option>
+                  ))}
+                </select>
+              ) : (
+                <form onSubmit={handleAddCustomGuide} className="space-y-2">
+                  <div>
+                    <input
+                      type="text"
+                      placeholder="Guide Name (e.g. Prof. J. K. Patil)"
+                      value={customName}
+                      onChange={e => setCustomName(e.target.value)}
+                      className="w-full border border-[var(--rule)] rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--navy)]/30 bg-white"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Designation (optional)"
+                      value={customDesig}
+                      onChange={e => setCustomDesig(e.target.value)}
+                      className="flex-1 border border-[var(--rule)] rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--navy)]/30 bg-white"
+                    />
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-[var(--ink)]/50">Q:</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="25"
+                        value={customQuota}
+                        onChange={e => setCustomQuota(e.target.value)}
+                        className="w-11 border border-[var(--rule)] rounded px-1 py-1 text-xs text-center focus:outline-none focus:ring-1 focus:ring-[var(--navy)]/30 bg-white"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={addingGuide || !customName.trim()}
+                    className="w-full py-1.5 bg-[var(--navy)] text-white text-xs font-medium rounded hover:bg-[#2a3d7a] disabled:opacity-50 transition-colors shadow-sm"
+                  >
+                    {addingGuide ? 'Adding…' : '+ Add Guide Name'}
+                  </button>
+                </form>
+              )}
             </div>
           </div>
         </div>
