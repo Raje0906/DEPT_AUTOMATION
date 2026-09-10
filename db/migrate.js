@@ -324,6 +324,107 @@ async function runMigrations() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_proj_panel_group ON project_panel_assignments(group_id, stage_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_proj_panel_member ON project_panel_assignments(panel_member_id)`);
 
+    // ─── SEMINAR TOOL — Faculty coordinator flag ───────────────────────────────
+    await client.query(`ALTER TABLE faculty ADD COLUMN IF NOT EXISTS is_seminar_coordinator BOOLEAN DEFAULT FALSE`);
+
+    // ─── SEMINAR SESSIONS ─────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS seminar_sessions (
+        id            SERIAL PRIMARY KEY,
+        name          VARCHAR(150) NOT NULL,
+        academic_year VARCHAR(20)  NOT NULL,
+        batch         VARCHAR(20)  NOT NULL,
+        status        VARCHAR(20)  NOT NULL DEFAULT 'SETUP'
+                      CHECK (status IN ('SETUP','UPLOAD','VALIDATION','ASSIGNMENT','PUBLISHED')),
+        created_by    INTEGER NOT NULL REFERENCES users(id),
+        created_at    TIMESTAMPTZ DEFAULT NOW(),
+        published_at  TIMESTAMPTZ,
+        published_by  INTEGER REFERENCES users(id)
+      )
+    `);
+
+    // ─── SEMINAR UPLOADS ──────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS seminar_uploads (
+        id                SERIAL PRIMARY KEY,
+        session_id        INTEGER NOT NULL REFERENCES seminar_sessions(id) ON DELETE CASCADE,
+        original_filename VARCHAR(255) NOT NULL,
+        file_data         BYTEA NOT NULL,
+        uploaded_by       INTEGER NOT NULL REFERENCES users(id),
+        uploaded_at       TIMESTAMPTZ DEFAULT NOW(),
+        parse_status      VARCHAR(20) NOT NULL DEFAULT 'PENDING'
+                          CHECK (parse_status IN ('PENDING','PARSED','ERROR')),
+        parse_result      JSONB,
+        parse_error       TEXT
+      )
+    `);
+
+    // ─── SEMINAR GROUPS ───────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS seminar_groups (
+        id               SERIAL PRIMARY KEY,
+        session_id       INTEGER NOT NULL REFERENCES seminar_sessions(id) ON DELETE CASCADE,
+        group_no         INTEGER NOT NULL,
+        domain           VARCHAR(300) NOT NULL,
+        guide_id         INTEGER REFERENCES faculty(id) ON DELETE SET NULL,
+        source_row_index INTEGER,
+        created_at       TIMESTAMPTZ DEFAULT NOW(),
+        updated_at       TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(session_id, group_no)
+      )
+    `);
+
+    // ─── SEMINAR GROUP MEMBERS ────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS seminar_group_members (
+        id           SERIAL PRIMARY KEY,
+        group_id     INTEGER NOT NULL REFERENCES seminar_groups(id) ON DELETE CASCADE,
+        member_index INTEGER NOT NULL CHECK (member_index BETWEEN 1 AND 4),
+        student_name VARCHAR(200) NOT NULL,
+        prn          VARCHAR(60)  NOT NULL,
+        division     VARCHAR(20),
+        mobile       VARCHAR(30),
+        email        VARCHAR(200),
+        topic1       TEXT,
+        topic2       TEXT,
+        topic3       TEXT,
+        is_leader    BOOLEAN DEFAULT FALSE
+      )
+    `);
+
+    // ─── SEMINAR GUIDES ───────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS seminar_guides (
+        id            SERIAL PRIMARY KEY,
+        session_id    INTEGER NOT NULL REFERENCES seminar_sessions(id) ON DELETE CASCADE,
+        faculty_id    INTEGER NOT NULL REFERENCES faculty(id) ON DELETE CASCADE,
+        quota         INTEGER NOT NULL DEFAULT 4,
+        display_order INTEGER NOT NULL DEFAULT 1,
+        UNIQUE(session_id, faculty_id)
+      )
+    `);
+
+    // ─── SEMINAR VALIDATION OVERRIDES ─────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS seminar_issue_overrides (
+        id           SERIAL PRIMARY KEY,
+        session_id   INTEGER NOT NULL REFERENCES seminar_sessions(id) ON DELETE CASCADE,
+        issue_key    VARCHAR(200) NOT NULL,
+        acknowledged_by INTEGER NOT NULL REFERENCES users(id),
+        note         TEXT,
+        created_at   TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(session_id, issue_key)
+      )
+    `);
+
+    // ─── SEMINAR INDEXES ──────────────────────────────────────────────────────
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_sem_session_status ON seminar_sessions(status)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_sem_group_session  ON seminar_groups(session_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_sem_group_guide    ON seminar_groups(guide_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_sem_member_group   ON seminar_group_members(group_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_sem_member_prn     ON seminar_group_members(prn)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_sem_guide_session  ON seminar_guides(session_id)`);
+
     await client.query('COMMIT');
     console.log('[Migration] All tables created successfully');
   } catch (err) {
