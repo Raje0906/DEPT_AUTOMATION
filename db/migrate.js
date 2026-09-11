@@ -216,6 +216,7 @@ async function runMigrations() {
     await client.query(`ALTER TABLE project_group_members ADD COLUMN IF NOT EXISTS email VARCHAR(200)`);
     await client.query(`ALTER TABLE project_group_members ADD COLUMN IF NOT EXISTS mobile_no VARCHAR(30)`);
     await client.query(`ALTER TABLE project_group_members ADD COLUMN IF NOT EXISTS division VARCHAR(30)`);
+    await client.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS class_year VARCHAR(10) DEFAULT 'TE'`);
 
     // ─── PROJECT GUIDE REQUESTS ───────────────────────────────────────────────
     await client.query(`

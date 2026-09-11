@@ -151,7 +151,7 @@ export default function SeminarUpload() {
       {parseResult?.result && (
         <div className="space-y-4">
           {/* Summary */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-white border border-[var(--rule)] rounded-lg p-4">
               <p className="text-2xl font-bold text-[var(--navy)]">{parseResult.result.groupCount}</p>
               <p className="text-xs text-[var(--ink)]/50 mt-0.5">Groups parsed</p>

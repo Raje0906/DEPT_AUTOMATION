@@ -291,7 +291,7 @@ export default function LabMaintenance() {
 
               <div>
                 <label className="input-label">Severity Level</label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {['Low', 'Medium', 'Critical'].map((level) => (
                     <button
                       key={level}

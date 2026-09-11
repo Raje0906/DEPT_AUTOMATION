@@ -400,7 +400,7 @@ export default function StudentProject() {
       </div>
 
       {/* Grid Layout: Titles, Roster & Guide */}
-      <div className="grid lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left 2 Cols: 3 Project Titles & Team Roster */}
         <div className="lg:col-span-2 space-y-6">
           {/* Project Title Preferences */}
