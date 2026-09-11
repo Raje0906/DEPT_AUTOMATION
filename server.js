@@ -85,7 +85,11 @@ async function start() {
       process.exit(1);
     });
   } catch (err) {
-    console.error('[Boot] Startup failed:', err.message);
+    if (err.code === 'ECONNREFUSED' || (err.errors && err.errors.some(e => e.code === 'ECONNREFUSED'))) {
+      console.error(`[Boot] Startup failed: Could not connect to PostgreSQL on ${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 5432}. Please ensure the PostgreSQL service is running.`);
+    } else {
+      console.error('[Boot] Startup failed:', err.message || err);
+    }
     process.exit(1);
   }
 }
