@@ -60,17 +60,15 @@ export default function SeminarReview() {
           <Link to={`/faculty/seminar/${id}/audit`} className="px-4 py-2 text-sm font-medium border border-[var(--rule)] text-[var(--ink)]/60 rounded-md hover:border-[var(--navy)] hover:text-[var(--navy)] transition-colors">
             Audit Log
           </Link>
-          {session?.status === 'PUBLISHED' && (
-            <button
-              id="btn-export"
-              onClick={handleExport}
-              disabled={downloading}
-              className="flex items-center gap-2 px-4 py-2 bg-[var(--navy)] text-white text-sm font-medium rounded-md hover:bg-[#2a3d7a] disabled:opacity-60 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
-              {downloading ? 'Downloading…' : 'Export XLSX'}
-            </button>
-          )}
+          <button
+            id="btn-export"
+            onClick={handleExport}
+            disabled={downloading}
+            className="flex items-center gap-2 px-4 py-2 bg-[var(--navy)] text-white text-sm font-medium rounded-md hover:bg-[#2a3d7a] disabled:opacity-60 transition-colors shadow-xs"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
+            {downloading ? 'Downloading…' : (session?.status === 'PUBLISHED' ? 'Export Final XLSX' : 'Export Draft XLSX')}
+          </button>
         </div>
       </div>
 

@@ -11,13 +11,17 @@ const STATUS_META = {
   PUBLISHED:   { label: 'Published',   color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
 };
 
-const StatusBadge = ({ status }) => {
-  const m = STATUS_META[status] || STATUS_META.SETUP;
-  return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${m.color}`}>
-      {m.label}
-    </span>
-  );
+const StatusBadge = ({ session }) => {
+  if (session?.status === 'PUBLISHED') {
+    return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border bg-emerald-50 text-emerald-700 border-emerald-200">Published</span>;
+  }
+  if (session?.status === 'ASSIGNMENT') {
+    return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border bg-purple-50 text-purple-700 border-purple-200">Guide Assignment</span>;
+  }
+  if (session?.is_locked) {
+    return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border bg-amber-50 text-amber-700 border-amber-200">Registration Locked</span>;
+  }
+  return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border bg-blue-50 text-blue-700 border-blue-200">Registration Open</span>;
 };
 
 export default function SeminarSessions() {
@@ -147,7 +151,7 @@ export default function SeminarSessions() {
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm font-medium text-[var(--ink)]/60 hover:text-[var(--ink)] transition-colors">Cancel</button>
                 <button type="submit" disabled={saving} className="px-4 py-2 bg-[var(--navy)] text-white text-sm font-medium rounded-md hover:bg-[#2a3d7a] disabled:opacity-60 transition-colors">
-                  {saving ? 'Creating…' : 'Create & Upload'}
+                  {saving ? 'Creating…' : 'Create Session'}
                 </button>
               </div>
             </form>
@@ -181,28 +185,26 @@ export default function SeminarSessions() {
                 <div>
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className="font-semibold text-[var(--ink)] text-sm">{s.name}</span>
-                    <StatusBadge status={s.status} />
+                    <StatusBadge session={s} />
                   </div>
                   <p className="text-xs text-[var(--ink)]/50">{s.batch} · {s.academic_year} · Created by {s.created_by_name}</p>
                   <p className="text-xs text-[var(--ink)]/50 mt-0.5">
-                    {s.group_count} groups · {s.assigned_count} assigned
+                    {s.group_count} groups registered · {s.assigned_count} assigned
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {s.status === 'PUBLISHED' && (
-                  <button
-                    onClick={() => navigate(`/faculty/seminar/${s.id}/review`)}
-                    className="px-3 py-1.5 text-xs font-medium border border-emerald-300 text-emerald-700 rounded-md hover:bg-emerald-50 transition-colors"
-                  >
-                    View & Export
-                  </button>
-                )}
+                <button
+                  onClick={() => navigate(`/faculty/seminar/${s.id}/upload`)}
+                  className="px-3 py-1.5 text-xs font-semibold border border-[var(--rule)] text-[var(--navy)] rounded-md hover:bg-slate-50 transition-colors"
+                >
+                  Submissions ({s.group_count})
+                </button>
                 <button
                   onClick={() => navigate(getNextStep(s))}
-                  className="px-3 py-1.5 text-xs font-medium bg-[var(--navy)] text-white rounded-md hover:bg-[#2a3d7a] transition-colors"
+                  className="px-3 py-1.5 text-xs font-semibold bg-[var(--navy)] text-white rounded-md hover:bg-[#2a3d7a] transition-colors"
                 >
-                  {s.status === 'PUBLISHED' ? 'Audit Log' : 'Continue →'}
+                  {s.status === 'PUBLISHED' ? 'Review & Export' : 'Continue →'}
                 </button>
                 <button
                   onClick={() => handleDelete(s)}

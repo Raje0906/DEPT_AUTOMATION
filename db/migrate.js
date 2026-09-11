@@ -435,6 +435,24 @@ async function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_sem_group_sem_guide ON seminar_groups(seminar_guide_id);
     `);
 
+    // ─── SEMINAR V2 ENHANCEMENTS (Student Direct Registration & Locking) ─────
+    await client.query(`
+      ALTER TABLE seminar_sessions ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT FALSE;
+      ALTER TABLE seminar_sessions ADD COLUMN IF NOT EXISTS locked_at TIMESTAMPTZ;
+      ALTER TABLE seminar_sessions ADD COLUMN IF NOT EXISTS locked_by INTEGER REFERENCES users(id);
+      ALTER TABLE seminar_sessions DROP CONSTRAINT IF EXISTS seminar_sessions_status_check;
+      ALTER TABLE seminar_sessions ADD CONSTRAINT seminar_sessions_status_check
+        CHECK (status IN ('SETUP','UPLOAD','VALIDATION','ASSIGNMENT','PUBLISHED','REGISTRATION_OPEN','LOCKED'));
+
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS leader_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS allow_edit BOOLEAN DEFAULT FALSE;
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ DEFAULT NOW();
+
+      CREATE INDEX IF NOT EXISTS idx_sem_groups_leader ON seminar_groups(leader_user_id);
+      CREATE INDEX IF NOT EXISTS idx_sem_groups_session_leader ON seminar_groups(session_id, leader_user_id);
+      CREATE INDEX IF NOT EXISTS idx_sem_member_email ON seminar_group_members(email);
+    `);
+
     await client.query('COMMIT');
     console.log('[Migration] All tables created successfully');
   } catch (err) {
