@@ -110,6 +110,7 @@ const roleNav = {
         { to: '/student/cgpa',        label: 'CGPA Overview',         icon: Icons.cgpa },
         { to: '/student/revaluation', label: 'Revaluation Cell',      icon: Icons.reval },
         { to: '/student/project',     label: 'BE Capstone Project',   icon: Icons.project },
+        { to: '/student/seminar',     label: 'TE Seminar Registration', icon: Icons.seminar },
       ],
     },
   ],

@@ -430,6 +430,272 @@ function sequentialFill(groups, guides) {
   return { assignments, unassigned };
 }
 
+// ─── V2: Standard Domains, Single Group Real-Time Validation & Standing Scanner ──
+
+const STANDARD_DOMAINS = [
+  'Artificial Intelligence & Machine Learning (AIML)',
+  'Data Science & Big Data Analytics',
+  'Cyber Security & Cryptography',
+  'Cloud Computing & DevOps',
+  'Internet of Things (IoT) & Embedded Systems',
+  'Full Stack Web & Mobile Development',
+  'Blockchain & Distributed Systems',
+  'Natural Language Processing & Computer Vision',
+  'High Performance Computing & Networks',
+  'Other / Emerging Technologies',
+];
+
+/**
+ * Real-time validation of a single group submission (for student direct registration).
+ * @param {Object} groupData - { domain, members: Array<Object> }
+ * @returns {{ valid: boolean, errors: Array<string>, warnings: Array<string>, cleanedGroup: Object }}
+ */
+function validateSingleGroup(groupData) {
+  const errors = [];
+  const warnings = [];
+
+  const rawDomain = normText(groupData?.domain);
+  if (!rawDomain) {
+    errors.push('Project Domain Name is required.');
+  } else if (!STANDARD_DOMAINS.includes(rawDomain)) {
+    warnings.push(`Domain "${rawDomain}" is not in the standard departmental list and will be flagged for coordinator review.`);
+  }
+
+  const rawMembers = Array.isArray(groupData?.members) ? groupData.members : [];
+  if (rawMembers.length < 3) {
+    errors.push(`A seminar group must have at least 3 members (found ${rawMembers.length}).`);
+  }
+  if (rawMembers.length > 4) {
+    errors.push(`A seminar group cannot have more than 4 members (found ${rawMembers.length}).`);
+  }
+
+  const cleanedMembers = [];
+  const seenPrns = new Map(); // prn -> memberIndex
+
+  rawMembers.forEach((m, idx) => {
+    const memberIndex = idx + 1;
+    const name = normText(m?.student_name || m?.name);
+    const prn = normPrn(m?.prn || m?.roll_no);
+    const division = normText(m?.division);
+    const rawMobile = m?.mobile || m?.mobile_no;
+    const mobile = normMobile(rawMobile);
+    const email = normEmail(m?.email);
+    const topic1 = normText(m?.topic1);
+    const topic2 = normText(m?.topic2);
+    const topic3 = normText(m?.topic3);
+    const is_leader = memberIndex === 1;
+
+    const label = `Student ${memberIndex}${is_leader ? ' (Leader)' : ''}`;
+
+    if (!name) errors.push(`${label}: Student Name is required.`);
+    if (!prn) {
+      errors.push(`${label}: College PRN is required.`);
+    } else {
+      // Basic format check for PRN: alphanumeric, 4 to 25 chars
+      if (!/^[A-Z0-9\-_]{4,25}$/i.test(prn)) {
+        errors.push(`${label}: PRN "${prn}" is malformed. Please enter a valid college PRN (alphanumeric, 4–25 characters).`);
+      }
+    }
+
+    if (!division) errors.push(`${label}: Division is required.`);
+
+    if (!mobile) {
+      errors.push(`${label}: Mobile number is required.`);
+    } else {
+      // Basic format check for Mobile: 10 digits (or with 91 / +91)
+      const digitsOnly = mobile.replace(/\D/g, '');
+      const validTen = digitsOnly.length === 10 || (digitsOnly.length === 12 && digitsOnly.startsWith('91'));
+      if (!validTen) {
+        errors.push(`${label}: Mobile number "${rawMobile}" is invalid. Must be a 10-digit mobile number.`);
+      }
+    }
+
+    if (!email) {
+      errors.push(`${label}: Email address is required.`);
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errors.push(`${label}: Email address "${email}" is invalid.`);
+    }
+
+    if (!topic1) errors.push(`${label}: Proposed Topic 1 is required.`);
+    if (!topic2) errors.push(`${label}: Proposed Topic 2 is required.`);
+    if (!topic3) errors.push(`${label}: Proposed Topic 3 is required.`);
+
+    if (prn) {
+      if (seenPrns.has(prn)) {
+        errors.push(`Duplicate PRN "${prn}" within this submission (Student ${seenPrns.get(prn)} and Student ${memberIndex}).`);
+      } else {
+        seenPrns.set(prn, memberIndex);
+      }
+    }
+
+    cleanedMembers.push({
+      memberIndex,
+      student_name: name,
+      prn,
+      division,
+      mobile,
+      email,
+      topic1,
+      topic2,
+      topic3,
+      is_leader,
+    });
+  });
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings,
+    cleanedGroup: {
+      domain: rawDomain,
+      members: cleanedMembers,
+    },
+  };
+}
+
+/**
+ * Standing validation scanner for coordinator dashboard across all groups in a session.
+ * @param {Array} groups - Array of group records with .members array
+ * @returns {{ issues: Array<Object>, summary: Object }}
+ */
+function runStandingValidation(groups) {
+  const issues = [];
+  const prnRegistry = new Map(); // prn -> { groupNo, groupId, memberIndex, studentName }
+
+  let errorCount = 0;
+  let warningCount = 0;
+
+  groups.forEach((g, idx) => {
+    const groupNo = g.group_no || (idx + 1);
+    const domain = normText(g.domain);
+
+    // 1. Missing Domain
+    if (!domain) {
+      issues.push({
+        key: `missing_domain:g${g.id || idx}`,
+        type: 'MISSING_DOMAIN',
+        severity: 'error',
+        groupNo,
+        groupId: g.id,
+        message: `Group ${groupNo}: Domain name is missing.`,
+      });
+      errorCount++;
+    } else if (!STANDARD_DOMAINS.includes(domain)) {
+      // 2. Non-standard Domain (Flagged for coordinator, not blocked)
+      issues.push({
+        key: `custom_domain:g${g.id || idx}`,
+        type: 'NON_STANDARD_DOMAIN',
+        severity: 'warning',
+        groupNo,
+        groupId: g.id,
+        field: 'Domain',
+        message: `Group ${groupNo}: Uses non-standard domain "${domain}" (requires coordinator review).`,
+      });
+      warningCount++;
+    }
+
+    // 3. Group Size
+    const members = Array.isArray(g.members) ? g.members : [];
+    if (members.length < 3) {
+      issues.push({
+        key: `group_too_small:g${g.id || idx}`,
+        type: 'GROUP_SIZE',
+        severity: 'error',
+        groupNo,
+        groupId: g.id,
+        message: `Group ${groupNo}: Only ${members.length} member(s) registered (minimum is 3).`,
+      });
+      errorCount++;
+    } else if (members.length > 4) {
+      issues.push({
+        key: `group_too_large:g${g.id || idx}`,
+        type: 'GROUP_SIZE',
+        severity: 'error',
+        groupNo,
+        groupId: g.id,
+        message: `Group ${groupNo}: ${members.length} members registered (maximum is 4).`,
+      });
+      errorCount++;
+    }
+
+    // 4. Member-level checks & duplicates
+    const seenInThisGroup = new Map();
+
+    members.forEach((m, mIdx) => {
+      const memberIndex = m.member_index || (mIdx + 1);
+      const studentName = normText(m.student_name || m.name);
+      const prn = normPrn(m.prn);
+
+      if (!studentName && prn) {
+        issues.push({
+          key: `missing_name:g${g.id || idx}:m${memberIndex}`,
+          type: 'MISSING_FIELD',
+          severity: 'error',
+          groupNo,
+          groupId: g.id,
+          message: `Group ${groupNo}, Student ${memberIndex} (${prn}): Name is missing.`,
+        });
+        errorCount++;
+      }
+      if (studentName && !prn) {
+        issues.push({
+          key: `missing_prn:g${g.id || idx}:m${memberIndex}`,
+          type: 'MISSING_FIELD',
+          severity: 'error',
+          groupNo,
+          groupId: g.id,
+          message: `Group ${groupNo}, Student ${memberIndex} "${studentName}": PRN is missing.`,
+        });
+        errorCount++;
+      }
+
+      if (!prn) return;
+
+      // Duplicate within group
+      if (seenInThisGroup.has(prn)) {
+        issues.push({
+          key: `dup_prn_within:g${g.id || idx}:${prn}`,
+          type: 'DUPLICATE_PRN_WITHIN',
+          severity: 'error',
+          groupNo,
+          groupId: g.id,
+          message: `Group ${groupNo}: PRN "${prn}" appears twice in this group (Students ${seenInThisGroup.get(prn)} and ${memberIndex}).`,
+        });
+        errorCount++;
+      } else {
+        seenInThisGroup.set(prn, memberIndex);
+      }
+
+      // Duplicate across groups
+      if (prnRegistry.has(prn)) {
+        const prev = prnRegistry.get(prn);
+        issues.push({
+          key: `dup_prn_across:${prn}:g${prev.groupId}_g${g.id || idx}`,
+          type: 'DUPLICATE_PRN_ACROSS',
+          severity: 'error',
+          groupNo,
+          groupId: g.id,
+          message: `PRN "${prn}" (${studentName || 'Student'}) appears in both Group ${prev.groupNo} and Group ${groupNo}.`,
+        });
+        errorCount++;
+      } else {
+        prnRegistry.set(prn, { groupNo, groupId: g.id, memberIndex, studentName });
+      }
+    });
+  });
+
+  return {
+    issues,
+    summary: {
+      totalGroups: groups.length,
+      totalIssues: issues.length,
+      errors: errorCount,
+      warnings: warningCount,
+      hasErrors: errorCount > 0,
+    },
+  };
+}
+
 module.exports = {
   parseSpreadsheet,
   parseGroups,
@@ -441,4 +707,7 @@ module.exports = {
   normMobile,
   buildColumnMap,
   sanitizeStudent,
+  STANDARD_DOMAINS,
+  validateSingleGroup,
+  runStandingValidation,
 };

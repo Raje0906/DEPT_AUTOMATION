@@ -4,8 +4,18 @@ const multer   = require('multer');
 const pool     = require('../db/pool');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { auditRecord } = require('../middleware/auditLogger');
-const { parseSpreadsheet, parseGroups, validateGroups, sequentialFill } = require('../services/seminarParser');
-const { buildWorkbook } = require('../services/seminarExporter');
+const {
+  parseSpreadsheet,
+  parseGroups,
+  validateGroups,
+  sequentialFill,
+  STANDARD_DOMAINS,
+  validateSingleGroup,
+  runStandingValidation,
+  normPrn,
+  normEmail,
+} = require('../services/seminarParser');
+const { buildWorkbook, getExportLifecycleLabel } = require('../services/seminarExporter');
 
 const router = express.Router();
 
@@ -41,7 +51,7 @@ router.get('/sessions', verifyToken, requireCoordinator, async (req, res) => {
     const r = await pool.query(
       `SELECT s.*, u.name as created_by_name,
               (SELECT COUNT(*) FROM seminar_groups sg WHERE sg.session_id = s.id) AS group_count,
-              (SELECT COUNT(*) FROM seminar_groups sg WHERE sg.session_id = s.id AND sg.guide_id IS NOT NULL) AS assigned_count
+              (SELECT COUNT(*) FROM seminar_groups sg WHERE sg.session_id = s.id AND (sg.guide_id IS NOT NULL OR sg.seminar_guide_id IS NOT NULL)) AS assigned_count
        FROM seminar_sessions s
        JOIN users u ON s.created_by = u.id
        ORDER BY s.created_at DESC`
@@ -119,7 +129,497 @@ router.delete('/sessions/:id', verifyToken, requireCoordinator, async (req, res)
   }
 });
 
-// ─── Upload & Parse ───────────────────────────────────────────────────────────
+// ─── V2: Student Direct Registration Endpoints ────────────────────────────────
+
+// GET /api/seminar/active-session
+router.get('/active-session', verifyToken, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT s.*, u.name as created_by_name,
+              (SELECT COUNT(*) FROM seminar_groups sg WHERE sg.session_id = s.id) AS group_count
+       FROM seminar_sessions s
+       JOIN users u ON s.created_by = u.id
+       ORDER BY (CASE WHEN s.status != 'PUBLISHED' AND NOT s.is_locked THEN 1 WHEN NOT s.is_locked THEN 2 ELSE 3 END) ASC, s.created_at DESC
+       LIMIT 1`
+    );
+    if (!r.rows.length) {
+      return res.json({ session: null, canRegister: false, standard_domains: STANDARD_DOMAINS });
+    }
+    const session = r.rows[0];
+    const canRegister = !session.is_locked && session.status !== 'PUBLISHED';
+    res.json({
+      session,
+      canRegister,
+      standard_domains: STANDARD_DOMAINS,
+    });
+  } catch (err) {
+    console.error('[Seminar] GET /active-session:', err.message);
+    res.status(500).json({ error: 'Failed to fetch active session' });
+  }
+});
+
+// GET /api/seminar/domains
+router.get('/domains', verifyToken, (_req, res) => {
+  res.json({ domains: STANDARD_DOMAINS });
+});
+
+// GET /api/seminar/my-submission
+router.get('/my-submission', verifyToken, async (req, res) => {
+  try {
+    const sessionId = req.query.sessionId ? parseInt(req.query.sessionId, 10) : null;
+
+    // Student profile prefill
+    let studentProfile = { name: req.user.name, email: req.user.email, prn: '', division: '' };
+    if (req.user.role === 'student') {
+      const stRes = await pool.query(
+        'SELECT roll_no, enrollment_no, division, batch FROM students WHERE user_id = $1',
+        [req.user.id]
+      );
+      if (stRes.rows.length > 0) {
+        studentProfile.prn = stRes.rows[0].enrollment_no || stRes.rows[0].roll_no || '';
+        studentProfile.division = stRes.rows[0].division || '';
+      }
+    }
+
+    // Determine target session
+    let session = null;
+    if (sessionId) {
+      const sRes = await pool.query('SELECT * FROM seminar_sessions WHERE id = $1', [sessionId]);
+      if (sRes.rows.length) session = sRes.rows[0];
+    }
+    if (!session) {
+      const sRes = await pool.query(
+        `SELECT * FROM seminar_sessions ORDER BY (CASE WHEN status != 'PUBLISHED' AND NOT is_locked THEN 1 ELSE 2 END) ASC, created_at DESC LIMIT 1`
+      );
+      if (sRes.rows.length) session = sRes.rows[0];
+    }
+
+    if (!session) {
+      return res.json({
+        hasSession: false,
+        hasSubmission: false,
+        prefill: studentProfile,
+        standard_domains: STANDARD_DOMAINS,
+      });
+    }
+
+    // Check if current user is leader of a group in this session
+    let groupRes = await pool.query(
+      `SELECT sg.*, u.name as leader_name, u.email as leader_email
+       FROM seminar_groups sg
+       LEFT JOIN users u ON sg.leader_user_id = u.id
+       WHERE sg.session_id = $1 AND sg.leader_user_id = $2`,
+      [session.id, req.user.id]
+    );
+
+    let isLeader = true;
+
+    // If not found by leader_user_id, check if student's PRN or email is in any group's members
+    if (groupRes.rows.length === 0 && studentProfile.prn) {
+      const memberGroupRes = await pool.query(
+        `SELECT sg.*, u.name as leader_name, u.email as leader_email
+         FROM seminar_groups sg
+         JOIN seminar_group_members sgm ON sgm.group_id = sg.id
+         LEFT JOIN users u ON sg.leader_user_id = u.id
+         WHERE sg.session_id = $1 AND (UPPER(REPLACE(sgm.prn, ' ', '')) = $2 OR LOWER(sgm.email) = $3)
+         LIMIT 1`,
+        [session.id, normPrn(studentProfile.prn), normEmail(studentProfile.email)]
+      );
+      if (memberGroupRes.rows.length > 0) {
+        groupRes = memberGroupRes;
+        isLeader = groupRes.rows[0].leader_user_id === req.user.id;
+      }
+    }
+
+    if (groupRes.rows.length === 0) {
+      return res.json({
+        hasSession: true,
+        session,
+        hasSubmission: false,
+        prefill: studentProfile,
+        canEdit: !session.is_locked && session.status !== 'PUBLISHED',
+        standard_domains: STANDARD_DOMAINS,
+      });
+    }
+
+    const group = groupRes.rows[0];
+    const membersRes = await pool.query(
+      `SELECT * FROM seminar_group_members WHERE group_id = $1 ORDER BY member_index ASC`,
+      [group.id]
+    );
+
+    const canEdit = isLeader && (!session.is_locked || group.allow_edit) && session.status !== 'PUBLISHED';
+
+    res.json({
+      hasSession: true,
+      session,
+      hasSubmission: true,
+      group,
+      members: membersRes.rows,
+      isLeader,
+      canEdit,
+      prefill: studentProfile,
+      standard_domains: STANDARD_DOMAINS,
+    });
+  } catch (err) {
+    console.error('[Seminar] GET /my-submission:', err.message);
+    res.status(500).json({ error: 'Failed to fetch submission details' });
+  }
+});
+
+// POST /api/seminar/register-group (student creates or edits group)
+router.post('/register-group', verifyToken, requireRole('student'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { session_id, domain, members } = req.body;
+    const sessionId = parseInt(session_id, 10);
+    if (!sessionId) {
+      return res.status(400).json({ error: 'Valid session_id is required' });
+    }
+
+    // Transaction with advisory lock to prevent double-click race conditions
+    await client.query('BEGIN');
+    const lockKey = (sessionId * 100000) + (req.user.id % 100000);
+    await client.query('SELECT pg_advisory_xact_lock($1)', [lockKey]);
+
+    // Check session
+    const sessRes = await client.query('SELECT * FROM seminar_sessions WHERE id = $1', [sessionId]);
+    if (!sessRes.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Seminar session not found' });
+    }
+    const session = sessRes.rows[0];
+    if (session.status === 'PUBLISHED') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'This session is published. Registrations are closed.' });
+    }
+
+    // Check existing group by this leader
+    const existingGroupRes = await client.query(
+      'SELECT * FROM seminar_groups WHERE session_id = $1 AND leader_user_id = $2',
+      [sessionId, req.user.id]
+    );
+    const existingGroup = existingGroupRes.rows[0] || null;
+
+    // Check locking
+    if (session.is_locked) {
+      if (!existingGroup || !existingGroup.allow_edit) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({
+          error: 'Registration is locked by the coordinator. Further submissions and edits are closed.',
+        });
+      }
+    }
+
+    // In-memory validation of fields, formats, group size, and duplicate PRNs within submission
+    const valResult = validateSingleGroup({ domain, members });
+    if (!valResult.valid) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: valResult.errors[0],
+        errors: valResult.errors,
+        warnings: valResult.warnings,
+      });
+    }
+
+    const { cleanedGroup } = valResult;
+
+    // Database check for duplicate PRNs across OTHER groups in this session
+    const prnList = cleanedGroup.members.map(m => m.prn);
+    const conflictQuery = `
+      SELECT sg.id as group_id, sg.group_no, m.student_name, m.prn
+      FROM seminar_group_members m
+      JOIN seminar_groups sg ON m.group_id = sg.id
+      WHERE sg.session_id = $1
+        AND UPPER(REPLACE(m.prn, ' ', '')) = ANY($2)
+        AND ($3::int IS NULL OR sg.id != $3)
+      LIMIT 1
+    `;
+    const conflictRes = await client.query(conflictQuery, [
+      sessionId,
+      prnList,
+      existingGroup ? existingGroup.id : null,
+    ]);
+
+    if (conflictRes.rows.length > 0) {
+      const conflict = conflictRes.rows[0];
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        error: `PRN "${conflict.prn}" (${conflict.student_name}) is already registered in Group ${conflict.group_no}. A student cannot be registered in multiple groups.`,
+        conflict: {
+          prn: conflict.prn,
+          name: conflict.student_name,
+          groupNo: conflict.group_no,
+        },
+      });
+    }
+
+    let finalGroupId;
+    let finalGroupNo;
+    let actionType;
+
+    if (existingGroup) {
+      // UPDATE existing group
+      finalGroupId = existingGroup.id;
+      finalGroupNo = existingGroup.group_no;
+      actionType = 'UPDATE';
+
+      await client.query(
+        `UPDATE seminar_groups
+         SET domain = $1, updated_at = NOW()
+         WHERE id = $2`,
+        [cleanedGroup.domain, finalGroupId]
+      );
+
+      // Re-insert members
+      await client.query('DELETE FROM seminar_group_members WHERE group_id = $1', [finalGroupId]);
+      for (const m of cleanedGroup.members) {
+        await client.query(
+          `INSERT INTO seminar_group_members (group_id, member_index, student_name, prn, division, mobile, email, topic1, topic2, topic3, is_leader)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+          [finalGroupId, m.memberIndex, m.student_name, m.prn, m.division, m.mobile, m.email, m.topic1, m.topic2, m.topic3, m.is_leader]
+        );
+      }
+    } else {
+      // INSERT new group
+      actionType = 'INSERT';
+      const maxNoRes = await client.query(
+        'SELECT COALESCE(MAX(group_no), 0) + 1 AS next_no FROM seminar_groups WHERE session_id = $1',
+        [sessionId]
+      );
+      finalGroupNo = maxNoRes.rows[0].next_no;
+
+      const gRow = await client.query(
+        `INSERT INTO seminar_groups (session_id, group_no, domain, leader_user_id, allow_edit, submitted_at)
+         VALUES ($1, $2, $3, $4, FALSE, NOW()) RETURNING id`,
+        [sessionId, finalGroupNo, cleanedGroup.domain, req.user.id]
+      );
+      finalGroupId = gRow.rows[0].id;
+
+      for (const m of cleanedGroup.members) {
+        await client.query(
+          `INSERT INTO seminar_group_members (group_id, member_index, student_name, prn, division, mobile, email, topic1, topic2, topic3, is_leader)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+          [finalGroupId, m.memberIndex, m.student_name, m.prn, m.division, m.mobile, m.email, m.topic1, m.topic2, m.topic3, m.is_leader]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+
+    await auditRecord({
+      tableName: 'seminar_groups',
+      recordId: finalGroupId,
+      changedBy: req.user.id,
+      oldValue: existingGroup ? { domain: existingGroup.domain } : null,
+      newValue: { domain: cleanedGroup.domain, memberCount: cleanedGroup.members.length, groupNo: finalGroupNo },
+      action: actionType,
+      reason: actionType === 'INSERT' ? 'Student group registration' : 'Student group update',
+    });
+
+    res.json({
+      success: true,
+      message: actionType === 'INSERT' ? 'Seminar group registered successfully!' : 'Seminar group registration updated successfully!',
+      groupId: finalGroupId,
+      groupNo: finalGroupNo,
+      warnings: valResult.warnings,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[Seminar] POST /register-group:', err.message);
+    res.status(500).json({ error: 'Registration failed: ' + err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// ─── V2: Coordinator Live Submissions & Standing Validation Endpoints ──────────
+
+// GET /api/seminar/sessions/:id/submissions
+router.get('/sessions/:id/submissions', verifyToken, requireCoordinator, async (req, res) => {
+  const sessionId = parseInt(req.params.id, 10);
+  try {
+    const sRes = await pool.query(
+      `SELECT s.*, u.name as created_by_name, pu.name as published_by_name, lu.name as locked_by_name
+       FROM seminar_sessions s
+       JOIN users u ON s.created_by = u.id
+       LEFT JOIN users pu ON s.published_by = pu.id
+       LEFT JOIN users lu ON s.locked_by = lu.id
+       WHERE s.id = $1`,
+      [sessionId]
+    );
+    if (!sRes.rows.length) return res.status(404).json({ error: 'Session not found' });
+    const session = sRes.rows[0];
+
+    const groupsRes = await pool.query(
+      `SELECT sg.*, u.name as leader_name, u.email as leader_email,
+              (SELECT json_agg(json_build_object(
+                'id', m.id,
+                'member_index', m.member_index,
+                'student_name', m.student_name,
+                'prn', m.prn,
+                'division', m.division,
+                'mobile', m.mobile,
+                'email', m.email,
+                'topic1', m.topic1,
+                'topic2', m.topic2,
+                'topic3', m.topic3,
+                'is_leader', m.is_leader
+              ) ORDER BY m.member_index) FROM seminar_group_members m WHERE m.group_id = sg.id) as members
+       FROM seminar_groups sg
+       LEFT JOIN users u ON sg.leader_user_id = u.id
+       WHERE sg.session_id = $1
+       ORDER BY sg.group_no ASC`,
+      [sessionId]
+    );
+
+    const groups = groupsRes.rows.map(g => ({
+      ...g,
+      members: g.members || [],
+    }));
+
+    const standing = runStandingValidation(groups);
+
+    res.json({
+      session,
+      groups,
+      standingValidation: standing,
+    });
+  } catch (err) {
+    console.error('[Seminar] GET /sessions/:id/submissions:', err.message);
+    res.status(500).json({ error: 'Failed to fetch submissions' });
+  }
+});
+
+// GET /api/seminar/sessions/:id/validation
+router.get('/sessions/:id/validation', verifyToken, requireCoordinator, async (req, res) => {
+  const sessionId = parseInt(req.params.id, 10);
+  try {
+    const groupsRes = await pool.query(
+      `SELECT sg.*,
+              (SELECT json_agg(json_build_object(
+                'id', m.id,
+                'member_index', m.member_index,
+                'student_name', m.student_name,
+                'prn', m.prn,
+                'division', m.division,
+                'mobile', m.mobile,
+                'email', m.email,
+                'topic1', m.topic1,
+                'topic2', m.topic2,
+                'topic3', m.topic3,
+                'is_leader', m.is_leader
+              ) ORDER BY m.member_index) FROM seminar_group_members m WHERE m.group_id = sg.id) as members
+       FROM seminar_groups sg
+       WHERE sg.session_id = $1
+       ORDER BY sg.group_no ASC`,
+      [sessionId]
+    );
+
+    const groups = groupsRes.rows.map(g => ({ ...g, members: g.members || [] }));
+    const result = runStandingValidation(groups);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to run validation' });
+  }
+});
+
+// PATCH /api/seminar/sessions/:id/toggle-lock
+router.patch('/sessions/:id/toggle-lock', verifyToken, requireCoordinator, async (req, res) => {
+  const sessionId = parseInt(req.params.id, 10);
+  try {
+    const prev = await pool.query('SELECT * FROM seminar_sessions WHERE id = $1', [sessionId]);
+    if (!prev.rows.length) return res.status(404).json({ error: 'Session not found' });
+    const session = prev.rows[0];
+
+    const newLocked = !session.is_locked;
+    const r = await pool.query(
+      `UPDATE seminar_sessions
+       SET is_locked = $1,
+           locked_at = CASE WHEN $1 THEN NOW() ELSE NULL END,
+           locked_by = CASE WHEN $1 THEN $2 ELSE NULL END
+       WHERE id = $3 RETURNING *`,
+      [newLocked, req.user.id, sessionId]
+    );
+
+    await auditRecord({
+      tableName: 'seminar_sessions',
+      recordId: sessionId,
+      changedBy: req.user.id,
+      oldValue: { is_locked: session.is_locked },
+      newValue: { is_locked: newLocked },
+      action: 'UPDATE',
+      reason: newLocked ? 'Coordinator locked registration' : 'Coordinator reopened registration',
+    });
+
+    res.json({ session: r.rows[0], message: newLocked ? 'Registration locked successfully' : 'Registration reopened successfully' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to toggle lock' });
+  }
+});
+
+// PATCH /api/seminar/sessions/:id/groups/:groupId/unlock
+router.patch('/sessions/:id/groups/:groupId/unlock', verifyToken, requireCoordinator, async (req, res) => {
+  const sessionId = parseInt(req.params.id, 10);
+  const groupId = parseInt(req.params.groupId, 10);
+  try {
+    const prev = await pool.query(
+      'SELECT * FROM seminar_groups WHERE id = $1 AND session_id = $2',
+      [groupId, sessionId]
+    );
+    if (!prev.rows.length) return res.status(404).json({ error: 'Group not found' });
+    const old = prev.rows[0];
+
+    const newAllow = !old.allow_edit;
+    const r = await pool.query(
+      `UPDATE seminar_groups SET allow_edit = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+      [newAllow, groupId]
+    );
+
+    await auditRecord({
+      tableName: 'seminar_groups',
+      recordId: groupId,
+      changedBy: req.user.id,
+      oldValue: { allow_edit: old.allow_edit },
+      newValue: { allow_edit: newAllow },
+      action: 'UPDATE',
+      reason: newAllow ? 'Coordinator granted single-group edit exception' : 'Coordinator revoked group edit exception',
+    });
+
+    res.json({ group: r.rows[0], message: newAllow ? 'Group edit exception granted' : 'Group edit locked' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to toggle group edit exception' });
+  }
+});
+
+// DELETE /api/seminar/sessions/:id/groups/:groupId
+router.delete('/sessions/:id/groups/:groupId', verifyToken, requireCoordinator, async (req, res) => {
+  const sessionId = parseInt(req.params.id, 10);
+  const groupId = parseInt(req.params.groupId, 10);
+  try {
+    const prev = await pool.query('SELECT * FROM seminar_groups WHERE id = $1 AND session_id = $2', [groupId, sessionId]);
+    if (!prev.rows.length) return res.status(404).json({ error: 'Group not found' });
+    const old = prev.rows[0];
+
+    await pool.query('DELETE FROM seminar_groups WHERE id = $1 AND session_id = $2', [groupId, sessionId]);
+
+    await auditRecord({
+      tableName: 'seminar_groups',
+      recordId: groupId,
+      changedBy: req.user.id,
+      oldValue: old,
+      newValue: null,
+      action: 'DELETE',
+      reason: 'Coordinator deleted group',
+    });
+
+    res.json({ deleted: true, groupId });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete group' });
+  }
+});
+
+// ─── Upload & Parse (Legacy Fallback) ─────────────────────────────────────────
 
 // POST /api/seminar/sessions/:id/upload
 router.post('/sessions/:id/upload', verifyToken, requireCoordinator,
@@ -631,7 +1131,8 @@ router.get('/sessions/:id/export', verifyToken, requireCoordinator, async (req, 
     }
 
     const buffer = buildWorkbook(session, groupsRes.rows, membersByGroupId);
-    const filename = `${session.name.replace(/[^a-z0-9]/gi, '_')}_GroupList.xlsx`;
+    const statePrefix = session.status === 'PUBLISHED' ? 'Final' : 'Draft';
+    const filename = `${session.name.replace(/[^a-z0-9]/gi, '_')}_${statePrefix}_GroupList.xlsx`;
 
     await auditRecord({ tableName: 'seminar_sessions', recordId: sessionId, changedBy: req.user.id, oldValue: null, newValue: { exported: filename }, action: 'UPDATE' });
 
