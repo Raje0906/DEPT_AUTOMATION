@@ -26,7 +26,7 @@ export default function CGPAView() {
       </div>
 
       {/* CGPA + trend */}
-      <div className="grid lg:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         <div className="panel p-6 flex flex-col items-start">
           <p className="text-xs text-draft uppercase tracking-wide mb-2">Cumulative GPA</p>
           <p className="font-serif text-5xl font-bold text-navy tabular-num">

@@ -8,6 +8,7 @@ import Layout from './components/Layout'
 
 // Auth
 import Login from './pages/auth/Login'
+import Register from './pages/auth/Register'
 
 // Student
 import StudentDashboard  from './pages/student/StudentDashboard'
@@ -82,6 +83,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
 
           {/* Student */}
           <Route path="/student" element={<StudentLayout><StudentDashboard /></StudentLayout>} />

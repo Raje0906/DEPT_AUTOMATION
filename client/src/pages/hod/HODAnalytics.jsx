@@ -68,7 +68,7 @@ export default function HODAnalytics() {
       </div>
 
       {/* Grade distribution + SGPA histogram */}
-      <div className="grid lg:grid-cols-2 gap-6 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <div className="panel p-5">
           <p className="text-xs text-draft uppercase tracking-wide mb-4">Grade distribution</p>
           <ResponsiveContainer width="100%" height={180}>

@@ -227,4 +227,172 @@ router.get('/me', verifyToken, async (req, res) => {
   }
 });
 
+// ─── POST /api/auth/register-student ─────────────────────────────────────────
+router.post('/register-student', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const {
+      name,
+      email,
+      password,
+      roll_no,
+      enrollment_no,
+      current_semester,
+      batch,
+      division,
+      class_year,
+    } = req.body;
+
+    // Validation
+    if (!name || !email || !password || !roll_no || !enrollment_no || !current_semester || !batch || !division) {
+      return res.status(400).json({ error: 'All fields are required.' });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanRoll = roll_no.trim().toUpperCase();
+    const cleanEnroll = enrollment_no.trim().toUpperCase();
+    const cleanClassYear = (class_year || 'TE').trim().toUpperCase();
+    const semesterInt = parseInt(current_semester, 10);
+
+    if (isNaN(semesterInt) || semesterInt < 1 || semesterInt > 8) {
+      return res.status(400).json({ error: 'Semester must be a number between 1 and 8.' });
+    }
+
+    // Check duplicate email
+    const emailCheck = await client.query('SELECT id FROM users WHERE LOWER(email) = $1', [cleanEmail]);
+    if (emailCheck.rows.length > 0) {
+      return res.status(400).json({ error: 'An account with this email already exists.' });
+    }
+
+    // Check duplicate roll_no or enrollment_no
+    const studentCheck = await client.query(
+      'SELECT id, roll_no, enrollment_no FROM students WHERE LOWER(roll_no) = $1 OR LOWER(enrollment_no) = $2',
+      [cleanRoll.toLowerCase(), cleanEnroll.toLowerCase()]
+    );
+    if (studentCheck.rows.length > 0) {
+      const match = studentCheck.rows[0];
+      if (match.roll_no.toLowerCase() === cleanRoll.toLowerCase()) {
+        return res.status(400).json({ error: 'A student with this Roll Number is already registered.' });
+      }
+      return res.status(400).json({ error: 'A student with this PRN / Enrollment Number is already registered.' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const department = 'Computer Engineering';
+
+    await client.query('BEGIN');
+
+    const userRes = await client.query(
+      `INSERT INTO users (name, role, email, password_hash, department)
+       VALUES ($1, 'student', $2, $3, $4)
+       RETURNING id`,
+      [name.trim(), cleanEmail, passwordHash, department]
+    );
+
+    const userId = userRes.rows[0].id;
+
+    await client.query(
+      `INSERT INTO students (user_id, roll_no, enrollment_no, batch, current_semester, division, class_year)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [userId, cleanRoll, cleanEnroll, batch.trim(), semesterInt, division.trim(), cleanClassYear]
+    );
+
+    await client.query('COMMIT');
+
+    res.status(201).json({
+      message: 'Student registered successfully. You can now log in.',
+      email: cleanEmail,
+      roll_no: cleanRoll,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[Auth] Student registration error:', err);
+    res.status(500).json({ error: 'Internal server error during registration.' });
+  } finally {
+    client.release();
+  }
+});
+
+// ─── POST /api/auth/register-faculty ─────────────────────────────────────────
+router.post('/register-faculty', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const {
+      name,
+      email,
+      employee_id,
+      designation,
+      password,
+      passcode,
+    } = req.body;
+
+    if (!name || !email || !employee_id || !designation || !password || !passcode) {
+      return res.status(400).json({ error: 'All fields are required.' });
+    }
+
+    const validPasscode = process.env.FACULTY_SECRET_KEY || 'COMP-FACULTY-2026';
+    if (passcode.trim() !== validPasscode.trim()) {
+      return res.status(403).json({ error: 'Invalid Department Staff Passcode. Access denied.' });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanEmpId = employee_id.trim().toUpperCase();
+
+    // Check duplicate email
+    const emailCheck = await client.query('SELECT id FROM users WHERE LOWER(email) = $1', [cleanEmail]);
+    if (emailCheck.rows.length > 0) {
+      return res.status(400).json({ error: 'An account with this email already exists.' });
+    }
+
+    // Check duplicate employee_id
+    const empCheck = await client.query('SELECT id FROM faculty WHERE LOWER(employee_id) = $1', [cleanEmpId.toLowerCase()]);
+    if (empCheck.rows.length > 0) {
+      return res.status(400).json({ error: 'A faculty member with this Employee ID is already registered.' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const department = 'Computer Engineering';
+
+    await client.query('BEGIN');
+
+    const userRes = await client.query(
+      `INSERT INTO users (name, role, email, password_hash, department)
+       VALUES ($1, 'faculty', $2, $3, $4)
+       RETURNING id`,
+      [name.trim(), cleanEmail, passwordHash, department]
+    );
+
+    const userId = userRes.rows[0].id;
+
+    await client.query(
+      `INSERT INTO faculty (user_id, department, designation, employee_id)
+       VALUES ($1, $2, $3, $4)`,
+      [userId, department, designation.trim(), cleanEmpId]
+    );
+
+    await client.query('COMMIT');
+
+    res.status(201).json({
+      message: 'Faculty registered successfully. You can now log in.',
+      email: cleanEmail,
+      employee_id: cleanEmpId,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[Auth] Faculty registration error:', err);
+    res.status(500).json({ error: 'Internal server error during registration.' });
+  } finally {
+    client.release();
+  }
+});
+
 module.exports = router;
+

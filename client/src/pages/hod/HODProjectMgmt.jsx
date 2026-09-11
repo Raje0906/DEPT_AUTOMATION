@@ -459,7 +459,7 @@ export default function HODProjectMgmt() {
             <h2 className="font-serif text-xl font-bold text-ink border-b border-rule pb-3">Assign Panel Evaluators to Group</h2>
 
             <form onSubmit={handleAssignPanel} className="space-y-5">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="input-label">Select Evaluation Stage *</label>
                   <select

@@ -77,7 +77,7 @@ export default function FacultyRevaluation() {
 
               {updating === r.id ? (
                 <div className="p-5 border-t border-rule space-y-3">
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
                       <label className="input-label">CIE</label>
                       <input type="number" className="input-field" value={form.cie} onChange={e => setForm(f => ({ ...f, cie: e.target.value }))} />

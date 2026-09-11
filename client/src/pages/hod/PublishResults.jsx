@@ -63,7 +63,7 @@ export default function PublishResults() {
       {/* Target selection */}
       <div className="panel mb-6 p-5">
         <h2 className="font-serif text-base font-semibold mb-4">Select semester &amp; class to publish</h2>
-        <div className="grid grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
           <div>
             <label className="input-label">Semester</label>
             <select

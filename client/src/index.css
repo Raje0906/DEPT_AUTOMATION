@@ -29,6 +29,7 @@
   body {
     margin: 0;
     padding: 0;
+    overflow-x: hidden;
   }
 
   h1, h2, h3 {
@@ -241,6 +242,27 @@
   /* ─── Anomaly Flag ───────────────────────────────────────────────────────── */
   .anomaly-flag {
     @apply flex items-start gap-2 p-3 bg-amber-50 border border-pending rounded-sm text-sm;
+  }
+
+  /* ─── Responsive Table Scroll Wrapper ────────────────────────────────────── */
+  .table-scroll {
+    @apply w-full overflow-x-auto rounded;
+    -webkit-overflow-scrolling: touch;
+  }
+  .table-scroll::-webkit-scrollbar {
+    height: 4px;
+  }
+  .table-scroll::-webkit-scrollbar-track {
+    background: #f5f3ee;
+  }
+  .table-scroll::-webkit-scrollbar-thumb {
+    background: #d4d0c8;
+    border-radius: 2px;
+  }
+
+  /* ─── Page Container ─────────────────────────────────────────────────────── */
+  .page-container {
+    @apply px-4 sm:px-6 lg:px-8 py-6 max-w-screen-2xl mx-auto w-full;
   }
 }
 

@@ -421,7 +421,7 @@ export default function ProjectEval() {
                           <label className="text-xs font-bold text-ink">{crit.name}</label>
                           <span className="text-xs font-mono text-draft font-semibold">Max: {crit.max_marks} Marks</span>
                         </div>
-                        <div className="grid grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                           <div>
                             <input
                               type="number"

@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
+import crestLogo from '../../assets/images/mes-wadia-crest.jpg';
+import campusPhoto from '../../assets/images/mes-wadia-campus.jpg';
 
 export default function Login() {
   const [identifier, setIdentifier] = useState('');
@@ -55,205 +57,240 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-paper flex">
+    <div className="min-h-screen bg-paper flex flex-col lg:flex-row">
       {/* Left — Institutional identity panel */}
-      <div className="hidden lg:flex flex-col justify-between w-2/5 bg-navy px-12 py-16">
-        <div>
-          {/* College emblem placeholder */}
-          <div className="w-20 h-20 rounded-full border-2 border-white border-opacity-30 flex items-center justify-center mb-8">
-            <svg viewBox="0 0 60 60" className="w-12 h-12" fill="none">
-              <circle cx="30" cy="22" r="10" stroke="white" strokeWidth="1.5" />
-              <path d="M8 42 C8 30 52 30 52 42" stroke="white" strokeWidth="1.5" fill="none"/>
-              <path d="M20 42 L20 55 M30 42 L30 55 M40 42 L40 55" stroke="white" strokeWidth="1.5"/>
-              <path d="M15 55 L45 55" stroke="white" strokeWidth="1.5"/>
-            </svg>
+      <div className="hidden lg:flex flex-col justify-between w-[42%] max-w-xl bg-navy px-12 xl:px-16 py-14 shadow-2xl relative z-10 overflow-hidden">
+        {/* Campus architectural background photo with rich navy tint */}
+        <div
+          className="absolute inset-0 bg-cover bg-center opacity-35 pointer-events-none scale-105"
+          style={{ backgroundImage: `url(${campusPhoto})` }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-navy/80 via-navy/85 to-navy/95 pointer-events-none" />
+
+        <div className="relative z-10">
+          {/* Official College Crest */}
+          <div className="w-20 h-20 rounded-full bg-white p-2 shadow-xl border-2 border-white/40 flex items-center justify-center mb-8 overflow-hidden">
+            <img
+              src={crestLogo}
+              alt="MES Wadia COE Emblem"
+              className="w-full h-full object-contain"
+            />
           </div>
-          <h1 className="font-serif text-white text-3xl font-bold leading-snug mb-3">
+          <h1 className="font-serif text-white text-3xl xl:text-4xl font-bold leading-tight mb-3">
             MES Wadia COE
           </h1>
-          <p className="text-blue-200 text-sm font-light leading-relaxed">
+          <p className="text-blue-100 text-sm font-normal tracking-wide">
             Department of Computer Engineering
           </p>
-          <div className="mt-6 pt-6 border-t border-white border-opacity-15">
-            <p className="text-blue-200 text-xs">
-              Autonomous Institution · Affiliated to MSBTE
+          <div className="mt-8 pt-6 border-t border-white/15 space-y-1.5">
+            <p className="text-blue-200/90 text-xs">
+              Autonomous Institution · Affiliated to SPPU
             </p>
-            <p className="text-blue-200 text-xs mt-1">
-              Academic Year 2024–25
+            <p className="text-blue-200/90 text-xs">
+              Academic Year 2026–27
             </p>
           </div>
         </div>
 
         {/* Bottom decorative rule */}
-        <div>
-          <div className="h-px w-16 bg-white bg-opacity-20 mb-4" />
-          <p className="text-blue-200 text-xs leading-relaxed">
-            Result Declaration &amp; Academic Records System
+        <div className="pt-8 relative z-10">
+          <div className="h-px w-16 bg-white/20 mb-4" />
+          <p className="text-blue-200/80 text-xs tracking-wide">
+            Department Automation &amp; Academic Activity Portal
           </p>
         </div>
       </div>
 
-      {/* Right — Login form */}
-      <div className="flex-1 flex flex-col justify-center px-8 sm:px-16 lg:px-20 py-12">
-        <div className="max-w-sm w-full mx-auto">
-          {/* Mobile college name */}
-          <div className="lg:hidden mb-8">
-            <h2 className="font-serif text-2xl font-bold text-navy">MES Wadia COE</h2>
-            <p className="text-sm text-draft mt-1">Department of Computer Engineering</p>
-          </div>
+      {/* Right — Login form area with full-bleed campus building background */}
+      <div className="flex-1 flex flex-col justify-between p-6 sm:p-10 lg:p-12 overflow-y-auto relative">
+        {/* Full-bleed Campus Building Photo */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden select-none z-0">
+          <img
+            src={campusPhoto}
+            alt="MES Wadia Campus Building"
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-navy/30 backdrop-blur-[2px]" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/30" />
+        </div>
 
-          {!showForgot ? (
-            <>
-              <div className="mb-8">
-                <h2 className="font-serif text-2xl font-bold text-ink">Sign in</h2>
-                <p className="text-sm text-draft mt-1">
-                  Use your email address, roll number, or employee ID
-                </p>
+        <div className="w-full flex-1 flex items-center justify-center relative z-10 py-6">
+          <div className="w-full max-w-md bg-white/95 backdrop-blur-md p-8 sm:p-10 rounded-xl shadow-2xl border border-white/80 my-auto">
+            {/* Mobile college name header */}
+            <div className="lg:hidden mb-8 pb-6 border-b border-rule">
+              <div className="w-14 h-14 rounded-full bg-white p-1.5 shadow-sm border border-rule flex items-center justify-center mb-3 overflow-hidden">
+                <img
+                  src={crestLogo}
+                  alt="MES Wadia COE Emblem"
+                  className="w-full h-full object-contain"
+                />
               </div>
+              <h2 className="font-serif text-2xl font-bold text-navy">MES Wadia COE</h2>
+              <p className="text-xs text-draft mt-0.5">Department of Computer Engineering</p>
+            </div>
 
-              <form onSubmit={handleLogin} className="space-y-5">
-                <div>
-                  <label htmlFor="identifier" className="input-label">
-                    Email / Roll No / Employee ID
-                  </label>
-                  <input
-                    id="identifier"
-                    type="text"
-                    autoComplete="username"
-                    value={identifier}
-                    onChange={(e) => setIdentifier(e.target.value)}
-                    placeholder="e.g. CE6A001 or rajan@meswadiacoe.edu"
-                    className="input-field"
-                    required
-                    disabled={loading}
-                  />
+            {!showForgot ? (
+              <>
+                <div className="mb-7">
+                  <h2 className="font-serif text-2xl font-bold text-ink tracking-tight">Sign in</h2>
+                  <p className="text-xs sm:text-sm text-draft mt-1.5">
+                    Use your email address, roll number, or employee ID
+                  </p>
                 </div>
 
-                <div>
-                  <label htmlFor="password" className="input-label">Password</label>
-                  <input
-                    id="password"
-                    type="password"
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter your password"
-                    className="input-field"
-                    required
-                    disabled={loading}
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="btn-primary w-full justify-center"
-                  disabled={loading}
-                >
-                  {loading ? 'Signing in…' : 'Sign in'}
-                </button>
-              </form>
-
-              <button
-                type="button"
-                onClick={() => setShowForgot(true)}
-                className="mt-5 text-sm text-maroon underline underline-offset-2 hover:text-maroon-dark transition-colors"
-              >
-                Forgot password?
-              </button>
-
-              {/* Dev credentials hint */}
-              <div className="mt-8 p-4 bg-white border border-rule rounded-sm">
-                <p className="text-xs font-semibold text-draft uppercase tracking-wide mb-2.5">
-                  Demo credentials (click to quick sign-in)
-                </p>
-                <div className="space-y-2">
-                  <button
-                    type="button"
-                    onClick={() => handleQuickDemo('student')}
-                    className="w-full text-left p-2 rounded border border-rule hover:border-navy hover:bg-blue-50 transition-colors flex items-center justify-between group"
-                  >
-                    <span className="text-xs font-medium text-ink">
-                      Student: <span className="font-mono text-draft group-hover:text-navy">ce6a001@meswadiacoe.edu</span>
-                    </span>
-                    <span className="text-[10px] text-navy font-semibold uppercase">Sign in →</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickDemo('faculty')}
-                    className="w-full text-left p-2 rounded border border-rule hover:border-navy hover:bg-blue-50 transition-colors flex items-center justify-between group"
-                  >
-                    <span className="text-xs font-medium text-ink">
-                      Faculty: <span className="font-mono text-draft group-hover:text-navy">rajan@meswadiacoe.edu</span>
-                    </span>
-                    <span className="text-[10px] text-navy font-semibold uppercase">Sign in →</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickDemo('hod')}
-                    className="w-full text-left p-2 rounded border border-rule hover:border-navy hover:bg-blue-50 transition-colors flex items-center justify-between group"
-                  >
-                    <span className="text-xs font-medium text-ink">
-                      HOD: <span className="font-mono text-draft group-hover:text-navy">hod@meswadiacoe.edu</span>
-                    </span>
-                    <span className="text-[10px] text-navy font-semibold uppercase">Sign in →</span>
-                  </button>
-                </div>
-              </div>
-            </>
-          ) : (
-            /* Forgot password panel */
-            <>
-              <div className="mb-8">
-                <button
-                  onClick={() => { setShowForgot(false); setForgotSent(false); }}
-                  className="text-sm text-maroon mb-4 flex items-center gap-1"
-                >
-                  ← Back to sign in
-                </button>
-                <h2 className="font-serif text-2xl font-bold text-ink">Reset password</h2>
-                <p className="text-sm text-draft mt-1">
-                  Enter the email address registered to your account.
-                </p>
-              </div>
-
-              {forgotSent ? (
-                <div className="notification-strip border-pass bg-green-50">
-                  <svg className="w-4 h-4 text-pass flex-shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" />
-                  </svg>
-                  <span>
-                    If that email exists in our system, a reset link has been sent.
-                    Check your inbox (and spam folder).
-                  </span>
-                </div>
-              ) : (
-                <form onSubmit={handleForgot} className="space-y-5">
+                <form onSubmit={handleLogin} className="space-y-4">
                   <div>
-                    <label htmlFor="forgot-email" className="input-label">Email address</label>
+                    <label htmlFor="identifier" className="input-label">
+                      Email / Roll No / Employee ID
+                    </label>
                     <input
-                      id="forgot-email"
-                      type="email"
-                      value={forgotEmail}
-                      onChange={(e) => setForgotEmail(e.target.value)}
-                      placeholder="your@email.edu"
+                      id="identifier"
+                      type="text"
+                      autoComplete="username"
+                      value={identifier}
+                      onChange={(e) => setIdentifier(e.target.value)}
+                      placeholder="e.g. CE6A001 or rajan@meswadiacoe.edu"
                       className="input-field"
                       required
                       disabled={loading}
                     />
                   </div>
-                  <button type="submit" className="btn-primary w-full justify-center" disabled={loading}>
-                    {loading ? 'Sending…' : 'Send reset link'}
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label htmlFor="password" className="input-label mb-0">Password</label>
+                      <button
+                        type="button"
+                        onClick={() => setShowForgot(true)}
+                        className="text-xs text-maroon hover:underline font-medium"
+                      >
+                        Forgot?
+                      </button>
+                    </div>
+                    <input
+                      id="password"
+                      type="password"
+                      autoComplete="current-password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter your password"
+                      className="input-field"
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="btn-primary w-full justify-center py-2.5 mt-2 shadow-sm font-semibold tracking-wide"
+                    disabled={loading}
+                  >
+                    {loading ? 'Signing in…' : 'Sign in'}
                   </button>
                 </form>
-              )}
-            </>
-          )}
-        </div>
 
-        {/* Footer */}
-        <p className="text-xs text-gray-400 text-center mt-auto pt-8">
-          For technical issues, contact the exam cell: examcell@meswadiacoe.edu
-        </p>
+                <div className="mt-4 text-center">
+                  <p className="text-xs text-draft">
+                    New student or faculty?{' '}
+                    <Link to="/register" className="text-navy font-semibold hover:underline">
+                      Create an account →
+                    </Link>
+                  </p>
+                </div>
+
+                {/* Dev credentials hint */}
+                <div className="mt-8 pt-6 border-t border-rule/70">
+                  <p className="text-[11px] font-semibold text-draft uppercase tracking-wider mb-2.5 flex items-center justify-between">
+                    <span>Demo credentials</span>
+                    <span className="text-[10px] text-draft font-normal">Click to quick sign-in</span>
+                  </p>
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => handleQuickDemo('student')}
+                      className="w-full text-left px-3 py-2 rounded border border-rule hover:border-navy hover:bg-blue-50/60 transition-colors flex items-center justify-between group"
+                    >
+                      <div className="flex flex-col">
+                        <span className="text-xs font-semibold text-ink">Student</span>
+                        <span className="text-[11px] font-mono text-draft group-hover:text-navy">ce6a001@meswadiacoe.edu</span>
+                      </div>
+                      <span className="text-[11px] text-navy font-semibold uppercase group-hover:translate-x-0.5 transition-transform">Sign in →</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickDemo('faculty')}
+                      className="w-full text-left px-3 py-2 rounded border border-rule hover:border-navy hover:bg-blue-50/60 transition-colors flex items-center justify-between group"
+                    >
+                      <div className="flex flex-col">
+                        <span className="text-xs font-semibold text-ink">Faculty</span>
+                        <span className="text-[11px] font-mono text-draft group-hover:text-navy">rajan@meswadiacoe.edu</span>
+                      </div>
+                      <span className="text-[11px] text-navy font-semibold uppercase group-hover:translate-x-0.5 transition-transform">Sign in →</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickDemo('hod')}
+                      className="w-full text-left px-3 py-2 rounded border border-rule hover:border-navy hover:bg-blue-50/60 transition-colors flex items-center justify-between group"
+                    >
+                      <div className="flex flex-col">
+                        <span className="text-xs font-semibold text-ink">HOD</span>
+                        <span className="text-[11px] font-mono text-draft group-hover:text-navy">hod@meswadiacoe.edu</span>
+                      </div>
+                      <span className="text-[11px] text-navy font-semibold uppercase group-hover:translate-x-0.5 transition-transform">Sign in →</span>
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              /* Forgot password panel */
+              <>
+                <div className="mb-7">
+                  <button
+                    onClick={() => { setShowForgot(false); setForgotSent(false); }}
+                    className="text-xs text-maroon hover:underline mb-3 flex items-center gap-1 font-medium"
+                  >
+                    ← Back to sign in
+                  </button>
+                  <h2 className="font-serif text-2xl font-bold text-ink">Reset password</h2>
+                  <p className="text-xs sm:text-sm text-draft mt-1.5">
+                    Enter the email address registered to your account.
+                  </p>
+                </div>
+
+                {forgotSent ? (
+                  <div className="notification-strip border-pass bg-green-50 text-xs sm:text-sm">
+                    <svg className="w-4 h-4 text-pass flex-shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" />
+                    </svg>
+                    <span>
+                      If that email exists in our system, a reset link has been sent.
+                      Check your inbox (and spam folder).
+                    </span>
+                  </div>
+                ) : (
+                  <form onSubmit={handleForgot} className="space-y-4">
+                    <div>
+                      <label htmlFor="forgot-email" className="input-label">Email address</label>
+                      <input
+                        id="forgot-email"
+                        type="email"
+                        value={forgotEmail}
+                        onChange={(e) => setForgotEmail(e.target.value)}
+                        placeholder="your@email.edu"
+                        className="input-field"
+                        required
+                        disabled={loading}
+                      />
+                    </div>
+                    <button type="submit" className="btn-primary w-full justify-center py-2.5 mt-2" disabled={loading}>
+                      {loading ? 'Sending…' : 'Send reset link'}
+                    </button>
+                  </form>
+                )}
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
