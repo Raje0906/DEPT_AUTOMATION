@@ -8,6 +8,18 @@ const DEPARTMENT  = 'Department of Computer Engineering';
 const COL = { groupNo: 0, domain: 1, guide: 2, name: 3, prn: 4, topic1: 5, topic2: 6, topic3: 7 };
 const NUM_COLS = 8;
 
+function getExportLifecycleLabel(session, groupCount) {
+  if (session?.status === 'PUBLISHED') {
+    const pubDate = session.published_at ? new Date(session.published_at).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB');
+    return `Final — Published ${pubDate}`;
+  }
+  if (session?.is_locked || session?.status === 'LOCKED') {
+    const lockDate = session.locked_at ? new Date(session.locked_at).toLocaleDateString('en-GB') : '';
+    return `Draft — Registration Locked${lockDate ? ' [' + lockDate + ']' : ''} (${groupCount} groups)`;
+  }
+  return `Draft — Registration Open (${groupCount} groups)`;
+}
+
 /**
  * Build the XLSX workbook with institution header, column headers, and merged group cells.
  * @param {Object} session - seminar session record
@@ -28,7 +40,8 @@ function buildWorkbook(session, groups, membersByGroupId) {
   wsData.push([DEPARTMENT, ...new Array(NUM_COLS - 1).fill('')]);
   merges.push({ s: { r: 1, c: 0 }, e: { r: 1, c: NUM_COLS - 1 } });
 
-  const title = (session?.name || 'TE Seminar') + ' — Guide Assignment List';
+  const lifecycleLabel = getExportLifecycleLabel(session, groups.length);
+  const title = `${session?.name || 'TE Seminar'} — Guide Assignment List [${lifecycleLabel}]`;
   wsData.push([title, ...new Array(NUM_COLS - 1).fill('')]);
   merges.push({ s: { r: 2, c: 0 }, e: { r: 2, c: NUM_COLS - 1 } });
 
@@ -80,4 +93,4 @@ function buildWorkbook(session, groups, membersByGroupId) {
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 }
 
-module.exports = { buildWorkbook };
+module.exports = { buildWorkbook, getExportLifecycleLabel };
