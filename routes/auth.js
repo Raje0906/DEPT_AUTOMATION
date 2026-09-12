@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const pool = require('../db/pool');
+const { logAudit } = require('../middleware/auditLogger');
 
 const router = express.Router();
 
@@ -11,6 +12,12 @@ router.post('/login', async (req, res) => {
   try {
     const { identifier, password } = req.body;
     if (!identifier || !password) {
+      logAudit({
+        req,
+        tableName: 'users',
+        action: 'LOGIN_FAILED',
+        reason: 'Missing identifier or password',
+      });
       return res.status(400).json({ error: 'Email/ID and password are required' });
     }
 
@@ -64,17 +71,39 @@ router.post('/login', async (req, res) => {
     }
 
     if (userResult.rows.length === 0) {
+      logAudit({
+        req,
+        tableName: 'users',
+        action: 'LOGIN_FAILED',
+        reason: `Login attempt for non-existent identifier: "${trimmed.slice(0, 50)}"`,
+      });
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const user = userResult.rows[0];
 
     if (!user.is_active) {
+      logAudit({
+        req,
+        tableName: 'users',
+        recordId: user.id,
+        changedBy: user.id,
+        action: 'LOGIN_BLOCKED',
+        reason: `Login blocked: inactive account (${user.email})`,
+      });
       return res.status(403).json({ error: 'Account is inactive. Contact administration.' });
     }
 
     const passwordMatch = await bcrypt.compare(password, user.password_hash);
     if (!passwordMatch) {
+      logAudit({
+        req,
+        tableName: 'users',
+        recordId: user.id,
+        changedBy: user.id,
+        action: 'LOGIN_FAILED',
+        reason: `Invalid password attempt for user: ${user.email}`,
+      });
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -105,6 +134,16 @@ router.post('/login', async (req, res) => {
 
     const token = jwt.sign(payload, process.env.JWT_SECRET, {
       expiresIn: process.env.JWT_EXPIRES_IN || '8h',
+    });
+
+    logAudit({
+      req,
+      tableName: 'users',
+      recordId: user.id,
+      changedBy: user.id,
+      action: 'LOGIN_SUCCESS',
+      newValue: { role: user.role, email: user.email },
+      reason: `Successful login as ${user.role} (${user.email})`,
     });
 
     res.json({
@@ -149,6 +188,15 @@ router.post('/forgot-password', async (req, res) => {
       `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)`,
       [user.id, tokenHash, expiresAt]
     );
+
+    logAudit({
+      req,
+      tableName: 'password_reset_tokens',
+      recordId: user.id,
+      changedBy: user.id,
+      action: 'PASSWORD_RESET_REQUEST',
+      reason: `Password reset requested for ${user.email}`,
+    });
 
     // Email sending (only if SMTP is configured)
     if (process.env.SMTP_USER) {
@@ -204,6 +252,15 @@ router.post('/reset-password', async (req, res) => {
       `UPDATE password_reset_tokens SET used = TRUE WHERE id = $1`,
       [tokenResult.rows[0].id]
     );
+
+    logAudit({
+      req,
+      tableName: 'users',
+      recordId: userId,
+      changedBy: userId,
+      action: 'PASSWORD_RESET_SUCCESS',
+      reason: `Password successfully reset for user id: ${userId}`,
+    });
 
     res.json({ message: 'Password reset successful. You can now log in.' });
   } catch (err) {
@@ -303,6 +360,16 @@ router.post('/register-student', async (req, res) => {
 
     await client.query('COMMIT');
 
+    logAudit({
+      req,
+      tableName: 'students',
+      recordId: userId,
+      changedBy: userId,
+      action: 'STUDENT_REGISTER',
+      newValue: { email: cleanEmail, roll_no: cleanRoll, enrollment_no: cleanEnroll },
+      reason: `Student self-registered: ${name.trim()} (${cleanRoll})`,
+    });
+
     res.status(201).json({
       message: 'Student registered successfully. You can now log in.',
       email: cleanEmail,
@@ -336,6 +403,12 @@ router.post('/register-faculty', async (req, res) => {
 
     const validPasscode = process.env.FACULTY_SECRET_KEY || 'COMP-FACULTY-2026';
     if (passcode.trim() !== validPasscode.trim()) {
+      logAudit({
+        req,
+        tableName: 'faculty',
+        action: 'SECURITY_ALERT',
+        reason: `Failed faculty registration attempt with invalid passcode for email: ${email}`,
+      });
       return res.status(403).json({ error: 'Invalid Department Staff Passcode. Access denied.' });
     }
 
@@ -379,6 +452,16 @@ router.post('/register-faculty', async (req, res) => {
     );
 
     await client.query('COMMIT');
+
+    logAudit({
+      req,
+      tableName: 'faculty',
+      recordId: userId,
+      changedBy: userId,
+      action: 'FACULTY_REGISTER',
+      newValue: { email: cleanEmail, employee_id: cleanEmpId, designation: designation.trim() },
+      reason: `Faculty self-registered: ${name.trim()} (${cleanEmpId})`,
+    });
 
     res.status(201).json({
       message: 'Faculty registered successfully. You can now log in.',

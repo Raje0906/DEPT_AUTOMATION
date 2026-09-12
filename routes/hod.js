@@ -326,17 +326,18 @@ router.get('/audit-log', async (req, res) => {
 
     const result = await pool.query(
       `SELECT a.id, a.table_name, a.record_id, a.action, a.old_value, a.new_value,
-              a.reason, a.created_at, u.name AS changed_by_name, u.role AS changed_by_role
+              a.reason, a.created_at, a.ip_address, a.user_agent,
+              u.name AS changed_by_name, u.role AS changed_by_role
        FROM audit_log a
-       JOIN users u ON u.id = a.changed_by
-       WHERE u.department = $1
+       LEFT JOIN users u ON u.id = a.changed_by
+       WHERE (u.department = $1 OR a.changed_by IS NULL)
        ORDER BY a.created_at DESC
        LIMIT $2 OFFSET $3`,
       [req.user.dept, limit, offset]
     );
 
     const countResult = await pool.query(
-      `SELECT COUNT(*) FROM audit_log a JOIN users u ON u.id = a.changed_by WHERE u.department = $1`,
+      `SELECT COUNT(*) FROM audit_log a LEFT JOIN users u ON u.id = a.changed_by WHERE (u.department = $1 OR a.changed_by IS NULL)`,
       [req.user.dept]
     );
 

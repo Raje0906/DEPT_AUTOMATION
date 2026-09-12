@@ -117,12 +117,14 @@ async function runMigrations() {
       CREATE TABLE IF NOT EXISTS audit_log (
         id          SERIAL PRIMARY KEY,
         table_name  VARCHAR(100) NOT NULL,
-        record_id   INTEGER      NOT NULL,
-        changed_by  INTEGER      NOT NULL REFERENCES users(id),
+        record_id   INTEGER,
+        changed_by  INTEGER      REFERENCES users(id),
         old_value   JSONB,
         new_value   JSONB,
-        action      VARCHAR(20)  NOT NULL CHECK (action IN ('INSERT','UPDATE','DELETE')),
+        action      VARCHAR(50)  NOT NULL,
         reason      TEXT,
+        ip_address  VARCHAR(45),
+        user_agent  TEXT,
         created_at  TIMESTAMPTZ DEFAULT NOW()
       )
     `);
@@ -454,6 +456,18 @@ async function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_sem_member_email ON seminar_group_members(email);
     `);
 
+    // ─── AUDIT LOG ENHANCEMENTS (Cybersecurity & Auth Events) ─────────────────
+    await client.query(`
+      ALTER TABLE audit_log ALTER COLUMN record_id DROP NOT NULL;
+      ALTER TABLE audit_log ALTER COLUMN changed_by DROP NOT NULL;
+      ALTER TABLE audit_log DROP CONSTRAINT IF EXISTS audit_log_action_check;
+      ALTER TABLE audit_log ALTER COLUMN action TYPE VARCHAR(50);
+      ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS ip_address VARCHAR(45);
+      ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS user_agent TEXT;
+      CREATE INDEX IF NOT EXISTS idx_audit_created_at ON audit_log(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action);
+    `);
+
     await client.query('COMMIT');
     console.log('[Migration] All tables created successfully');
   } catch (err) {
@@ -466,3 +480,12 @@ async function runMigrations() {
 }
 
 module.exports = { runMigrations };
+
+if (require.main === module) {
+  runMigrations()
+    .then(() => process.exit(0))
+    .catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
+}
