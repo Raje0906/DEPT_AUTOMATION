@@ -61,9 +61,9 @@ export default function StudentProject() {
     if (!title2.trim()) return toast.error('Please specify Project Title 2');
     if (!title3.trim()) return toast.error('Please specify Project Title 3');
 
-    // Filter active members (Student 1 and 2 mandatory, Student 3 & 4 optional unless filled)
+    // Filter active members (Student 1, 2, and 3 mandatory, Student 4 optional unless filled)
     const validMembers = members.filter((m, idx) => {
-      if (idx < 2) return true;
+      if (idx < 3) return true;
       return m.name.trim() !== '' || m.roll_no.trim() !== '' || m.email.trim() !== '';
     });
 
@@ -121,7 +121,7 @@ export default function StudentProject() {
       <div className="p-8 max-w-7xl mx-auto flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-4 border-navy border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-sm font-medium text-draft">Loading BE Capstone Project details...</p>
+          <p className="text-sm font-medium text-draft">Loading BE Project details...</p>
         </div>
       </div>
     );
@@ -136,7 +136,7 @@ export default function StudentProject() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-200 text-navy font-mono text-xs font-bold rounded mb-2">
-                BE CAPSTONE PROJECT REGISTRATION
+                BE PROJECT REGISTRATION
               </div>
               <h1 className="font-serif text-2xl lg:text-3xl font-bold text-ink">Project Group Registration Form</h1>
               <p className="text-sm text-draft mt-1 font-medium">
@@ -162,7 +162,7 @@ export default function StudentProject() {
                   <span className="w-6 h-6 rounded bg-navy text-white text-xs flex items-center justify-center font-sans font-bold">1</span>
                   Student Team Members Details
                 </h2>
-                <p className="text-xs text-draft mt-0.5">Minimum 2 students · Maximum 4 students per group</p>
+                <p className="text-xs text-draft mt-0.5">Minimum 3 students · Maximum 4 students per group</p>
               </div>
               <span className="text-xs font-mono text-draft bg-paper px-3 py-1 border border-rule rounded">
                 Table Format (Sheet Upload)
@@ -172,7 +172,7 @@ export default function StudentProject() {
             <div className="space-y-6 divide-y divide-rule">
               {members.map((m, idx) => {
                 const sNum = idx + 1;
-                const isRequired = idx < 2;
+                const isRequired = idx < 3;
                 return (
                   <div key={idx} className={idx > 0 ? 'pt-6' : ''}>
                     <div className="flex items-center justify-between mb-4">
@@ -235,6 +235,7 @@ export default function StudentProject() {
                           <option value="BE-1">BE-1</option>
                           <option value="BE-2">BE-2</option>
                           <option value="BE-3">BE-3</option>
+                          <option value="BE-4">BE-4</option>
                         </select>
                       </div>
 
@@ -288,18 +289,18 @@ export default function StudentProject() {
               {/* Domain Name */}
               <div>
                 <label className="input-label font-bold text-ink">
-                  Project Domain (Write project Domain Name) *
+                  Project Domain *
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Artificial Intelligence, AIML, Data Science, Cyber Security, Full Stack Web Development, Blockchain, Cloud Computing, AIDS"
+                  placeholder="Enter Project Domain"
                   value={domain}
                   onChange={(e) => setDomain(e.target.value)}
                   className="input-field"
                 />
                 <p className="text-[11px] text-draft mt-1">
-                  Suggestions: Artificial Intelligence &amp; Machine Learning (AIML), Cyber Security &amp; Cryptography, Full Stack Web Development, Cloud &amp; DevOps, Data Science &amp; Data Analytics.
+                  Suggestions: AIML, Cyber Security, Web Development, Cloud &amp; DevOps, Data Science
                 </p>
               </div>
 

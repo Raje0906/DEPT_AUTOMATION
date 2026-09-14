@@ -182,8 +182,8 @@ router.post('/student/groups', verifyToken, requireRole('student'), async (req, 
       return res.status(400).json({ error: 'Project Domain and Project Title 1 are required' });
     }
 
-    if (!Array.isArray(members) || members.length < 2) {
-      return res.status(400).json({ error: 'Project group must consist of at least 2 student members (similar to PDF sheet)' });
+    if (!Array.isArray(members) || members.length < 3) {
+      return res.status(400).json({ error: 'Project group must consist of at least 3 student members' });
     }
 
     if (members.length > 4) {

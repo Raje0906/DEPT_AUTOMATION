@@ -242,11 +242,11 @@ export default function FacultyDashboard() {
                 🎓
               </span>
               <h3 className="font-semibold text-ink text-base group-hover:text-maroon transition-colors">
-                Project Evaluation
+                BE Project Evaluation
               </h3>
             </div>
             <p className="text-xs text-draft leading-relaxed">
-              Guide, review, and evaluate Final Year BE Capstone batches, milestones, and rubrics.
+              Guide, review, and evaluate Final Year BE Project batches, milestones, and rubrics.
             </p>
           </Link>
 
