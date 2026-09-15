@@ -315,11 +315,63 @@
 
 /* ─── Print styles for mark sheet PDF ───────────────────────────────────────── */
 @media print {
-  body {
-    background: white;
-    color: black;
+  @page {
+    size: A4 portrait;
+    margin: 6mm 8mm;
   }
-  .no-print {
+
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    font-size: 11px !important;
+    line-height: 1.2 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  aside, nav, header, footer, .no-print, [role="navigation"] {
     display: none !important;
+  }
+
+  .print\:hidden {
+    display: none !important;
+  }
+
+  .print\:block {
+    display: block !important;
+  }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+  }
+
+  .sppu-marksheet-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    padding: 4px 6px !important;
+    box-shadow: none !important;
+    border: 1px solid #000000 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 }

@@ -1,23 +1,39 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
-import { getClassesForSemester } from '../../utils/academicClasses';
+import { StatusBadge } from '../../components/ResultTable';
 
 export default function PublishResults() {
-  const [dashData, setDashData] = useState(null);
-  const [loading, setLoading]   = useState(true);
-  const [publishing, setPublishing] = useState(false);
-  const [confirm, setConfirm]   = useState(false);
-  const [target, setTarget]     = useState({ semester: '6', academicYear: '2025-26', division: 'TE Comp 1' });
+  const [dashData, setDashData]         = useState(null);
+  const [matrixData, setMatrixData]     = useState(null);
+  const [loading, setLoading]           = useState(true);
+  const [publishing, setPublishing]     = useState(false);
+  const [target, setTarget]             = useState({ semester: '5', academicYear: '2025-26', division: 'TE 1' });
+  const [activeView, setActiveView]     = useState('publish'); // 'publish' | 'matrix'
 
-  useEffect(() => {
-    api.get('/hod/dashboard')
-      .then(res => setDashData(res.data))
+  const loadData = () => {
+    setLoading(true);
+    Promise.all([
+      api.get(`/hod/dashboard?academic_year=${encodeURIComponent(target.academicYear)}&semester=${target.semester}`),
+      api.get(`/hod/exam-completion-status?academic_year=${encodeURIComponent(target.academicYear)}&semester=${target.semester}`)
+    ])
+      .then(([dashRes, matrixRes]) => {
+        setDashData(dashRes.data);
+        setMatrixData(matrixRes.data);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [target.semester, target.academicYear]);
 
   const handlePublish = async () => {
+    if (!window.confirm(`Publish official Semester ${target.semester} results for ${target.division}? Students will be able to view their final mark sheets.`)) {
+      return;
+    }
+
     setPublishing(true);
     try {
       const res = await api.post('/hod/publish', {
@@ -27,9 +43,7 @@ export default function PublishResults() {
         confirmPublish: true,
       });
       toast.success(res.data.message);
-      setConfirm(false);
-      const updated = await api.get('/hod/dashboard');
-      setDashData(updated.data);
+      loadData();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Publish failed');
     } finally {
@@ -37,144 +51,200 @@ export default function PublishResults() {
     }
   };
 
-  if (loading) return <div className="p-8 text-sm text-draft">Loading…</div>;
-
   const subjects = dashData?.subjects || [];
-  const currentClasses = getClassesForSemester(target.semester);
-
-  // Check if all submitted/approved for the selected semester
   const targetSubjects = subjects.filter(s =>
     String(s.semester) === String(target.semester) && s.division === target.division
   );
-  const allApproved = targetSubjects.length > 0 &&
-    targetSubjects.every(s => s.status === 'approved' || s.status === 'published');
-  const alreadyPublished = targetSubjects.every(s => s.status === 'published');
+  const isAlreadyPublished = targetSubjects.length > 0 && targetSubjects.every(s => s.status === 'published');
 
   return (
-    <div className="p-6 lg:p-8 max-w-3xl">
-      <div className="mb-6 pb-4 border-b border-rule">
-        <h1 className="font-serif text-2xl font-bold text-ink">Publish Results</h1>
-        <p className="text-sm text-draft mt-0.5">
-          Publishing results makes them visible to students. This action is irreversible — published results
-          are frozen unless a formal correction workflow is used.
-        </p>
+    <div className="p-6 lg:p-10 w-full max-w-7xl mx-auto">
+      {/* Page Header */}
+      <div className="mb-8 pb-5 border-b border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="font-serif text-3xl font-bold text-gray-900">Publish Academic Results</h1>
+          <p className="text-sm text-gray-500 mt-1 font-medium">
+            Review exam completion status across all subjects and publish final semester results.
+          </p>
+        </div>
+
+        {/* View Switcher Tabs */}
+        <div className="flex bg-gray-100 p-1 rounded-lg">
+          <button
+            onClick={() => setActiveView('publish')}
+            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
+              activeView === 'publish' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            🚀 Publish Console
+          </button>
+          <button
+            onClick={() => setActiveView('matrix')}
+            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
+              activeView === 'matrix' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            📊 Exam Completion Matrix
+          </button>
+        </div>
       </div>
 
-      {/* Target selection */}
-      <div className="panel mb-6 p-5">
-        <h2 className="font-serif text-base font-semibold mb-4">Select semester &amp; class to publish</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+      {/* Target Selection Card */}
+      <div className="bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm">
+        <h2 className="text-sm font-bold uppercase tracking-wider text-gray-500 mb-4">Target Evaluation Batch</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
-            <label className="input-label">Semester</label>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Semester</label>
             <select
-              className="input-field"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500"
               value={target.semester}
-              onChange={e => {
-                const newSem = e.target.value;
-                const classes = getClassesForSemester(newSem);
-                setTarget(t => ({
-                  ...t,
-                  semester: newSem,
-                  division: classes.includes(t.division) ? t.division : classes[0],
-                }));
-              }}
+              onChange={e => setTarget(t => ({ ...t, semester: e.target.value }))}
             >
-              {[3,4,5,6,7,8].map(s => (
+              {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
                 <option key={s} value={s}>
-                  Sem {s} {s <= 4 ? '(SE)' : s <= 6 ? '(TE)' : '(BE)'}
+                  Semester {s} {s === 5 ? '(TE Sem 1)' : ''}
                 </option>
               ))}
             </select>
           </div>
           <div>
-            <label className="input-label">Academic year</label>
-            <select className="input-field" value={target.academicYear}
-              onChange={e => setTarget(t => ({ ...t, academicYear: e.target.value }))}>
-              {['2025-26','2024-25','2023-24'].map(y => <option key={y} value={y}>{y}</option>)}
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Academic Year</label>
+            <select
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500"
+              value={target.academicYear}
+              onChange={e => setTarget(t => ({ ...t, academicYear: e.target.value }))}
+            >
+              {['2025-26', '2024-25'].map(y => <option key={y} value={y}>{y}</option>)}
             </select>
           </div>
           <div>
-            <label className="input-label">Class</label>
-            <select className="input-field" value={target.division}
-              onChange={e => setTarget(t => ({ ...t, division: e.target.value }))}>
-              {currentClasses.map(d => <option key={d} value={d}>{d}</option>)}
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Division</label>
+            <select
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500"
+              value={target.division}
+              onChange={e => setTarget(t => ({ ...t, division: e.target.value }))}
+            >
+              {['TE 1', 'TE 2', 'TE 3'].map(d => <option key={d} value={d}>{d}</option>)}
             </select>
           </div>
         </div>
 
-        {/* Status of selected semester */}
-        {targetSubjects.length > 0 ? (
-          <div className="space-y-2">
-            {targetSubjects.map((s, i) => (
-              <div key={i} className="flex items-center justify-between text-sm py-1 border-b border-rule last:border-0">
-                <span>{s.subject_name}</span>
-                <span className={`font-medium ${
-                  s.status === 'approved'   ? 'text-navy' :
-                  s.status === 'published'  ? 'text-pass' :
-                  s.status === 'submitted'  ? 'text-pending' : 'text-fail'
-                }`}>
-                  {s.status.charAt(0).toUpperCase() + s.status.slice(1)}
-                </span>
-              </div>
-            ))}
+        {/* Publish CTA */}
+        <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between flex-wrap gap-4">
+          <div className="text-xs text-gray-500">
+            {isAlreadyPublished ? (
+              <span className="text-emerald-700 font-semibold">✓ Results for this division are currently published and visible to students.</span>
+            ) : (
+              <span>Ready to freeze and broadcast final grades to all students in {target.division}.</span>
+            )}
           </div>
-        ) : (
-          <p className="text-sm text-draft">No subjects found for this selection.</p>
-        )}
+          <button
+            onClick={handlePublish}
+            disabled={publishing || loading}
+            className={`px-5 py-2.5 rounded-lg text-sm font-bold text-white shadow-sm transition-all ${
+              isAlreadyPublished
+                ? 'bg-emerald-600 hover:bg-emerald-700'
+                : 'bg-indigo-600 hover:bg-indigo-700'
+            } disabled:opacity-50`}
+          >
+            {publishing ? 'Publishing...' : (isAlreadyPublished ? '🔄 Re-Publish Results' : '📢 Publish Results Now')}
+          </button>
+        </div>
       </div>
 
-      {/* Publish trigger */}
-      {alreadyPublished ? (
-        <div className="notification-strip border-pass bg-green-50">
-          <span className="text-xs font-semibold text-pass uppercase tracking-wide mr-2">Published</span>
-          Semester {target.semester} results for Division {target.division} have already been published.
+      {loading ? (
+        <div className="text-center py-20 text-gray-500 text-sm font-medium">Loading status data...</div>
+      ) : activeView === 'matrix' ? (
+        /* ─── EXAM COMPLETION MATRIX ─── */
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-bold text-gray-900">Exam-Type Breakdown Matrix</h3>
+            <span className="text-xs text-gray-500">Semester {target.semester} · {target.academicYear}</span>
+          </div>
+          <div className="overflow-x-auto border border-gray-200 rounded-xl shadow-sm bg-white">
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <thead className="bg-gray-50 text-gray-700 font-semibold uppercase text-xs tracking-wider">
+                <tr>
+                  <th className="px-4 py-3 text-left">Subject</th>
+                  <th className="px-4 py-3 text-left">Code</th>
+                  <th className="px-4 py-3 text-left">Division</th>
+                  <th className="px-4 py-3 text-left">Faculty</th>
+                  <th className="px-4 py-3 text-center">Exam Type</th>
+                  <th className="px-4 py-3 text-right">Entered / Enrolled</th>
+                  <th className="px-4 py-3 text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {matrixData?.completionMatrix?.map((row, idx) => (
+                  <tr key={idx} className="hover:bg-gray-50/75 transition-colors">
+                    <td className="px-4 py-3 font-medium text-gray-900">{row.subject_name}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-gray-500">{row.subject_code}</td>
+                    <td className="px-4 py-3 font-bold text-gray-800">{row.division}</td>
+                    <td className="px-4 py-3 text-gray-700">{row.faculty_name}</td>
+                    <td className="px-4 py-3 text-center">
+                      <span className="px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-700">
+                        {row.exam_name}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono text-gray-700">
+                      {row.entered_count} / {row.total_students || '—'}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <StatusBadge status={row.current_status || (row.entered_count > 0 ? 'draft' : 'not_started')} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : (
-        <button
-          onClick={() => setConfirm(true)}
-          disabled={!allApproved || publishing}
-          className={`btn-primary w-full justify-center py-3 text-base ${!allApproved ? 'opacity-50 cursor-not-allowed' : ''}`}
-        >
-          Publish Semester {target.semester} results for Division {target.division}
-        </button>
-      )}
+        /* ─── SUBJECTS STATUS LIST ─── */
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-bold text-gray-900">
+              Department Subjects for {target.division} (Semester {target.semester})
+            </h3>
+            <span className="text-xs text-gray-500">{targetSubjects.length} Assigned Subjects</span>
+          </div>
 
-      {!allApproved && !alreadyPublished && targetSubjects.length > 0 && (
-        <p className="text-xs text-fail mt-2 text-center">
-          All subjects must be approved before publishing.
-          {targetSubjects.filter(s => s.status !== 'approved' && s.status !== 'published').length} subject(s) not yet approved.
-        </p>
-      )}
-
-      {/* Publish confirmation modal — weighted, serious */}
-      {confirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white border border-navy rounded-sm w-full max-w-lg mx-4 p-7 shadow-2xl">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-sm bg-navy flex items-center justify-center shrink-0">
-                <svg className="w-5 h-5 text-white" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" />
-                </svg>
-              </div>
-              <h2 className="font-serif text-xl font-bold text-ink">Confirm result publication</h2>
-            </div>
-
-            <p className="text-sm text-ink mb-2">
-              You are about to publish <strong>Semester {target.semester}</strong> results for
-              Division <strong>{target.division}</strong> ({target.academicYear}).
-            </p>
-            <ul className="text-sm text-ink space-y-1.5 mb-5 pl-4 list-disc">
-              <li>All students will be able to see their marks immediately.</li>
-              <li>All published marks will be frozen — no further edits by faculty.</li>
-              <li>This action is logged and cannot be undone without a formal correction request.</li>
-            </ul>
-
-            <div className="flex gap-3 justify-end">
-              <button onClick={() => setConfirm(false)} className="btn-ghost">Cancel</button>
-              <button onClick={handlePublish} disabled={publishing} className="btn-primary">
-                {publishing ? 'Publishing…' : 'Confirm — Publish results'}
-              </button>
-            </div>
+          <div className="overflow-x-auto border border-gray-200 rounded-xl shadow-sm bg-white">
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <thead className="bg-gray-50 text-gray-700 font-semibold uppercase text-xs tracking-wider">
+                <tr>
+                  <th className="px-4 py-3 text-left w-10">#</th>
+                  <th className="px-4 py-3 text-left">Subject</th>
+                  <th className="px-4 py-3 text-left">Code</th>
+                  <th className="px-4 py-3 text-left">Assigned Faculty</th>
+                  <th className="px-4 py-3 text-right">Marks Entered</th>
+                  <th className="px-4 py-3 text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {targetSubjects.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                      No subjects found for this selection.
+                    </td>
+                  </tr>
+                ) : (
+                  targetSubjects.map((s, idx) => (
+                    <tr key={s.id} className="hover:bg-gray-50/75 transition-colors">
+                      <td className="px-4 py-3 text-gray-400 font-mono text-xs">{idx + 1}</td>
+                      <td className="px-4 py-3 font-medium text-gray-900">{s.subject_name}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-gray-500">{s.code}</td>
+                      <td className="px-4 py-3 text-gray-700">{s.faculty_name}</td>
+                      <td className="px-4 py-3 text-right font-mono text-gray-700">
+                        {s.marks_entered} marks
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <StatusBadge status={s.status} />
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

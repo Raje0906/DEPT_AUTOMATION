@@ -179,7 +179,7 @@ export default function Layout({ children }) {
       <aside
         className={`
           fixed inset-y-0 left-0 z-30 w-64 bg-[#141C38] flex flex-col border-r border-[#222E54]
-          transform transition-transform duration-200
+          transform transition-transform duration-200 print:hidden
           ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
           lg:relative lg:translate-x-0 lg:flex
         `}

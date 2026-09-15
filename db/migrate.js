@@ -468,6 +468,72 @@ async function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action);
     `);
 
+    // ─── EXAM TYPES & RESULT GENERATION SYSTEM ───────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS exam_types (
+        id                SERIAL PRIMARY KEY,
+        code              VARCHAR(50) UNIQUE NOT NULL,
+        name              VARCHAR(100) NOT NULL,
+        category          VARCHAR(30) NOT NULL DEFAULT 'both' CHECK (category IN ('theory','practical','both')),
+        has_result_impact BOOLEAN DEFAULT TRUE,
+        default_max_marks NUMERIC(5,2) NOT NULL DEFAULT 100,
+        display_order     INTEGER NOT NULL DEFAULT 1
+      );
+
+      CREATE TABLE IF NOT EXISTS student_exam_marks (
+        id                SERIAL PRIMARY KEY,
+        student_id        INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+        subject_id        INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+        exam_type_id      INTEGER NOT NULL REFERENCES exam_types(id) ON DELETE CASCADE,
+        semester          INTEGER NOT NULL,
+        academic_year     VARCHAR(20) NOT NULL,
+        marks_obtained    NUMERIC(5,2),
+        is_absent         BOOLEAN DEFAULT FALSE,
+        status            VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','submitted','approved','published')),
+        entered_by        INTEGER REFERENCES faculty(id),
+        last_modified_at  TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(student_id, subject_id, exam_type_id, semester, academic_year)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_student_exam_marks_lookup 
+        ON student_exam_marks(student_id, subject_id, semester, academic_year);
+      CREATE INDEX IF NOT EXISTS idx_student_exam_marks_subject_exam 
+        ON student_exam_marks(subject_id, exam_type_id, semester, academic_year);
+
+      CREATE TABLE IF NOT EXISTS student_term_work_details (
+        id                      SERIAL PRIMARY KEY,
+        student_id              INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+        subject_id              INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+        semester                INTEGER NOT NULL,
+        academic_year           VARCHAR(20) NOT NULL,
+        attendance_marks        NUMERIC(5,2) DEFAULT 0,
+        assignment_1_marks      NUMERIC(5,2) DEFAULT 0,
+        assignment_2_marks      NUMERIC(5,2) DEFAULT 0,
+        timely_submission_marks NUMERIC(5,2) DEFAULT 0,
+        total_tw_marks          NUMERIC(5,2) DEFAULT 0,
+        entered_by              INTEGER REFERENCES faculty(id),
+        last_modified_at        TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(student_id, subject_id, semester, academic_year)
+      );
+
+      INSERT INTO exam_types (code, name, category, has_result_impact, default_max_marks, display_order)
+      VALUES 
+        ('unit_test_1', 'Unit Test 1', 'theory', FALSE, 30, 1),
+        ('unit_test_2', 'Unit Test 2', 'theory', FALSE, 30, 2),
+        ('insem', 'Insem Exam', 'theory', TRUE, 30, 3),
+        ('mock_theory', 'Mock Theory Exam', 'theory', FALSE, 70, 4),
+        ('mock_practical', 'Mock Practical Exam', 'practical', FALSE, 25, 5),
+        ('term_work', 'Term Work', 'practical', TRUE, 25, 6),
+        ('final_practical', 'Final Practical/Oral Exam', 'practical', TRUE, 25, 7),
+        ('endsem', 'Endsem Exam', 'theory', TRUE, 70, 8)
+      ON CONFLICT (code) DO UPDATE SET 
+        name = EXCLUDED.name,
+        category = EXCLUDED.category,
+        has_result_impact = EXCLUDED.has_result_impact,
+        default_max_marks = EXCLUDED.default_max_marks,
+        display_order = EXCLUDED.display_order;
+    `);
+
     await client.query('COMMIT');
     console.log('[Migration] All tables created successfully');
   } catch (err) {

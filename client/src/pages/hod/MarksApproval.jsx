@@ -1,38 +1,39 @@
 import React, { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import api from '../../api/axios';
-import ResultTable from '../../components/ResultTable';
 import toast from 'react-hot-toast';
+import { StatusBadge } from '../../components/ResultTable';
 
 export default function MarksApproval() {
   const [searchParams] = useSearchParams();
-  const subjectId  = searchParams.get('subjectId');
-  const semester   = searchParams.get('sem') || '6';
-  const academicYear = searchParams.get('ay') || '2024-25';
+  const subjectId    = searchParams.get('subjectId');
+  const semester     = searchParams.get('sem') || '5';
+  const academicYear = searchParams.get('ay')  || '2025-26';
+  const division     = searchParams.get('div') || 'TE 1';
 
-  const [data, setData]       = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [comment, setComment] = useState('');
+  const [data, setData]             = useState(null);
+  const [loading, setLoading]       = useState(false);
+  const [comment, setComment]       = useState('');
   const [showSendback, setShowSendback] = useState(false);
   const [processing, setProcessing] = useState(false);
 
-  const load = () => {
+  const loadData = () => {
     if (!subjectId) return;
     setLoading(true);
-    api.get(`/hod/marks/${subjectId}?semester=${semester}&academicYear=${academicYear}`)
+    api.get(`/hod/marks/${subjectId}?semester=${semester}&academic_year=${encodeURIComponent(academicYear)}&division=${encodeURIComponent(division)}`)
       .then(res => setData(res.data))
       .catch(console.error)
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, [subjectId, semester, academicYear]);
+  useEffect(loadData, [subjectId, semester, academicYear, division]);
 
   const handleApprove = async () => {
     setProcessing(true);
     try {
-      await api.post(`/hod/approve/${subjectId}`, { semester, academicYear });
-      toast.success('Marks approved and locked.');
-      load();
+      const res = await api.post(`/hod/approve/${subjectId}`, { semester, academicYear, division });
+      toast.success(res.data.message);
+      loadData();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Approval failed');
     } finally {
@@ -41,17 +42,17 @@ export default function MarksApproval() {
   };
 
   const handleSendback = async () => {
-    if (!comment || comment.trim().length < 10) {
-      toast.error('Please provide a detailed comment before sending back.');
+    if (!comment || comment.trim().length < 5) {
+      toast.error('Please enter a remark explaining what requires correction.');
       return;
     }
     setProcessing(true);
     try {
-      await api.post(`/hod/sendback/${subjectId}`, { semester, academicYear, comment });
-      toast.success('Marks sent back to faculty for correction.');
+      const res = await api.post(`/hod/sendback/${subjectId}`, { semester, academicYear, division, comment });
+      toast.success(res.data.message);
       setShowSendback(false);
       setComment('');
-      load();
+      loadData();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to send back');
     } finally {
@@ -61,105 +62,137 @@ export default function MarksApproval() {
 
   if (!subjectId) {
     return (
-      <div className="p-8">
-        <p className="text-sm text-draft">Select a submitted subject from the dashboard to review.</p>
+      <div className="p-8 max-w-4xl mx-auto text-center text-gray-500">
+        <p className="text-base font-medium">Select a subject from the HOD dashboard to review.</p>
+        <Link to="/hod/publish" className="text-sm text-indigo-600 font-semibold mt-2 inline-block">
+          Go to Publish Console →
+        </Link>
       </div>
     );
   }
 
+  const examTypes = data?.examTypes || [];
+  const students  = data?.students  || [];
+
   return (
-    <div className="p-6 lg:p-8 max-w-6xl">
-      <div className="mb-6 pb-4 border-b border-rule flex items-start justify-between flex-wrap gap-4">
+    <div className="p-6 lg:p-10 w-full max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="mb-6 pb-4 border-b border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="font-serif text-2xl font-bold text-ink">Mark Review</h1>
-          <p className="text-sm text-draft mt-0.5">Semester {semester} · {academicYear}</p>
+          <Link to="/hod/publish" className="text-xs font-semibold text-indigo-600 hover:text-indigo-800">
+            ← Back to Publish Console
+          </Link>
+          <h1 className="text-2xl lg:text-3xl font-serif font-bold text-gray-900 mt-1">
+            Review Marks: {data?.subject?.name}
+          </h1>
+          <p className="text-sm text-gray-500 mt-0.5">
+            Subject Code: <span className="font-mono font-bold text-gray-700">{data?.subject?.code}</span> · Division: <span className="font-bold text-gray-800">{division}</span> · Semester {semester} ({academicYear})
+          </p>
         </div>
-        {data && (
-          <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={() => setShowSendback(true)}
-              className="btn-secondary"
-              disabled={processing}
-            >
-              Send back for correction
-            </button>
-            <button
-              onClick={handleApprove}
-              className="btn-primary"
-              disabled={processing}
-            >
-              {processing ? 'Processing…' : 'Approve and lock marks'}
-            </button>
-          </div>
-        )}
+
+        {/* Actions (Strictly Read-only for HOD, no marks editing) */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowSendback(true)}
+            disabled={processing || loading}
+            className="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-semibold hover:bg-amber-600 transition-colors shadow-sm disabled:opacity-50"
+          >
+            ↩ Send Back for Correction
+          </button>
+          <button
+            onClick={handleApprove}
+            disabled={processing || loading}
+            className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-50"
+          >
+            ✓ Approve &amp; Lock Marks
+          </button>
+        </div>
       </div>
 
-      {loading && <p className="text-sm text-draft">Loading marks…</p>}
-
-      {data && (
-        <>
-          {/* Anomaly flags */}
-          {data.anomalies?.length > 0 && (
-            <div className="mb-4 space-y-2">
-              <p className="text-xs font-semibold text-pending uppercase tracking-wide">
-                Anomalies detected — review before approving
-              </p>
-              {data.anomalies.map((a, i) => (
-                <div key={i} className="anomaly-flag">
-                  <svg className="w-4 h-4 text-pending flex-shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" />
-                  </svg>
-                  <div>
-                    <span className="font-mono text-xs font-semibold mr-2">{a.rollNo}</span>
-                    <span>{a.message}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Class stats */}
-          <div className="flex gap-6 mb-4 text-sm">
-            <span className="text-draft">Class average: <strong className="text-ink tabular-num">{data.classAverage}</strong></span>
-            <span className="text-draft">Total students: <strong className="text-ink tabular-num">{data.marks?.length}</strong></span>
-            <span className="text-draft">Pass: <strong className="text-pass">{data.marks?.filter(m => m.grade !== 'F').length}</strong></span>
-            <span className="text-draft">Fail: <strong className="text-fail">{data.marks?.filter(m => m.grade === 'F').length}</strong></span>
+      {/* Sendback Remark Modal / Box */}
+      {showSendback && (
+        <div className="mb-6 p-5 bg-amber-50 border border-amber-300 rounded-xl">
+          <h3 className="text-sm font-bold text-amber-900 mb-2">Send Marks Back to Faculty for Correction</h3>
+          <p className="text-xs text-amber-700 mb-3">
+            Provide specific guidance to the faculty member on which exam marks or students need revision.
+          </p>
+          <textarea
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            rows={3}
+            className="w-full p-2.5 bg-white border border-amber-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500"
+            placeholder="e.g., Please verify the Insem marks for roll numbers 12 and 15..."
+          />
+          <div className="flex justify-end gap-2 mt-3">
+            <button
+              onClick={() => setShowSendback(false)}
+              className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-xs font-semibold rounded-md"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSendback}
+              disabled={processing}
+              className="px-4 py-1.5 bg-amber-600 text-white text-xs font-bold rounded-md hover:bg-amber-700"
+            >
+              Confirm Sendback
+            </button>
           </div>
-
-          {/* Marks table */}
-          <div className="panel">
-            <ResultTable subjects={data.marks?.map(m => ({
-              ...m,
-              subject_name: m.subject_name,
-              subject_code: m.code,
-            })) || []} showStatus />
-          </div>
-        </>
+        </div>
       )}
 
-      {/* Send back modal */}
-      {showSendback && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="bg-white border border-rule rounded-sm w-full max-w-md mx-4 p-6">
-            <h2 className="font-serif text-xl font-bold text-ink mb-2">Send back for correction</h2>
-            <p className="text-sm text-draft mb-4">
-              This will unlock the marks for the faculty to revise. A comment is mandatory.
-            </p>
-            <label className="input-label">Comment for faculty</label>
-            <textarea
-              className="input-field resize-none mb-4"
-              rows={3}
-              value={comment}
-              onChange={e => setComment(e.target.value)}
-              placeholder="Describe what needs to be corrected…"
-            />
-            <div className="flex gap-3 justify-end">
-              <button onClick={() => setShowSendback(false)} className="btn-ghost">Cancel</button>
-              <button onClick={handleSendback} disabled={processing} className="btn-danger">
-                {processing ? 'Sending…' : 'Send back'}
-              </button>
-            </div>
-          </div>
+      {loading ? (
+        <div className="text-center py-20 text-gray-500 text-sm font-medium">Loading mark sheets...</div>
+      ) : students.length === 0 ? (
+        <div className="bg-white border border-gray-200 rounded-xl p-12 text-center text-gray-500">
+          <p className="text-base font-semibold">No student marks recorded yet for this subject and division.</p>
+        </div>
+      ) : (
+        /* Read-only multi-exam matrix */
+        <div className="overflow-x-auto border border-gray-200 rounded-xl shadow-sm bg-white">
+          <table className="min-w-full divide-y divide-gray-200 text-sm">
+            <thead className="bg-gray-50 text-gray-700 font-semibold uppercase text-xs tracking-wider">
+              <tr>
+                <th className="px-4 py-3 text-left w-10">#</th>
+                <th className="px-4 py-3 text-left">Roll No</th>
+                <th className="px-4 py-3 text-left">PRN</th>
+                <th className="px-4 py-3 text-left">Student Name</th>
+                {examTypes.map(et => (
+                  <th key={et.id} className="px-3 py-3 text-right">
+                    {et.name} <span className="text-[10px] text-gray-400">({et.default_max_marks})</span>
+                  </th>
+                ))}
+                <th className="px-4 py-3 text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {students.map((st, idx) => (
+                <tr key={st.student_id} className="hover:bg-gray-50/75 transition-colors">
+                  <td className="px-4 py-3 text-gray-400 font-mono text-xs">{idx + 1}</td>
+                  <td className="px-4 py-3 font-mono font-bold text-gray-800">{st.roll_no}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-gray-500">{st.enrollment_no}</td>
+                  <td className="px-4 py-3 font-medium text-gray-900">{st.student_name}</td>
+                  {examTypes.map(et => {
+                    const m = st.marks[et.code];
+                    if (!m || m.marks === null) {
+                      return <td key={et.id} className="px-3 py-3 text-right text-gray-300 font-mono">—</td>;
+                    }
+                    if (m.isAbsent) {
+                      return <td key={et.id} className="px-3 py-3 text-right font-mono text-red-600 font-bold">AB</td>;
+                    }
+                    return (
+                      <td key={et.id} className="px-3 py-3 text-right font-mono font-semibold text-gray-800">
+                        {m.marks}
+                      </td>
+                    );
+                  })}
+                  <td className="px-4 py-3 text-center">
+                    <StatusBadge status={st.overall_status} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
