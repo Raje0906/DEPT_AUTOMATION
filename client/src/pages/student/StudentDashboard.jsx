@@ -9,7 +9,7 @@ export default function StudentDashboard() {
   const [data, setData]       = useState(null);
   const [notices, setNotices] = useState([]);
   const [loading, setLoading] = useState(true);
-  const currentSem = user?.current_semester || 6;
+  const currentSem = user?.current_semester || 5;
 
   useEffect(() => {
     Promise.all([
@@ -41,7 +41,7 @@ export default function StudentDashboard() {
           Welcome, {user?.name?.split(' ')[0]}
         </h1>
         <p className="text-base text-draft mt-1 font-medium">
-          {user?.roll_no} · Semester {currentSem} · Division {user?.division} · {user?.batch || '2021–25'}
+          {user?.roll_no} · Semester {currentSem} · Division {user?.division} · {user?.batch || '2025–26'}
         </p>
       </div>
 
@@ -109,23 +109,31 @@ export default function StudentDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {semData.subjects.map((s, i) => (
-                  <tr key={i}>
-                    <td>
-                      {s.subject_name}
-                      {s.is_backlog && <span className="ml-2 badge-backlog">Backlog</span>}
-                    </td>
-                    <td className="numeric font-semibold">{s.total != null ? Number(s.total).toFixed(0) : '—'}</td>
-                    <td className="text-center">
-                      <span className={s.grade === 'F' ? 'text-fail font-bold' : s.grade === 'O' || s.grade === 'A+' ? 'text-pass font-bold' : 'font-semibold'}>
-                        {s.grade || '—'}
-                      </span>
-                    </td>
-                    <td>
-                      <StatusBadge status={s.status} />
-                    </td>
-                  </tr>
-                ))}
+                {semData.subjects.map((s, i) => {
+                  const name = s.subject_name || s.subjectName || 'Subject';
+                  const code = s.subject_code || s.subjectCode || '';
+                  const totalVal = s.total ?? s.totalObtained;
+                  const isBacklog = s.is_backlog || s.isBacklog;
+                  const st = s.status || (s.isComplete ? 'published' : 'draft');
+                  return (
+                    <tr key={i}>
+                      <td>
+                        <span className="font-semibold text-ink">{name}</span>
+                        {code && <span className="text-xs text-draft ml-2 font-mono">({code})</span>}
+                        {isBacklog && <span className="ml-2 badge-backlog">Backlog</span>}
+                      </td>
+                      <td className="numeric font-semibold">{totalVal != null ? Number(totalVal).toFixed(0) : '—'}</td>
+                      <td className="text-center">
+                        <span className={s.grade === 'F' ? 'text-fail font-bold' : (s.grade === 'O' || s.grade === 'A+' || s.grade === 'A') ? 'text-pass font-bold' : 'font-semibold'}>
+                          {s.grade || '—'}
+                        </span>
+                      </td>
+                      <td>
+                        <StatusBadge status={st} />
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           ) : (

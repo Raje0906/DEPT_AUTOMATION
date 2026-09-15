@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../api/axios';
 import { useAuth } from '../../contexts/AuthContext';
-import ResultTable from '../../components/ResultTable';
+import ResultTable, { StatusBadge } from '../../components/ResultTable';
+import SppuMarksheet from '../../components/SppuMarksheet';
 
 export default function StudentResults() {
   const { user } = useAuth();
-  const [semester, setSemester] = useState(user?.current_semester || 6);
-  const [data, setData]         = useState(null);
-  const [loading, setLoading]   = useState(true);
+  // Default to Semester 5 (TE Semester 1 AY 2025-26)
+  const [semester, setSemester] = useState(5);
+  const [activeTab, setActiveTab] = useState('sppu'); // 'sppu' | 'final' | 'internal' | 'term_work' | 'university'
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
@@ -17,134 +20,203 @@ export default function StudentResults() {
       .finally(() => setLoading(false));
   }, [semester]);
 
-  const maxSem = user?.current_semester || 6;
-  const availableSemesters = Array.from({ length: maxSem }, (_, i) => i + 1);
-
   const handleDownload = () => {
     window.print();
   };
 
-  return (
-    <div className="p-8 lg:p-10 w-full max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="mb-8 pb-5 border-b border-rule flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="font-serif text-3xl lg:text-4xl font-bold text-ink">Academic Results</h1>
-          <p className="text-base text-draft mt-1 font-medium">{user?.name} · {user?.roll_no}</p>
-        </div>
+  const isOtherSemester = semester !== 5 || data?.isOtherSemester;
 
-        {/* Semester selector */}
-        <div className="flex items-center gap-3">
-          <label className="text-xs text-draft uppercase tracking-wide font-semibold whitespace-nowrap">
-            Semester
-          </label>
-          <select
-            value={semester}
-            onChange={(e) => setSemester(parseInt(e.target.value, 10))}
-            className="input-field w-auto py-1.5 pr-8"
-          >
-            {availableSemesters.map(s => (
-              <option key={s} value={s}>Semester {s}</option>
-            ))}
-          </select>
-          <button onClick={handleDownload} className="btn-secondary text-sm py-1.5 no-print">
-            Download PDF
-          </button>
-        </div>
+  return (
+    <div className="p-6 lg:p-10 w-full max-w-7xl mx-auto">
+      {/* Printable Marksheet Container: Always active during window.print() */}
+      <div className="hidden print:block w-full">
+        <SppuMarksheet
+          student={data?.student || user}
+          subjects={data?.subjects || []}
+          semester={semester}
+          academicYear={data?.academicYear || '2025-26'}
+          sgpa={data?.sgpa}
+          published={data?.published}
+        />
       </div>
 
-      {loading ? (
-        <p className="text-sm text-draft">Loading results…</p>
-      ) : !data || data.subjects?.length === 0 ? (
-        <div className="empty-state">
-          <p className="text-sm font-medium text-draft">No marks entered for Semester {semester} yet.</p>
-          <p className="text-xs text-gray-400 mt-1">
-            Results will appear here once the faculty submits marks and they are published.
-          </p>
-        </div>
-      ) : (
-        <>
-          {/* Result status notice */}
-          {!data.published && (
-            <div className="notification-strip mb-4">
-              <span className="text-xs font-semibold text-navy uppercase tracking-wide mr-2">Notice</span>
-              These results are not yet officially published. Marks may change until published by the HOD.
+      {/* Screen Interface: Hidden during print */}
+      <div className="print:hidden">
+        {/* Top Header & Semester Picker */}
+        <div className="mb-8 pb-6 border-b border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-serif font-bold text-gray-900">Academic Results</h1>
+              {data?.published && (
+                <span className="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-0.5 rounded-full font-bold border border-emerald-300">
+                  Official SPPU Result
+                </span>
+              )}
             </div>
-          )}
-
-          {/* Mark sheet header (visible in print) */}
-          <div className="mb-4 hidden print:block text-center">
-            <h2 className="font-serif text-xl font-bold">MES Wadia COE</h2>
-            <p className="text-sm">Department of Computer Engineering</p>
-            <p className="text-sm font-medium mt-1">
-              Mark Sheet — Semester {semester} — Academic Year {data.subjects?.[0]?.academic_year || '2024-25'}
+            <p className="text-sm text-gray-500 mt-1 font-medium">
+              {data?.student?.name || user?.name} · PRN: <span className="font-mono text-gray-700">{data?.student?.enrollment_no || user?.enrollment_no}</span> · Division: <span className="font-bold text-gray-800">{data?.student?.division || user?.division}</span>
             </p>
-            <div className="mt-3 flex justify-between text-sm border-t pt-2">
-              <span>Name: {user?.name}</span>
-              <span>Roll No: {user?.roll_no}</span>
-              <span>Enrollment No: {user?.enrollment_no}</span>
-            </div>
           </div>
 
-          {/* The canonical table */}
-          <div className="panel mb-6">
-            <div className="panel-header">
-              <div className="flex items-center justify-between">
-                <h2 className="font-serif text-lg font-semibold">
-                  Semester {semester} — Mark Sheet
-                </h2>
-                {data.published && (
-                  <span className="badge-published">Published</span>
-                )}
-              </div>
-              {data.subjects?.[0]?.academic_year && (
-                <p className="text-xs text-draft mt-1">Academic Year {data.subjects[0].academic_year}</p>
-              )}
-            </div>
-            <ResultTable subjects={data.subjects} />
+          <div className="flex items-center gap-3 no-print">
+            <label className="text-xs text-gray-500 uppercase tracking-wider font-semibold whitespace-nowrap">
+              Semester
+            </label>
+            <select
+              value={semester}
+              onChange={(e) => setSemester(parseInt(e.target.value, 10))}
+              className="px-3 py-1.5 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
+                <option key={s} value={s}>
+                  Semester {s} {s === 5 ? '(TE Sem 1 - 2025-26)' : ''}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handleDownload}
+              className="px-4 py-1.5 bg-indigo-900 text-white rounded-md text-sm font-semibold hover:bg-indigo-800 transition-colors shadow flex items-center gap-2"
+            >
+              <span>🖨️</span> Print Result
+            </button>
           </div>
+        </div>
 
-          {/* SGPA summary */}
-          <div className="panel p-5">
-            <div className="flex flex-wrap gap-8 items-start">
+        {loading ? (
+          <div className="text-center py-20 text-gray-500 text-sm font-medium">Loading academic records...</div>
+        ) : isOtherSemester ? (
+          /* Empty / Zeroed View for non-TE Sem 1 */
+          <div className="space-y-6">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-center gap-3 text-amber-900 text-sm">
+              <span className="text-lg">ℹ️</span>
               <div>
-                <p className="text-xs text-draft uppercase tracking-wide mb-1">SGPA — Semester {semester}</p>
-                <p className="font-serif text-3xl font-bold text-navy tabular-num">
-                  {data.sgpa?.toFixed(2) || '—'}
+                <strong>Semester {semester} Records:</strong> All marks and results are set to <strong>0</strong> (no data entered yet for this semester).
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">SGPA</span>
+                <p className="text-2xl font-bold font-mono text-gray-400 mt-1">0.00</p>
+              </div>
+              <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Earned Credits</span>
+                <p className="text-2xl font-bold font-mono text-gray-400 mt-1">0 / 22</p>
+              </div>
+              <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Status</span>
+                <p className="text-sm font-semibold text-gray-500 mt-2">Not Entered</p>
+              </div>
+            </div>
+
+            <div className="bg-white border border-gray-200 rounded-lg p-12 text-center text-gray-400">
+              <p className="text-base font-semibold text-gray-600">No evaluation data entered yet for Semester {semester}</p>
+              <p className="text-xs mt-1 text-gray-400">Please select Semester 5 (TE Sem 1 AY 2025-26) to view your imported results.</p>
+            </div>
+          </div>
+        ) : (
+          /* TE Semester 1 Results */
+          <div className="space-y-6">
+            {/* Summary Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                <span className="text-xs text-gray-500 font-semibold uppercase tracking-wider">SGPA</span>
+                <p className="text-3xl font-bold font-mono text-indigo-700 mt-1">
+                  {data?.sgpa !== null ? Number(data?.sgpa).toFixed(2) : 'Pending'}
                 </p>
               </div>
-              <div>
-                <p className="text-xs text-draft uppercase tracking-wide mb-1">Total Credits</p>
-                <p className="font-serif text-3xl font-bold text-ink tabular-num">{data.totalCredits}</p>
-              </div>
-              <div>
-                <p className="text-xs text-draft uppercase tracking-wide mb-1">Pass / Fail</p>
-                <p className="font-serif text-3xl font-bold tabular-num">
-                  <span className="text-pass">{data.subjects?.filter(s => s.grade !== 'F').length}</span>
-                  <span className="text-rule"> / </span>
-                  <span className="text-fail">{data.subjects?.filter(s => s.grade === 'F').length}</span>
+              <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                <span className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Total Credits</span>
+                <p className="text-3xl font-bold font-mono text-gray-800 mt-1">
+                  {data?.totalCredits || 22}
                 </p>
               </div>
-
-              {/* Backlog subjects */}
-              {data.subjects?.some(s => s.is_backlog) && (
-                <div className="w-full border-t border-rule pt-4 mt-2">
-                  <p className="text-xs font-semibold text-fail uppercase tracking-wide mb-2">
-                    Backlog subjects
-                  </p>
-                  {data.subjects.filter(s => s.is_backlog).map((s, i) => (
-                    <div key={i} className="flex items-center gap-3 text-sm py-1">
-                      <span className="badge-backlog">Backlog</span>
-                      <span>{s.subject_name}</span>
-                      <span className="text-draft font-mono text-xs">{s.subject_code}</span>
-                    </div>
-                  ))}
+              <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                <span className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Academic Year</span>
+                <p className="text-lg font-bold text-gray-800 mt-2">{data?.academicYear}</p>
+              </div>
+              <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                <span className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Result Status</span>
+                <div className="mt-2">
+                  <StatusBadge status={data?.published ? 'published' : 'draft'} />
                 </div>
-              )}
+              </div>
             </div>
+
+            {/* Tab Navigation */}
+            <div className="border-b border-gray-200 no-print">
+              <nav className="flex flex-wrap gap-2 sm:space-x-4">
+                <button
+                  onClick={() => setActiveTab('sppu')}
+                  className={`py-3 px-3 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === 'sppu'
+                      ? 'border-indigo-600 text-indigo-700 font-bold bg-indigo-50/50 rounded-t'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  🏛️ SPPU Marksheet View
+                </button>
+                <button
+                  onClick={() => setActiveTab('final')}
+                  className={`py-3 px-3 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === 'final'
+                      ? 'border-indigo-600 text-indigo-600 font-bold'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  🏆 Final Consolidated Breakdown
+                </button>
+                <button
+                  onClick={() => setActiveTab('internal')}
+                  className={`py-3 px-3 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === 'internal'
+                      ? 'border-indigo-600 text-indigo-600 font-bold'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  📝 Internal (UT1, UT2, Mock)
+                </button>
+                <button
+                  onClick={() => setActiveTab('term_work')}
+                  className={`py-3 px-3 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === 'term_work'
+                      ? 'border-indigo-600 text-indigo-600 font-bold'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  📊 Term Work Details
+                </button>
+                <button
+                  onClick={() => setActiveTab('university')}
+                  className={`py-3 px-3 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === 'university'
+                      ? 'border-indigo-600 text-indigo-600 font-bold'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  🏛️ University (Insem/Endsem)
+                </button>
+              </nav>
+            </div>
+
+            {/* Active Tab Content */}
+            {activeTab === 'sppu' ? (
+              <div className="py-2">
+                <SppuMarksheet
+                  student={data?.student || user}
+                  subjects={data?.subjects || []}
+                  semester={semester}
+                  academicYear={data?.academicYear || '2025-26'}
+                  sgpa={data?.sgpa}
+                  published={data?.published}
+                />
+              </div>
+            ) : (
+              <ResultTable subjects={data?.subjects} mode={activeTab} showStatus={false} />
+            )}
           </div>
-        </>
-      )}
+        )}
+      </div>
     </div>
   );
 }

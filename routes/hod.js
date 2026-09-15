@@ -10,29 +10,32 @@ router.use(verifyToken, requireRole('hod'));
 // ─── GET /api/hod/dashboard ───────────────────────────────────────────────────
 router.get('/dashboard', async (req, res) => {
   try {
+    const selectedYear = req.query.academic_year || '2025-26';
+    const selectedSem = req.query.semester ? parseInt(req.query.semester, 10) : 5;
+
     // Dept-wide subject submission status table
     const result = await pool.query(
-      `SELECT fsm.id, s.name AS subject_name, s.code, s.semester, fsm.division, fsm.academic_year,
+      `SELECT fsm.id, s.id AS subject_id, s.name AS subject_name, s.code, s.semester, s.credits,
+              s.subject_type, s.has_practical, fsm.division, fsm.academic_year,
               u.name AS faculty_name, f.employee_id,
-              COUNT(m.id) AS marks_entered,
-              COUNT(st.id) AS enrolled,
+              COUNT(sem.id) AS marks_entered,
+              (SELECT COUNT(*) FROM students st WHERE st.division = fsm.division AND st.current_semester = fsm.semester) AS enrolled,
               CASE
-                WHEN COUNT(m.id) = 0 THEN 'not_started'
-                WHEN COUNT(m.id) FILTER (WHERE m.status = 'published') = COUNT(m.id) AND COUNT(m.id) > 0 THEN 'published'
-                WHEN COUNT(m.id) FILTER (WHERE m.status = 'approved') = COUNT(m.id) AND COUNT(m.id) > 0 THEN 'approved'
-                WHEN COUNT(m.id) FILTER (WHERE m.status = 'submitted') > 0 THEN 'submitted'
+                WHEN COUNT(sem.id) = 0 THEN 'not_started'
+                WHEN COUNT(sem.id) FILTER (WHERE sem.status = 'published') > 0 THEN 'published'
+                WHEN COUNT(sem.id) FILTER (WHERE sem.status = 'approved') = COUNT(sem.id) AND COUNT(sem.id) > 0 THEN 'approved'
+                WHEN COUNT(sem.id) FILTER (WHERE sem.status = 'submitted') > 0 THEN 'submitted'
                 ELSE 'draft'
               END AS status
        FROM faculty_subject_map fsm
        JOIN subjects s ON s.id = fsm.subject_id
        JOIN faculty f ON f.id = fsm.faculty_id
        JOIN users u ON u.id = f.user_id
-       LEFT JOIN students st ON st.division = fsm.division AND st.current_semester = s.semester
-       LEFT JOIN marks m ON m.subject_id = s.id AND m.semester = fsm.semester AND m.academic_year = fsm.academic_year
-       WHERE f.department = $1
+       LEFT JOIN student_exam_marks sem ON sem.subject_id = s.id AND sem.semester = fsm.semester AND sem.academic_year = fsm.academic_year
+       WHERE f.department = $1 AND fsm.academic_year = $2
        GROUP BY fsm.id, s.id, u.name, f.employee_id
-       ORDER BY s.semester, s.code`,
-      [req.user.dept]
+       ORDER BY s.semester, s.code, fsm.division`,
+      [req.user.dept, selectedYear]
     );
 
     // Pending revaluation requests
@@ -43,9 +46,18 @@ router.get('/dashboard', async (req, res) => {
       [req.user.dept]
     );
 
+    // Publication status per division for this semester & year
+    const pubStatusRes = await pool.query(
+      `SELECT division, status, published_at 
+       FROM result_publish_status 
+       WHERE semester = $1 AND academic_year = $2 AND department = $3`,
+      [selectedSem, selectedYear, req.user.dept]
+    );
+
     res.json({
       subjects: result.rows,
-      pendingRevaluations: parseInt(revalResult.rows[0].pending, 10),
+      publishStatus: pubStatusRes.rows,
+      pendingRevaluations: parseInt(revalResult.rows[0]?.pending || 0, 10),
     });
   } catch (err) {
     console.error('[HOD] Dashboard error:', err.message);
@@ -53,53 +65,119 @@ router.get('/dashboard', async (req, res) => {
   }
 });
 
+// ─── GET /api/hod/exam-completion-status ───────────────────────────────────────
+// Detailed matrix showing status of each exam type per subject and division
+router.get('/exam-completion-status', async (req, res) => {
+  try {
+    const semester = req.query.semester ? parseInt(req.query.semester, 10) : 5;
+    const academicYear = req.query.academic_year || '2025-26';
+
+    const examTypesRes = await pool.query(`SELECT * FROM exam_types ORDER BY display_order`);
+    const examTypes = examTypesRes.rows;
+
+    const matrixRes = await pool.query(
+      `SELECT fsm.id AS map_id, fsm.division, fsm.semester, fsm.academic_year,
+              s.id AS subject_id, s.name AS subject_name, s.code AS subject_code, s.subject_type,
+              u.name AS faculty_name, f.employee_id,
+              et.id AS exam_type_id, et.code AS exam_code, et.name AS exam_name,
+              COUNT(sem.id) AS entered_count,
+              (SELECT COUNT(*) FROM students st WHERE st.division = fsm.division AND st.current_semester = fsm.semester) AS total_students,
+              MAX(sem.status) AS current_status
+       FROM faculty_subject_map fsm
+       JOIN subjects s ON s.id = fsm.subject_id
+       JOIN faculty f ON f.id = fsm.faculty_id
+       JOIN users u ON u.id = f.user_id
+       CROSS JOIN exam_types et
+       LEFT JOIN students st2 ON st2.division = fsm.division AND st2.current_semester = fsm.semester
+       LEFT JOIN student_exam_marks sem ON sem.student_id = st2.id 
+         AND sem.subject_id = s.id 
+         AND sem.exam_type_id = et.id 
+         AND sem.semester = fsm.semester 
+         AND sem.academic_year = fsm.academic_year
+       WHERE f.department = $1 AND fsm.semester = $2 AND fsm.academic_year = $3
+       GROUP BY fsm.id, fsm.division, fsm.semester, fsm.academic_year, s.id, u.name, f.employee_id, et.id
+       ORDER BY s.code, fsm.division, et.display_order`,
+      [req.user.dept, semester, academicYear]
+    );
+
+    res.json({
+      semester,
+      academicYear,
+      examTypes,
+      completionMatrix: matrixRes.rows
+    });
+  } catch (err) {
+    console.error('[HOD] Exam completion status error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ─── GET /api/hod/marks/:subjectId ────────────────────────────────────────────
-// Full mark list for approval review + anomaly detection
+// Full mark list for approval review (strictly read-only)
 router.get('/marks/:subjectId', async (req, res) => {
   try {
     const { subjectId } = req.params;
-    const { semester, academicYear } = req.query;
+    const semester = parseInt(req.query.semester, 10) || 5;
+    const academicYear = req.query.academic_year || '2025-26';
+    const division = req.query.division || 'TE 1';
 
+    const subjectResult = await pool.query(`SELECT * FROM subjects WHERE id = $1`, [subjectId]);
+    if (subjectResult.rows.length === 0) return res.status(404).json({ error: 'Subject not found' });
+    const subject = subjectResult.rows[0];
+
+    const examTypesRes = await pool.query(`SELECT * FROM exam_types ORDER BY display_order`);
+    const examTypes = examTypesRes.rows;
+
+    // Fetch marks per student
     const marksResult = await pool.query(
-      `SELECT m.id AS mark_id, m.cie_marks, m.practical_marks, m.end_sem_marks,
-              m.total, m.grade, m.grade_points, m.is_backlog, m.status,
-              u.name AS student_name, s2.roll_no, s2.enrollment_no,
-              sub.name AS subject_name, sub.code, sub.max_cie, sub.max_end_sem,
-              sub.max_practical, sub.has_practical, sub.credits
-       FROM marks m
-       JOIN students s2 ON s2.id = m.student_id
-       JOIN users u ON u.id = s2.user_id
-       JOIN subjects sub ON sub.id = m.subject_id
-       WHERE m.subject_id = $1 AND m.semester = $2 AND m.academic_year = $3
-       ORDER BY s2.roll_no`,
-      [subjectId, semester, academicYear || '2024-25']
+      `SELECT st.id AS student_id, st.roll_no, st.enrollment_no, u.name AS student_name,
+              sem.marks_obtained, sem.is_absent, sem.status,
+              et.id AS exam_type_id, et.code AS exam_code, et.name AS exam_name
+       FROM students st
+       JOIN users u ON u.id = st.user_id
+       LEFT JOIN student_exam_marks sem ON sem.student_id = st.id 
+         AND sem.subject_id = $1 AND sem.semester = $2 AND sem.academic_year = $3
+       LEFT JOIN exam_types et ON et.id = sem.exam_type_id
+       WHERE st.division = $4 AND st.current_semester = $2
+       ORDER BY CAST(NULLIF(regexp_replace(st.roll_no, '[^0-9]', '', 'g'), '') AS INTEGER), st.roll_no, et.display_order`,
+      [subjectId, semester, academicYear, division]
     );
 
-    const rows = marksResult.rows;
-
-    // Anomaly detection
-    const anomalies = [];
-    const totals = rows.map(r => parseFloat(r.total) || 0);
-    const avg = totals.length > 0 ? totals.reduce((a, b) => a + b, 0) / totals.length : 0;
-    const stdDev = totals.length > 1
-      ? Math.sqrt(totals.reduce((sum, t) => sum + Math.pow(t - avg, 2), 0) / totals.length)
-      : 0;
-
-    for (const row of rows) {
-      const t = parseFloat(row.total) || 0;
-      if (t === 0 && row.cie_marks === 0 && row.end_sem_marks === 0) {
-        anomalies.push({ rollNo: row.roll_no, type: 'all_zero', message: 'All marks are zero — possible missing entry' });
+    // Group marks by student
+    const studentMap = {};
+    for (const row of marksResult.rows) {
+      if (!studentMap[row.student_id]) {
+        studentMap[row.student_id] = {
+          student_id: row.student_id,
+          roll_no: row.roll_no,
+          enrollment_no: row.enrollment_no,
+          student_name: row.student_name,
+          marks: {},
+          overall_status: 'draft'
+        };
       }
-      const maxTotal = parseFloat(row.max_cie) + (row.has_practical ? parseFloat(row.max_practical) : 0) + parseFloat(row.max_end_sem);
-      if (t === maxTotal) {
-        anomalies.push({ rollNo: row.roll_no, type: 'full_marks', message: 'Full marks — verify entry' });
-      }
-      if (stdDev > 5 && Math.abs(t - avg) > 2.5 * stdDev) {
-        anomalies.push({ rollNo: row.roll_no, type: 'outlier', message: `Statistical outlier — ${t.toFixed(1)} is far from class average of ${avg.toFixed(1)}` });
+      if (row.exam_code) {
+        studentMap[row.student_id].marks[row.exam_code] = {
+          marks: row.marks_obtained,
+          isAbsent: row.is_absent,
+          status: row.status
+        };
+        if (row.status === 'submitted' || row.status === 'approved' || row.status === 'published') {
+          studentMap[row.student_id].overall_status = row.status;
+        }
       }
     }
 
-    res.json({ marks: rows, anomalies, classAverage: Math.round(avg * 10) / 10 });
+    const students = Object.values(studentMap);
+
+    res.json({
+      subject,
+      semester,
+      academicYear,
+      division,
+      examTypes,
+      students,
+    });
   } catch (err) {
     console.error('[HOD] Marks review error:', err.message);
     res.status(500).json({ error: 'Internal server error' });
@@ -110,30 +188,33 @@ router.get('/marks/:subjectId', async (req, res) => {
 router.post('/approve/:subjectId', async (req, res) => {
   try {
     const { subjectId } = req.params;
-    const { semester, academicYear } = req.body;
+    const { semester = 5, academicYear = '2025-26', division = 'TE 1' } = req.body;
 
     const updateResult = await pool.query(
-      `UPDATE marks SET status = 'approved', last_modified_at = NOW()
-       WHERE subject_id = $1 AND semester = $2 AND academic_year = $3 AND status = 'submitted'
-       RETURNING id`,
-      [subjectId, semester, academicYear]
+      `UPDATE student_exam_marks sem
+       SET status = 'approved', last_modified_at = NOW()
+       FROM students st
+       WHERE sem.student_id = st.id AND sem.subject_id = $1 AND sem.semester = $2 
+         AND sem.academic_year = $3 AND st.division = $4 AND sem.status = 'submitted'
+       RETURNING sem.id`,
+      [subjectId, semester, academicYear, division]
     );
 
     if (updateResult.rows.length === 0) {
-      return res.status(400).json({ error: 'No submitted marks found to approve for this subject' });
+      return res.status(400).json({ error: 'No submitted marks found to approve for this subject & division' });
     }
 
     auditRecord({
-      tableName: 'marks',
+      tableName: 'student_exam_marks',
       recordId: parseInt(subjectId, 10),
       changedBy: req.user.id,
       oldValue: { status: 'submitted' },
       newValue: { status: 'approved' },
       action: 'UPDATE',
-      reason: 'HOD approved marks',
+      reason: `HOD approved marks for subject ${subjectId} (${division})`,
     });
 
-    res.json({ message: `Approved ${updateResult.rows.length} mark entries. Subject is now locked for faculty edits.` });
+    res.json({ message: `Approved ${updateResult.rows.length} mark entries. Marks are locked for faculty edits.` });
   } catch (err) {
     console.error('[HOD] Approve error:', err.message);
     res.status(500).json({ error: 'Internal server error' });
@@ -144,29 +225,33 @@ router.post('/approve/:subjectId', async (req, res) => {
 router.post('/sendback/:subjectId', async (req, res) => {
   try {
     const { subjectId } = req.params;
-    const { semester, academicYear, comment } = req.body;
+    const { semester = 5, academicYear = '2025-26', division = 'TE 1', comment } = req.body;
 
-    if (!comment || comment.trim().length < 10) {
-      return res.status(400).json({ error: 'A detailed comment is required when sending marks back for correction' });
+    if (!comment || comment.trim().length < 5) {
+      return res.status(400).json({ error: 'A remark is required when sending marks back for correction' });
     }
 
-    await pool.query(
-      `UPDATE marks SET status = 'draft', last_modified_at = NOW()
-       WHERE subject_id = $1 AND semester = $2 AND academic_year = $3 AND status = 'submitted'`,
-      [subjectId, semester, academicYear]
+    const updateRes = await pool.query(
+      `UPDATE student_exam_marks sem
+       SET status = 'draft', last_modified_at = NOW()
+       FROM students st
+       WHERE sem.student_id = st.id AND sem.subject_id = $1 AND sem.semester = $2 
+         AND sem.academic_year = $3 AND st.division = $4 AND sem.status IN ('submitted', 'approved')
+       RETURNING sem.id`,
+      [subjectId, semester, academicYear, division]
     );
 
     auditRecord({
-      tableName: 'marks',
+      tableName: 'student_exam_marks',
       recordId: parseInt(subjectId, 10),
       changedBy: req.user.id,
       oldValue: { status: 'submitted' },
       newValue: { status: 'draft' },
       action: 'UPDATE',
-      reason: `HOD sent back for correction: ${comment}`,
+      reason: `HOD sent back for correction (${division}): ${comment}`,
     });
 
-    res.json({ message: 'Marks sent back to faculty for correction.', comment });
+    res.json({ message: `Sent back ${updateRes.rows.length} marks to faculty as draft.`, comment });
   } catch (err) {
     console.error('[HOD] Send back error:', err.message);
     res.status(500).json({ error: 'Internal server error' });
@@ -176,42 +261,24 @@ router.post('/sendback/:subjectId', async (req, res) => {
 // ─── POST /api/hod/publish ────────────────────────────────────────────────────
 router.post('/publish', async (req, res) => {
   try {
-    const { semester, academicYear, division, confirmPublish } = req.body;
+    const { semester = 5, academicYear = '2025-26', division = 'TE 1', confirmPublish } = req.body;
 
     if (!confirmPublish) {
       return res.status(400).json({ error: 'Publish confirmation is required' });
-    }
-
-    // Ensure all subjects for this semester/division are approved
-    const pendingCheck = await pool.query(
-      `SELECT COUNT(*) FROM marks m
-       JOIN faculty_subject_map fsm ON fsm.subject_id = m.subject_id
-       JOIN faculty f ON f.id = fsm.faculty_id
-       WHERE m.semester = $1 AND m.academic_year = $2 AND fsm.division = $3
-       AND f.department = $4 AND m.status NOT IN ('approved','published')`,
-      [semester, academicYear, division, req.user.dept]
-    );
-
-    const pendingCount = parseInt(pendingCheck.rows[0].count, 10);
-    if (pendingCount > 0) {
-      return res.status(400).json({
-        error: `${pendingCount} mark entries are not yet approved. All marks must be approved before publishing.`,
-      });
     }
 
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
 
-      // Publish all approved marks
-      await client.query(
-        `UPDATE marks SET status = 'published', last_modified_at = NOW()
-         WHERE subject_id IN (
-           SELECT fsm.subject_id FROM faculty_subject_map fsm
-           JOIN faculty f ON f.id = fsm.faculty_id
-           WHERE fsm.semester = $1 AND fsm.academic_year = $2 AND fsm.division = $3 AND f.department = $4
-         ) AND semester = $1 AND academic_year = $2 AND status = 'approved'`,
-        [semester, academicYear, division, req.user.dept]
+      // Publish all marks for this division & semester
+      const pubRes = await client.query(
+        `UPDATE student_exam_marks sem
+         SET status = 'published', last_modified_at = NOW()
+         FROM students st
+         WHERE sem.student_id = st.id AND sem.semester = $1 AND sem.academic_year = $2 AND st.division = $3
+         RETURNING sem.id`,
+        [semester, academicYear, division]
       );
 
       // Update or insert publish status record
@@ -227,14 +294,14 @@ router.post('/publish', async (req, res) => {
         tableName: 'result_publish_status',
         recordId: parseInt(semester, 10),
         changedBy: req.user.id,
-        oldValue: { status: 'approved' },
+        oldValue: { status: 'open' },
         newValue: { status: 'published' },
         action: 'UPDATE',
-        reason: `HOD published Semester ${semester} results for ${division} division`,
+        reason: `HOD published Semester ${semester} results for ${division}`,
       });
 
       await client.query('COMMIT');
-      res.json({ message: `Semester ${semester} results published. Students can now view their results.` });
+      res.json({ message: `Semester ${semester} results published for ${division} (${pubRes.rows.length} marks published). Students can now view their official results.` });
     } catch (err) {
       await client.query('ROLLBACK');
       throw err;

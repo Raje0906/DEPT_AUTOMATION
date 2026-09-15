@@ -1,23 +1,23 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api/axios';
 import { StatusBadge } from '../../components/ResultTable';
-import { ALL_CLASSES } from '../../utils/academicClasses';
 
 export default function ResultGeneration() {
   const [data, setData]                 = useState(null);
   const [loading, setLoading]           = useState(true);
-  const [academicYear, setAcademicYear] = useState('');
-  const [selectedYearFilter, setSelectedYearFilter] = useState('ALL'); // 'ALL' | 'SE' | 'TE' | 'BE'
-  const [selectedClassFilter, setSelectedClassFilter] = useState('ALL');
+  const [academicYear, setAcademicYear] = useState('2025-26');
+  const [selectedSemFilter, setSelectedSemFilter] = useState('5'); // Default to Sem 5 (TE Sem 1 AY 2025-26)
+  const [selectedDivFilter, setSelectedDivFilter] = useState('ALL');
+  const [viewMode, setViewMode]         = useState('grouped'); // 'grouped' (1 card per subject) | 'cards' (individual)
 
   const fetchSubjects = (year) => {
     setLoading(true);
-    const url = year ? `/faculty/subjects?academic_year=${encodeURIComponent(year)}` : '/faculty/subjects';
+    const url = `/faculty/subjects?academic_year=${encodeURIComponent(year || '2025-26')}`;
     api.get(url)
       .then(res => {
         setData(res.data);
-        if (!academicYear && res.data.selectedYear) {
+        if (res.data.selectedYear) {
           setAcademicYear(res.data.selectedYear);
         }
       })
@@ -30,183 +30,256 @@ export default function ResultGeneration() {
   }, [academicYear]);
 
   const allSubjects   = data?.subjects || [];
-  const academicYears = data?.academicYears || [];
+  const academicYears = data?.academicYears?.length > 0 ? data.academicYears : ['2025-26', '2024-25'];
 
-  // Filter subjects based on Year and Class
-  const filteredSubjects = allSubjects.filter(s => {
-    const sem = parseInt(s.semester, 10);
-    if (selectedYearFilter === 'SE' && sem !== 3 && sem !== 4) return false;
-    if (selectedYearFilter === 'TE' && sem !== 5 && sem !== 6) return false;
-    if (selectedYearFilter === 'BE' && sem !== 7 && sem !== 8) return false;
-    if (selectedClassFilter !== 'ALL' && s.division !== selectedClassFilter) return false;
-    return true;
-  });
+  // Filter subjects based on Semester and Division
+  const filteredSubjects = useMemo(() => {
+    return allSubjects.filter(s => {
+      if (selectedSemFilter !== 'ALL' && String(s.semester) !== String(selectedSemFilter)) {
+        return false;
+      }
+      if (selectedDivFilter !== 'ALL' && s.division !== selectedDivFilter) {
+        return false;
+      }
+      return true;
+    });
+  }, [allSubjects, selectedSemFilter, selectedDivFilter]);
 
-  const pending = filteredSubjects.filter(s => s.submission_status === 'not_started' || s.submission_status === 'draft');
+  // Group by unique Subject (consolidating multiple divisions into one card)
+  const groupedSubjects = useMemo(() => {
+    const map = new Map();
+    for (const s of filteredSubjects) {
+      const key = `${s.id}-${s.semester}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          id: s.id,
+          code: s.code,
+          name: s.name,
+          semester: s.semester,
+          credits: s.credits,
+          subject_type: s.subject_type,
+          academic_year: s.academic_year,
+          divisions: []
+        });
+      }
+      map.get(key).divisions.push({
+        division: s.division,
+        map_id: s.map_id,
+        submission_status: s.submission_status,
+        enrolled_count: s.enrolled_count,
+        marks_entered: s.marks_entered,
+        academic_year: s.academic_year
+      });
+    }
+    return Array.from(map.values());
+  }, [filteredSubjects]);
 
   return (
-    <div className="p-8 lg:p-10 w-full max-w-7xl mx-auto">
+    <div className="p-6 lg:p-10 w-full max-w-7xl mx-auto">
       {/* Page Header */}
-      <div className="mb-8 pb-5 border-b border-rule flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="mb-8 pb-5 border-b border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="font-serif text-3xl font-bold text-ink">Result Generation</h1>
-          <p className="text-base text-draft mt-1 font-medium">
-            Enter Continuous Internal Evaluation (CIE), Practical &amp; End-Sem marks to generate student results
+          <h1 className="font-serif text-3xl font-bold text-gray-900">Result Generation &amp; Marks Entry</h1>
+          <p className="text-sm text-gray-500 mt-1 font-medium">
+            Manage evaluations across 8 exam types (Unit Tests, Insem, Mock Exams, Term Work, Practical &amp; End-Sem).
           </p>
         </div>
 
         {/* Academic Year Selector */}
-        {academicYears.length > 0 && (
-          <div className="flex items-center gap-2">
-            <label htmlFor="academic-year-select" className="text-xs font-semibold text-draft uppercase tracking-wider">
-              Academic Year:
-            </label>
-            <select
-              id="academic-year-select"
-              value={academicYear || data?.selectedYear || ''}
-              onChange={(e) => setAcademicYear(e.target.value)}
-              className="px-3 py-1.5 bg-white border border-rule rounded text-xs font-semibold text-ink focus:outline-none focus:ring-1 focus:ring-maroon"
-            >
-              {academicYears.map((yr) => (
-                <option key={yr} value={yr}>{yr}</option>
-              ))}
-            </select>
-          </div>
-        )}
-      </div>
-
-      {/* Filter Bar: SE / TE / BE & Class */}
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-6 bg-white p-4 rounded border border-rule">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-draft uppercase tracking-wider mr-1">Filter by Year:</span>
-          {['ALL', 'SE', 'TE', 'BE'].map((yr) => (
-            <button
-              key={yr}
-              onClick={() => {
-                setSelectedYearFilter(yr);
-                setSelectedClassFilter('ALL');
-              }}
-              className={`px-3 py-1 text-xs font-semibold rounded transition-colors ${
-                selectedYearFilter === yr
-                  ? 'bg-maroon text-white shadow-sm'
-                  : 'bg-gray-100 text-ink hover:bg-gray-200'
-              }`}
-            >
-              {yr === 'ALL' ? 'All Classes' : `${yr} Classes`}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <label htmlFor="class-filter" className="text-xs font-bold text-draft uppercase tracking-wider">
-            Class:
+        <div className="flex items-center gap-3">
+          <label htmlFor="academic-year-select" className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            Academic Year:
           </label>
           <select
-            id="class-filter"
-            value={selectedClassFilter}
-            onChange={(e) => setSelectedClassFilter(e.target.value)}
-            className="px-3 py-1.5 bg-white border border-rule rounded text-xs font-semibold text-ink focus:outline-none focus:ring-1 focus:ring-maroon"
+            id="academic-year-select"
+            value={academicYear}
+            onChange={(e) => setAcademicYear(e.target.value)}
+            className="px-3 py-1.5 bg-white border border-gray-300 rounded-md text-sm font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
-            <option value="ALL">All 4 Classes</option>
-            {ALL_CLASSES.filter(c => {
-              if (selectedYearFilter === 'SE') return c.startsWith('SE');
-              if (selectedYearFilter === 'TE') return c.startsWith('TE');
-              if (selectedYearFilter === 'BE') return c.startsWith('BE');
-              return true;
-            }).map((cls) => (
-              <option key={cls} value={cls}>{cls}</option>
+            {academicYears.map((yr) => (
+              <option key={yr} value={yr}>{yr}</option>
             ))}
           </select>
         </div>
       </div>
 
-      {/* Action Required Banner */}
-      {pending.length > 0 && (
-        <div className="notification-strip mb-8 py-3.5 px-5 text-sm">
-          <span className="text-xs font-bold text-navy uppercase tracking-wider mr-2.5 bg-blue-100 px-2 py-0.5 rounded">
-            Action required
-          </span>
-          <span className="font-medium text-ink">
-            {pending.length} subject{pending.length > 1 ? 's have' : ' has'} marks not yet submitted for selected classes.
-          </span>
+      {/* Control Bar: Filters and Layout Mode */}
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+        {/* Semester Filter */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-gray-500 uppercase tracking-wider mr-1">Semester:</span>
+          {[
+            { label: 'Sem 5 (Current)', val: '5' },
+            { label: 'Sem 6', val: '6' },
+            { label: 'All Semesters', val: 'ALL' }
+          ].map((sem) => (
+            <button
+              key={sem.val}
+              onClick={() => setSelectedSemFilter(sem.val)}
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                selectedSemFilter === sem.val
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {sem.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Division Filter */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-gray-500 uppercase tracking-wider mr-1">Division:</span>
+          {['ALL', 'TE 1', 'TE 2', 'TE 3'].map((div) => (
+            <button
+              key={div}
+              onClick={() => setSelectedDivFilter(div)}
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                selectedDivFilter === div
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {div === 'ALL' ? 'All' : div}
+            </button>
+          ))}
+        </div>
+
+        {/* Layout Toggle */}
+        <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg border border-gray-200">
+          <button
+            onClick={() => setViewMode('grouped')}
+            className={`px-3 py-1 text-xs font-semibold rounded transition-all ${
+              viewMode === 'grouped' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+            }`}
+            title="Consolidate multiple divisions of the same subject into one card"
+          >
+            📑 Grouped by Subject
+          </button>
+          <button
+            onClick={() => setViewMode('cards')}
+            className={`px-3 py-1 text-xs font-semibold rounded transition-all ${
+              viewMode === 'cards' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+            }`}
+            title="Show each division as a separate card"
+          >
+            🗂️ Separate Cards
+          </button>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      {loading ? (
+        <div className="text-center py-20 text-gray-500 text-sm font-medium">Loading assigned subjects...</div>
+      ) : filteredSubjects.length === 0 ? (
+        <div className="bg-white border border-gray-200 rounded-xl p-12 text-center text-gray-500">
+          <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3 text-xl">📚</div>
+          <p className="text-base font-semibold text-gray-800">No subjects found matching selected filters</p>
+          <p className="text-xs text-gray-400 mt-1">Try switching to "All Semesters" or "All Divisions".</p>
+        </div>
+      ) : viewMode === 'grouped' ? (
+        /* ─── GROUPED VIEW: 1 Card per Subject with Division Selectors ─── */
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {groupedSubjects.map((sub) => (
+            <div
+              key={sub.id}
+              className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+            >
+              <div>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <span className="text-xs font-mono font-bold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded border border-indigo-100">
+                    {sub.code}
+                  </span>
+                  <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                    Sem {sub.semester} · {sub.credits} Credits · <span className="capitalize">{sub.subject_type}</span>
+                  </span>
+                </div>
+
+                <h3 className="font-serif font-bold text-xl text-gray-950 mt-2">{sub.name}</h3>
+                <p className="text-xs text-gray-500 mt-1">
+                  You are assigned to evaluate <strong>{sub.divisions.length}</strong> {sub.divisions.length === 1 ? 'division' : 'divisions'} for this subject.
+                </p>
+
+                {/* Division Action Matrix */}
+                <div className="mt-5 space-y-2.5">
+                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
+                    Assigned Divisions — Select to Enter / Edit Marks:
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    {sub.divisions.map((divInfo) => {
+                      const marksUrl = `/faculty/marks/${sub.id}?sem=${sub.semester}&ay=${encodeURIComponent(divInfo.academic_year || academicYear)}&div=${encodeURIComponent(divInfo.division)}`;
+                      return (
+                        <Link
+                          key={divInfo.division}
+                          to={marksUrl}
+                          className="flex flex-col justify-between p-3 bg-gray-50 hover:bg-indigo-50 border border-gray-200 hover:border-indigo-300 rounded-lg transition-all group shadow-2xs hover:shadow-sm"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-bold text-gray-900 group-hover:text-indigo-800">
+                              Div {divInfo.division}
+                            </span>
+                            <StatusBadge status={divInfo.submission_status} />
+                          </div>
+                          <div className="mt-3 pt-2 border-t border-gray-200/60 flex items-center justify-between text-xs text-gray-500">
+                            <span>{divInfo.marks_entered || 0} marks</span>
+                            <span className="font-bold text-indigo-600 group-hover:translate-x-0.5 transition-transform">
+                              Enter →
+                            </span>
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        /* ─── FLAT CARD VIEW: 1 Card per (Subject, Division) ─── */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredSubjects.map((sub) => {
+            const marksUrl = `/faculty/marks/${sub.id}?sem=${sub.semester}&ay=${encodeURIComponent(sub.academic_year)}&div=${encodeURIComponent(sub.division)}`;
+
+            return (
+              <div key={sub.map_id || `${sub.id}-${sub.division}`} className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+                <div>
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <span className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                      {sub.code}
+                    </span>
+                    <span className="text-xs font-bold text-gray-800 bg-gray-100 px-2 py-0.5 rounded border border-gray-200">
+                      Div {sub.division}
+                    </span>
+                  </div>
+                  <h3 className="font-serif font-bold text-lg text-gray-900 line-clamp-2">{sub.name}</h3>
+                  <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
+                    <span>Sem {sub.semester}</span>
+                    <span>•</span>
+                    <span>{sub.credits} Credits</span>
+                    <span>•</span>
+                    <span className="capitalize">{sub.subject_type}</span>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
+                    <span className="text-gray-500">Status:</span>
+                    <StatusBadge status={sub.submission_status} />
+                  </div>
+                </div>
+
+                <div className="mt-5 pt-3 border-t border-gray-100">
+                  <Link
+                    to={marksUrl}
+                    className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
+                  >
+                    ✏️ Enter / Edit Marks
+                  </Link>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
-
-      {/* Main Table Panel */}
-      <div className="panel">
-        <div className="panel-header flex items-center justify-between">
-          <h2 className="font-serif text-xl font-semibold">
-            Assigned Subjects — {academicYear || data?.selectedYear || '2025-26'}
-          </h2>
-          <span className="text-xs font-medium text-draft bg-gray-100 px-2.5 py-1 rounded">
-            {filteredSubjects.length} courses displayed
-          </span>
-        </div>
-
-        {loading ? (
-          <div className="p-8 text-sm text-draft">Loading subjects…</div>
-        ) : filteredSubjects.length === 0 ? (
-          <div className="empty-state py-12 text-center">
-            <p className="text-base text-draft">
-              No subjects found for selected filters ({selectedYearFilter} · {selectedClassFilter}).
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="result-table w-full">
-              <thead>
-                <tr>
-                  <th>Subject</th>
-                  <th>Code</th>
-                  <th className="numeric">Semester</th>
-                  <th>Class</th>
-                  <th className="numeric">Enrolled</th>
-                  <th className="numeric">Marks entered</th>
-                  <th>Status</th>
-                  <th className="text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredSubjects.map((s, i) => (
-                  <tr key={s.map_id || i}>
-                    <td className="font-semibold text-ink text-base">{s.name}</td>
-                    <td className="font-mono text-sm font-bold text-draft">{s.code}</td>
-                    <td className="numeric font-medium text-base">Sem {s.semester}</td>
-                    <td>
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-50 text-blue-900 border border-blue-200">
-                        {s.division}
-                      </span>
-                    </td>
-                    <td className="numeric font-medium text-base">{s.enrolled_count}</td>
-                    <td className="numeric font-semibold text-base">
-                      {s.marks_entered} / {s.enrolled_count}
-                    </td>
-                    <td><StatusBadge status={s.submission_status} /></td>
-                    <td className="text-right">
-                      {(s.submission_status === 'draft' || s.submission_status === 'not_started') && (
-                        <Link
-                          to={`/faculty/marks/${s.id}?sem=${s.semester}&ay=${s.academic_year}&div=${encodeURIComponent(s.division)}`}
-                          className="inline-flex items-center px-4 py-1.5 bg-maroon hover:bg-[#4E1C27] text-white text-xs font-semibold rounded shadow-sm transition-colors"
-                        >
-                          Enter marks →
-                        </Link>
-                      )}
-                      {(s.submission_status === 'submitted' || s.submission_status === 'approved' || s.submission_status === 'published') && (
-                        <Link
-                          to={`/faculty/marks/${s.id}?sem=${s.semester}&ay=${s.academic_year}&div=${encodeURIComponent(s.division)}`}
-                          className="inline-flex items-center px-4 py-1.5 border border-rule hover:bg-gray-100 text-ink text-xs font-medium rounded transition-colors"
-                        >
-                          View marks
-                        </Link>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
     </div>
   );
 }
