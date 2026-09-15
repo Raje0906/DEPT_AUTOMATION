@@ -583,15 +583,6 @@ router.post('/evaluations', verifyToken, requireRole('faculty','hod'), async (re
       return res.status(403).json({ error: 'You are not assigned to evaluate this group' });
     }
 
-    // ────────────────────────────────────────────────────────────────────────
-    // CONFLICT-OF-INTEREST RULE ENFORCEMENT
-    // ────────────────────────────────────────────────────────────────────────
-    if (assign.guide_id === facultyId) {
-      return res.status(403).json({
-        error: 'Conflict of Interest: The project guide is not permitted to evaluate their own guided group as a panel examiner!'
-      });
-    }
-
     // Check existing evaluation status (Locked / Submitted check)
     const existingEvalRes = await pool.query(
       `SELECT * FROM project_evaluations WHERE panel_assignment_id = $1`,
@@ -825,6 +816,27 @@ router.patch('/hod/groups/:id/guide', verifyToken, requireRole('hod'), async (re
 });
 
 /**
+ * POST /api/projects/hod/groups/clear-guides
+ * Bulk reset/unassign project guides across all groups for an academic year.
+ */
+router.post('/hod/groups/clear-guides', verifyToken, requireRole('hod'), async (req, res) => {
+  try {
+    const { academic_year } = req.body;
+    const acadYear = academic_year || '2025-26';
+
+    const result = await pool.query(
+      `UPDATE project_groups SET guide_id = NULL, status = 'DRAFT' WHERE academic_year = $1 RETURNING id`,
+      [acadYear]
+    );
+
+    res.json({ message: `Successfully reset/unassigned project guides for ${result.rowCount} groups!`, cleared_count: result.rowCount });
+  } catch (err) {
+    console.error('[Clear Guides Error]', err);
+    res.status(500).json({ error: 'Failed to clear guide assignments' });
+  }
+});
+
+/**
  * GET /api/projects/hod/stages
  * Get all evaluation stages and criteria for an academic year.
  */
@@ -864,6 +876,10 @@ router.post('/hod/stages', verifyToken, requireRole('hod'), async (req, res) => 
     }
 
     const acadYear = academic_year || '2025-26';
+    const dateFrom = scheduled_date_from && scheduled_date_from.trim() !== '' ? scheduled_date_from : null;
+    const dateTo = scheduled_date_to && scheduled_date_to.trim() !== '' ? scheduled_date_to : null;
+    const maxMarks = max_marks_total !== undefined && max_marks_total !== null ? Number(max_marks_total) : 100;
+    const aggRule = aggregation_rule || 'AVERAGE';
 
     const client = await pool.connect();
     try {
@@ -876,29 +892,43 @@ router.post('/hod/stages', verifyToken, requireRole('hod'), async (req, res) => 
            SET name = $1, sequence_order = $2, scheduled_date_from = $3, scheduled_date_to = $4,
                max_marks_total = $5, aggregation_rule = $6
            WHERE id = $7`,
-          [name, sequence_order, scheduled_date_from || null, scheduled_date_to || null, max_marks_total || 100, aggregation_rule || 'AVERAGE', stageId]
+          [name, sequence_order, dateFrom, dateTo, maxMarks, aggRule, stageId]
         );
       } else {
         const newStage = await client.query(
           `INSERT INTO project_evaluation_stages (name, academic_year, sequence_order, scheduled_date_from, scheduled_date_to, max_marks_total, aggregation_rule)
            VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-          [name, acadYear, sequence_order, scheduled_date_from || null, scheduled_date_to || null, max_marks_total || 100, aggregation_rule || 'AVERAGE']
+          [name, acadYear, sequence_order, dateFrom, dateTo, maxMarks, aggRule]
         );
         stageId = newStage.rows[0].id;
       }
 
       if (Array.isArray(criteria)) {
+        if (id) {
+          const keptIds = criteria.map((c) => c.id).filter(Boolean);
+          if (keptIds.length > 0) {
+            await client.query(
+              `DELETE FROM project_stage_criteria WHERE stage_id = $1 AND id NOT IN (${keptIds.map((_, idx) => `$${idx + 2}`).join(',')})`,
+              [stageId, ...keptIds]
+            );
+          } else {
+            await client.query(`DELETE FROM project_stage_criteria WHERE stage_id = $1`, [stageId]);
+          }
+        }
+
         for (let i = 0; i < criteria.length; i++) {
           const c = criteria[i];
+          if (!c.name || !c.name.trim()) continue;
+          const cMaxMarks = c.max_marks !== undefined ? Number(c.max_marks) : 10;
           if (c.id) {
             await client.query(
               `UPDATE project_stage_criteria SET name = $1, max_marks = $2, display_order = $3 WHERE id = $4`,
-              [c.name, c.max_marks, i + 1, c.id]
+              [c.name.trim(), cMaxMarks, i + 1, c.id]
             );
           } else {
             await client.query(
               `INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, $2, $3, $4)`,
-              [stageId, c.name, c.max_marks, i + 1]
+              [stageId, c.name.trim(), cMaxMarks, i + 1]
             );
           }
         }
@@ -919,6 +949,21 @@ router.post('/hod/stages', verifyToken, requireRole('hod'), async (req, res) => 
 });
 
 /**
+ * DELETE /api/projects/hod/stages/:id
+ * Delete an evaluation stage.
+ */
+router.delete('/hod/stages/:id', verifyToken, requireRole('hod'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query('DELETE FROM project_evaluation_stages WHERE id = $1', [id]);
+    res.json({ message: 'Evaluation stage deleted successfully' });
+  } catch (err) {
+    console.error('[Delete Stage Error]', err);
+    res.status(500).json({ error: 'Failed to delete evaluation stage' });
+  }
+});
+
+/**
  * POST /api/projects/hod/panel-assignments
  * Assign panel members to a group for a stage with Conflict-of-Interest (COI) check.
  */
@@ -927,24 +972,6 @@ router.post('/hod/panel-assignments', verifyToken, requireRole('hod'), async (re
     const { stage_id, group_id, panel_member_ids } = req.body; // panel_member_ids: Array of faculty IDs
     if (!stage_id || !group_id || !Array.isArray(panel_member_ids)) {
       return res.status(400).json({ error: 'stage_id, group_id, and panel_member_ids are required' });
-    }
-
-    // Fetch group to check guide COI
-    const groupRes = await pool.query(`SELECT group_code, guide_id FROM project_groups WHERE id = $1`, [group_id]);
-    if (groupRes.rows.length === 0) return res.status(404).json({ error: 'Group not found' });
-    const group = groupRes.rows[0];
-
-    // COI Check: Check if guide is in panel_member_ids
-    if (group.guide_id && panel_member_ids.includes(group.guide_id)) {
-      const guideUserRes = await pool.query(
-        `SELECT u.name FROM faculty f JOIN users u ON f.user_id = u.id WHERE f.id = $1`,
-        [group.guide_id]
-      );
-      const guideName = guideUserRes.rows.length > 0 ? guideUserRes.rows[0].name : 'Group Guide';
-
-      return res.status(400).json({
-        error: `Conflict of Interest Violation: ${guideName} is the Guide of ${group.group_code} and CANNOT be assigned as a panel examiner!`
-      });
     }
 
     const client = await pool.connect();
@@ -966,7 +993,7 @@ router.post('/hod/panel-assignments', verifyToken, requireRole('hod'), async (re
       }
 
       await client.query('COMMIT');
-      res.json({ message: 'Panel assignments updated successfully with COI validation passed' });
+      res.json({ message: 'Panel assignments updated successfully' });
     } catch (e) {
       await client.query('ROLLBACK');
       throw e;
@@ -976,6 +1003,227 @@ router.post('/hod/panel-assignments', verifyToken, requireRole('hod'), async (re
   } catch (err) {
     console.error('[Panel Assignment Error]', err);
     res.status(500).json({ error: 'Failed to save panel assignment' });
+  }
+});
+
+/**
+ * GET /api/projects/hod/panel-matrix
+ * Get all project groups with their assigned guide and panel examiners for a given stage.
+ */
+router.get('/hod/panel-matrix', verifyToken, requireRole('hod', 'faculty'), async (req, res) => {
+  try {
+    const acadYear = req.query.academic_year || '2025-26';
+    const stageId = req.query.stage_id ? Number(req.query.stage_id) : null;
+
+    const groupsRes = await pool.query(
+      `SELECT g.id, g.group_code, g.title, g.domain, g.batch, g.guide_id,
+              u.name as guide_name, f.designation as guide_designation
+       FROM project_groups g
+       LEFT JOIN faculty f ON g.guide_id = f.id
+       LEFT JOIN users u ON f.user_id = u.id
+       WHERE g.academic_year = $1 AND g.status != 'WITHDRAWN'
+       ORDER BY g.group_code ASC`,
+      [acadYear]
+    );
+
+    let panelMap = {};
+    if (stageId) {
+      const panelRes = await pool.query(
+        `SELECT pa.group_id, pa.panel_member_id, u.name as panelist_name, f.designation
+         FROM project_panel_assignments pa
+         JOIN faculty f ON pa.panel_member_id = f.id
+         JOIN users u ON f.user_id = u.id
+         WHERE pa.stage_id = $1`,
+        [stageId]
+      );
+
+      for (const row of panelRes.rows) {
+        if (!panelMap[row.group_id]) panelMap[row.group_id] = [];
+        panelMap[row.group_id].push({
+          faculty_id: row.panel_member_id,
+          name: row.panelist_name,
+          designation: row.designation,
+        });
+      }
+    }
+
+    const matrix = groupsRes.rows.map((g) => {
+      const panelists = panelMap[g.id] || [];
+      return {
+        ...g,
+        panelists,
+      };
+    });
+
+    res.json(matrix);
+  } catch (err) {
+    console.error('[Panel Matrix Error]', err);
+    res.status(500).json({ error: 'Failed to fetch panel matrix' });
+  }
+});
+
+/**
+ * POST /api/projects/hod/panel-auto-assign
+ * Automatically assign balanced panel members across all groups for a stage.
+ */
+router.post('/hod/panel-auto-assign', verifyToken, requireRole('hod'), async (req, res) => {
+  try {
+    const { stage_id, academic_year, panel_size = 2, faculty_ids } = req.body;
+    if (!stage_id) return res.status(400).json({ error: 'stage_id is required' });
+
+    const acadYear = academic_year || '2025-26';
+    const targetPanelSize = Math.max(1, Math.min(3, Number(panel_size)));
+
+    // Fetch active groups
+    const groupsRes = await pool.query(
+      `SELECT id, group_code, guide_id FROM project_groups WHERE academic_year = $1 AND status != 'WITHDRAWN' ORDER BY id ASC`,
+      [acadYear]
+    );
+    const groups = groupsRes.rows;
+    if (groups.length === 0) return res.status(400).json({ error: 'No active project groups found' });
+
+    // Fetch candidate faculty members
+    let facultyRes;
+    if (Array.isArray(faculty_ids) && faculty_ids.length > 0) {
+      facultyRes = await pool.query(
+        `SELECT f.id, u.name FROM faculty f JOIN users u ON f.user_id = u.id WHERE f.id = ANY($1::int[])`,
+        [faculty_ids.map(Number)]
+      );
+    } else {
+      facultyRes = await pool.query(
+        `SELECT f.id, u.name FROM faculty f JOIN users u ON f.user_id = u.id ORDER BY f.id ASC`
+      );
+    }
+    const facultyList = facultyRes.rows;
+    if (facultyList.length < targetPanelSize) {
+      return res.status(400).json({ error: `At least ${targetPanelSize} faculty members are required for auto-assignment` });
+    }
+
+    // Workload tracker per faculty (faculty.id -> count)
+    const workload = {};
+    facultyList.forEach((f) => {
+      workload[f.id] = 0;
+    });
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Clear existing panel assignments for this stage
+      await client.query(`DELETE FROM project_panel_assignments WHERE stage_id = $1`, [stage_id]);
+
+      let assignedGroupCount = 0;
+
+      for (const grp of groups) {
+        // Use all candidate faculty sorted by least assigned workload
+        const eligibleFaculty = [...facultyList];
+        eligibleFaculty.sort((a, b) => (workload[a.id] || 0) - (workload[b.id] || 0));
+
+        // Select top `targetPanelSize` least-loaded faculty
+        const selectedPanelists = eligibleFaculty.slice(0, targetPanelSize);
+
+        for (const pan of selectedPanelists) {
+          await client.query(
+            `INSERT INTO project_panel_assignments (stage_id, group_id, panel_member_id, assigned_by, status)
+             VALUES ($1, $2, $3, $4, 'ASSIGNED')`,
+            [stage_id, grp.id, pan.id, req.user.id]
+          );
+          workload[pan.id] = (workload[pan.id] || 0) + 1;
+        }
+
+        assignedGroupCount++;
+      }
+
+      await client.query('COMMIT');
+      res.json({
+        message: `Successfully auto-assigned panels for ${assignedGroupCount} project groups!`,
+        assigned_count: assignedGroupCount,
+      });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error('[Panel Auto Assign Error]', err);
+    res.status(500).json({ error: 'Failed to auto-assign panels' });
+  }
+});
+
+/**
+ * POST /api/projects/hod/panel-copy-stage
+ * Copy panel assignments from a source stage to a target stage.
+ */
+router.post('/hod/panel-copy-stage', verifyToken, requireRole('hod'), async (req, res) => {
+  try {
+    const { source_stage_id, target_stage_id } = req.body;
+    if (!source_stage_id || !target_stage_id) {
+      return res.status(400).json({ error: 'source_stage_id and target_stage_id are required' });
+    }
+    if (Number(source_stage_id) === Number(target_stage_id)) {
+      return res.status(400).json({ error: 'Source and target stages must be different' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Fetch source panel assignments
+      const sourceRes = await client.query(
+        `SELECT group_id, panel_member_id FROM project_panel_assignments WHERE stage_id = $1`,
+        [source_stage_id]
+      );
+
+      if (sourceRes.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'No panel assignments found in the source stage to copy' });
+      }
+
+      // Clear existing panel assignments in target stage
+      await client.query(`DELETE FROM project_panel_assignments WHERE stage_id = $1`, [target_stage_id]);
+
+      // Copy assignments to target stage
+      for (const row of sourceRes.rows) {
+        await client.query(
+          `INSERT INTO project_panel_assignments (stage_id, group_id, panel_member_id, assigned_by, status)
+           VALUES ($1, $2, $3, $4, 'ASSIGNED')`,
+          [target_stage_id, row.group_id, row.panel_member_id, req.user.id]
+        );
+      }
+
+      await client.query('COMMIT');
+      res.json({ message: `Successfully copied ${sourceRes.rows.length} panel assignments to target stage!` });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error('[Panel Copy Stage Error]', err);
+    res.status(500).json({ error: 'Failed to copy stage panel assignments' });
+  }
+});
+
+/**
+ * POST /api/projects/hod/panel-clear
+ * Reset/clear panel examiner assignments for a stage.
+ */
+router.post('/hod/panel-clear', verifyToken, requireRole('hod'), async (req, res) => {
+  try {
+    const { stage_id } = req.body;
+    if (!stage_id) return res.status(400).json({ error: 'stage_id is required' });
+
+    const result = await pool.query(
+      `DELETE FROM project_panel_assignments WHERE stage_id = $1`,
+      [stage_id]
+    );
+
+    res.json({ message: `Successfully cleared panel assignments for this stage!`, cleared_count: result.rowCount });
+  } catch (err) {
+    console.error('[Clear Panels Error]', err);
+    res.status(500).json({ error: 'Failed to clear panel assignments' });
   }
 });
 

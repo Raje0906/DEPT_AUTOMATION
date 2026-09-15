@@ -216,46 +216,48 @@ async function seed() {
     // ─── BE PROJECT EVALUATION SEEDING ────────────────────────────────────────
     console.log('[Seed] Seeding BE Project Evaluation stages, criteria, and groups...');
 
+    await client.query(`
+      TRUNCATE project_score_releases, project_evaluation_scores, project_evaluations,
+               project_panel_assignments, project_guide_requests, project_group_members,
+               project_groups, project_stage_criteria, project_evaluation_stages
+      RESTART IDENTITY CASCADE;
+    `);
+
     // 1. Evaluation Stages
     const stage1 = await client.query(`
       INSERT INTO project_evaluation_stages (name, academic_year, sequence_order, scheduled_date_from, scheduled_date_to, max_marks_total, aggregation_rule, is_active)
-      VALUES ('Synopsis Review', '2025-26', 1, '2025-08-01', '2025-08-15', 100, 'AVERAGE', true)
+      VALUES ('Internal Presentation', '2025-26', 1, '2025-08-01', '2025-08-15', 50, 'AVERAGE', true)
       RETURNING id
     `);
     const stage1Id = stage1.rows[0].id;
 
     const stage2 = await client.query(`
       INSERT INTO project_evaluation_stages (name, academic_year, sequence_order, scheduled_date_from, scheduled_date_to, max_marks_total, aggregation_rule, is_active)
-      VALUES ('Mid-Term Review (Phase I)', '2025-26', 2, '2025-10-15', '2025-10-30', 100, 'AVERAGE', true)
+      VALUES ('Mid-Term Review (Phase I)', '2025-26', 2, '2025-10-15', '2025-10-30', 50, 'AVERAGE', true)
       RETURNING id
     `);
     const stage2Id = stage2.rows[0].id;
 
     const stage3 = await client.query(`
       INSERT INTO project_evaluation_stages (name, academic_year, sequence_order, scheduled_date_from, scheduled_date_to, max_marks_total, aggregation_rule, is_active)
-      VALUES ('Final Presentation & Viva (Phase II)', '2025-26', 3, '2026-04-10', '2026-04-25', 100, 'AVERAGE', true)
+      VALUES ('Final Presentation & Viva (Phase II)', '2025-26', 3, '2026-04-10', '2026-04-25', 50, 'AVERAGE', true)
       RETURNING id
     `);
     const stage3Id = stage3.rows[0].id;
 
-    // 2. Stage Criteria
-    // Stage 1 Criteria
-    const s1c1 = await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'Problem Statement & Objectives', 25, 1) RETURNING id`, [stage1Id]);
-    const s1c2 = await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'Literature Review & Scope', 25, 2) RETURNING id`, [stage1Id]);
-    const s1c3 = await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'Proposed Methodology', 30, 3) RETURNING id`, [stage1Id]);
-    const s1c4 = await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'Presentation & Viva', 20, 4) RETURNING id`, [stage1Id]);
+    // 2. Stage Criteria (Attendance, Presentation, Subject Understanding, Publication, Viva - 10 marks each = Total 50)
+    async function seedCriteriaForStage(stageId) {
+      const c1 = await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'Attendance', 10, 1) RETURNING id`, [stageId]);
+      const c2 = await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'Presentation', 10, 2) RETURNING id`, [stageId]);
+      const c3 = await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'Subject Understanding', 10, 3) RETURNING id`, [stageId]);
+      const c4 = await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'Publication', 10, 4) RETURNING id`, [stageId]);
+      const c5 = await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'Viva', 10, 5) RETURNING id`, [stageId]);
+      return [c1.rows[0].id, c2.rows[0].id, c3.rows[0].id, c4.rows[0].id, c5.rows[0].id];
+    }
 
-    // Stage 2 Criteria
-    const s2c1 = await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'System Architecture & Design', 30, 1) RETURNING id`, [stage2Id]);
-    const s2c2 = await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'Module Implementation Progress', 30, 2) RETURNING id`, [stage2Id]);
-    const s2c3 = await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'Toolchain & Test Bench Setup', 20, 3) RETURNING id`, [stage2Id]);
-    const s2c4 = await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'Viva & Q&A', 20, 4) RETURNING id`, [stage2Id]);
-
-    // Stage 3 Criteria
-    await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'Full Prototype & Working Demo', 35, 1)`, [stage3Id]);
-    await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'Code Quality & Performance', 25, 2)`, [stage3Id]);
-    await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'Final Project Report / Paper', 20, 3)`, [stage3Id]);
-    await client.query(`INSERT INTO project_stage_criteria (stage_id, name, max_marks, display_order) VALUES ($1, 'Comprehensive Viva', 20, 4)`, [stage3Id]);
+    const [s1c1, s1c2, s1c3, s1c4, s1c5] = await seedCriteriaForStage(stage1Id);
+    const [s2c1, s2c2, s2c3, s2c4, s2c5] = await seedCriteriaForStage(stage2Id);
+    const [s3c1, s3c2, s3c3, s3c4, s3c5] = await seedCriteriaForStage(stage3Id);
 
     // 3. Project Groups
     // Group 1: Autonomous Drone Navigation (Guide: Rajan Mehta - facultyIds[0])
@@ -352,10 +354,11 @@ async function seed() {
       RETURNING id
     `, [paG1S1_P1.rows[0].id]);
     const eval1Id = eval1.rows[0].id;
-    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 23, 'Clear objectives')`, [eval1Id, s1c1.rows[0].id]);
-    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 22, 'Comprehensive survey')`, [eval1Id, s1c2.rows[0].id]);
-    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 26, 'Solid architecture')`, [eval1Id, s1c3.rows[0].id]);
-    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 18, 'Good viva performance')`, [eval1Id, s1c4.rows[0].id]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 9, '')`, [eval1Id, s1c1]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 8, '')`, [eval1Id, s1c2]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 9, '')`, [eval1Id, s1c3]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 8, '')`, [eval1Id, s1c4]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 9, '')`, [eval1Id, s1c5]);
 
     // G1 Stage 1 - Evaluator Arjun Sharma
     const eval2 = await client.query(`
@@ -364,10 +367,11 @@ async function seed() {
       RETURNING id
     `, [paG1S1_P2.rows[0].id]);
     const eval2Id = eval2.rows[0].id;
-    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 24, 'Well stated')`, [eval2Id, s1c1.rows[0].id]);
-    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 23, 'Good references')`, [eval2Id, s1c2.rows[0].id]);
-    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 27, 'Strong methodology')`, [eval2Id, s1c3.rows[0].id]);
-    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 19, 'Confident defense')`, [eval2Id, s1c4.rows[0].id]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 9, '')`, [eval2Id, s1c1]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 9, '')`, [eval2Id, s1c2]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 8, '')`, [eval2Id, s1c3]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 9, '')`, [eval2Id, s1c4]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 8, '')`, [eval2Id, s1c5]);
 
     // G1 Stage 2 - Evaluator Sunita Patil (Draft)
     const eval3 = await client.query(`
@@ -376,10 +380,11 @@ async function seed() {
       RETURNING id
     `, [paG1S2_P1.rows[0].id]);
     const eval3Id = eval3.rows[0].id;
-    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 27, 'Clean modular design')`, [eval3Id, s2c1.rows[0].id]);
-    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 25, 'Pipeline 70% complete')`, [eval3Id, s2c2.rows[0].id]);
-    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 17, 'Jetson board configured')`, [eval3Id, s2c3.rows[0].id]);
-    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 17, 'Satisfactory Q&A')`, [eval3Id, s2c4.rows[0].id]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 8, '')`, [eval3Id, s2c1]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 8, '')`, [eval3Id, s2c2]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 9, '')`, [eval3Id, s2c3]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 7, '')`, [eval3Id, s2c4]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 8, '')`, [eval3Id, s2c5]);
 
     // G2 Stage 1 - Evaluator Rajan Mehta
     const eval4 = await client.query(`
@@ -388,10 +393,11 @@ async function seed() {
       RETURNING id
     `, [paG2S1_P1.rows[0].id]);
     const eval4Id = eval4.rows[0].id;
-    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 22, 'Realistic problem statement')`, [eval4Id, s1c1.rows[0].id]);
-    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 21, 'Thorough lit survey')`, [eval4Id, s1c2.rows[0].id]);
-    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 24, 'Circuit design solid')`, [eval4Id, s1c3.rows[0].id]);
-    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 17, 'Clear slides')`, [eval4Id, s1c4.rows[0].id]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 9, '')`, [eval4Id, s1c1]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 8, '')`, [eval4Id, s1c2]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 9, '')`, [eval4Id, s1c3]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 8, '')`, [eval4Id, s1c4]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 8, '')`, [eval4Id, s1c5]);
 
     // G3 Stage 1 - Evaluator Rajan Mehta
     const eval5 = await client.query(`
@@ -400,10 +406,11 @@ async function seed() {
       RETURNING id
     `, [paG3S1_P1.rows[0].id]);
     const eval5Id = eval5.rows[0].id;
-    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 24, 'High industry relevance')`, [eval5Id, s1c1.rows[0].id]);
-    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 24, 'Thorough baseline comparison')`, [eval5Id, s1c2.rows[0].id]);
-    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 28, 'Excellent LSTM model choice')`, [eval5Id, s1c3.rows[0].id]);
-    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 18, 'Great presentation')`, [eval5Id, s1c4.rows[0].id]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 9, '')`, [eval5Id, s1c1]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 9, '')`, [eval5Id, s1c2]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 9, '')`, [eval5Id, s1c3]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 8, '')`, [eval5Id, s1c4]);
+    await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 9, '')`, [eval5Id, s1c5]);
 
     // 6. Release Scores for Stage 1 (Synopsis Review)
     await client.query(`

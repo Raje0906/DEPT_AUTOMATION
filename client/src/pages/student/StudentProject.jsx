@@ -352,11 +352,8 @@ export default function StudentProject() {
       <div className="bg-white p-6 border border-rule rounded shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-3">
-            <span className="font-mono text-sm font-bold text-navy bg-blue-50 border border-blue-200 px-3 py-1 rounded">
-              {group.group_code}
-            </span>
             <span className="text-xs font-mono font-medium text-draft bg-white border border-rule px-2.5 py-1 rounded">
-              Academic Year: {group.academic_year} · {group.batch}
+              Academic Year: {group.academic_year}
             </span>
             <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-xs font-bold ${
               group.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
@@ -421,10 +418,6 @@ export default function StudentProject() {
 
           {/* Team Members Roster (PDF Sheet Table Format) */}
           <div className="panel">
-            <div className="panel-header flex items-center justify-between">
-              <h2 className="font-serif text-lg font-bold">Student Team Roster ({groupMembers.length}/4)</h2>
-              <span className="text-xs text-draft font-mono">Departmental Format</span>
-            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-left">
                 <thead>
@@ -508,7 +501,7 @@ export default function StudentProject() {
       {/* Section: Stage Continuous Evaluations & Released Scores */}
       <div className="space-y-6">
         <div className="border-b border-rule pb-3">
-          <h2 className="font-serif text-2xl font-bold text-ink">Evaluation Stages &amp; Continuous Assessment Scores</h2>
+          <h2 className="font-serif text-2xl font-bold text-ink">Evaluation Scores</h2>
           <p className="text-xs text-draft mt-0.5">Continuous assessment scores are visible once officially released by HOD.</p>
         </div>
 
@@ -570,10 +563,9 @@ export default function StudentProject() {
                         <table className="w-full text-xs mb-4">
                           <thead>
                             <tr className="border-b border-rule bg-paper text-draft text-left">
-                              <th className="p-2">Evaluation Rubric Criterion</th>
-                              <th className="p-2 text-right">Max</th>
-                              <th className="p-2 text-right">Awarded</th>
-                              <th className="p-2">Examiner Notes</th>
+                              <th className="p-2">Evaluation Criteria</th>
+                              <th className="p-2 text-right">Max Marks</th>
+                              <th className="p-2 text-right">Marks Awarded</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-rule">
@@ -582,7 +574,6 @@ export default function StudentProject() {
                                 <td className="p-2 font-medium text-ink">{sc.criterion_name}</td>
                                 <td className="p-2 text-right text-draft font-mono">{sc.max_marks}</td>
                                 <td className="p-2 text-right font-bold font-mono text-navy">{sc.marks_awarded}</td>
-                                <td className="p-2 text-draft italic">{sc.remark || '—'}</td>
                               </tr>
                             ))}
                           </tbody>
