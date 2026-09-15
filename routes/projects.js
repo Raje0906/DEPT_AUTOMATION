@@ -63,16 +63,8 @@ router.get('/student/my-group', verifyToken, requireRole('student'), async (req,
       [group.id]
     );
 
-    // Fetch guide requests history
-    const guideReqRes = await pool.query(
-      `SELECT gr.*, u.name as requested_guide_name, f.designation
-       FROM project_guide_requests gr
-       JOIN faculty f ON gr.requested_guide_id = f.id
-       JOIN users u ON f.user_id = u.id
-       WHERE gr.group_id = $1
-       ORDER BY gr.requested_at DESC`,
-      [group.id]
-    );
+    // Guide requests are deprecated (HOD directly assigns guides)
+    const guideReqRes = { rows: [] };
 
     // Fetch all stages for group's academic year
     const stagesRes = await pool.query(
@@ -341,62 +333,9 @@ router.post('/student/groups/join', verifyToken, requireRole('student'), async (
  * Request a faculty member to be project guide.
  */
 router.post('/student/guide-requests', verifyToken, requireRole('student'), async (req, res) => {
-  try {
-    const { group_id, requested_guide_id } = req.body;
-    if (!group_id || !requested_guide_id) {
-      return res.status(400).json({ error: 'group_id and requested_guide_id are required' });
-    }
-
-    const student = await getStudentId(req.user.id);
-
-    // Verify student is leader of the group
-    const leaderRes = await pool.query(
-      `SELECT is_leader FROM project_group_members WHERE group_id = $1 AND student_id = $2`,
-      [group_id, student.id]
-    );
-    if (leaderRes.rows.length === 0 || !leaderRes.rows[0].is_leader) {
-      return res.status(403).json({ error: 'Only the group leader can request a guide' });
-    }
-
-    // Check guide load limit (max 5 groups)
-    const loadRes = await pool.query(
-      `SELECT COUNT(*) FROM project_groups WHERE guide_id = $1 AND status IN ('ACTIVE','PENDING_GUIDE_APPROVAL')`,
-      [requested_guide_id]
-    );
-    const currentLoad = parseInt(loadRes.rows[0].count, 10);
-    if (currentLoad >= 5) {
-      return res.status(400).json({ error: 'Selected faculty member has reached maximum guide capacity (5 groups)' });
-    }
-
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      // Create guide request
-      const reqRes = await client.query(
-        `INSERT INTO project_guide_requests (group_id, requested_guide_id, status)
-         VALUES ($1, $2, 'PENDING') RETURNING *`,
-        [group_id, requested_guide_id]
-      );
-
-      // Update group status
-      await client.query(
-        `UPDATE project_groups SET status = 'PENDING_GUIDE_APPROVAL' WHERE id = $1`,
-        [group_id]
-      );
-
-      await client.query('COMMIT');
-      res.status(201).json({ message: 'Guide request submitted successfully', request: reqRes.rows[0] });
-    } catch (e) {
-      await client.query('ROLLBACK');
-      throw e;
-    } finally {
-      client.release();
-    }
-  } catch (err) {
-    console.error('[Guide Request Error]', err);
-    res.status(500).json({ error: 'Failed to submit guide request' });
-  }
+  return res.status(400).json({
+    error: 'Guide selection by students is disabled. Project guides are assigned directly by the Head of Department (HOD).'
+  });
 });
 
 /**
@@ -410,7 +349,7 @@ router.get('/student/available-guides', verifyToken, async (req, res) => {
               COUNT(g.id) as current_guided_groups
        FROM faculty f
        JOIN users u ON f.user_id = u.id
-       LEFT JOIN project_groups g ON g.guide_id = f.id AND g.status IN ('ACTIVE','PENDING_GUIDE_APPROVAL')
+       LEFT JOIN project_groups g ON g.guide_id = f.id AND g.status = 'ACTIVE'
        GROUP BY f.id, u.name, u.email, f.designation, f.employee_id
        ORDER BY u.name ASC`
     );
@@ -431,91 +370,15 @@ router.get('/student/available-guides', verifyToken, async (req, res) => {
  * List pending guide requests for the logged-in faculty.
  */
 router.get('/guide/requests', verifyToken, requireRole('faculty','hod'), async (req, res) => {
-  try {
-    const facultyId = await getFacultyId(req.user.id);
-    if (!facultyId) return res.status(404).json({ error: 'Faculty record not found' });
-
-    const requestsRes = await pool.query(
-      `SELECT gr.*, g.group_code, g.title, g.domain, g.abstract, g.academic_year, g.batch,
-              u.name as leader_name, u.email as leader_email
-       FROM project_guide_requests gr
-       JOIN project_groups g ON gr.group_id = g.id
-       JOIN project_group_members gm ON g.id = gm.group_id AND gm.is_leader = true
-       JOIN students s ON gm.student_id = s.id
-       JOIN users u ON s.user_id = u.id
-       WHERE gr.requested_guide_id = $1 AND gr.status = 'PENDING'
-       ORDER BY gr.requested_at DESC`,
-      [facultyId]
-    );
-
-    res.json(requestsRes.rows);
-  } catch (err) {
-    console.error('[Fetch Guide Requests Error]', err);
-    res.status(500).json({ error: 'Failed to fetch guide requests' });
-  }
+  res.json([]);
 });
 
 /**
  * PATCH /api/projects/guide/requests/:id
- * Approve or Reject a guide request.
+ * Deprecated endpoint - guides assigned directly by HOD.
  */
 router.patch('/guide/requests/:id', verifyToken, requireRole('faculty','hod'), async (req, res) => {
-  try {
-    const requestId = req.params.id;
-    const { status, remarks } = req.body; // 'APPROVED' or 'REJECTED'
-
-    if (!['APPROVED', 'REJECTED'].includes(status)) {
-      return res.status(400).json({ error: 'Status must be APPROVED or REJECTED' });
-    }
-
-    const facultyId = await getFacultyId(req.user.id);
-
-    const reqRes = await pool.query(
-      `SELECT * FROM project_guide_requests WHERE id = $1`,
-      [requestId]
-    );
-    if (reqRes.rows.length === 0) return res.status(404).json({ error: 'Guide request not found' });
-    const reqObj = reqRes.rows[0];
-
-    if (reqObj.requested_guide_id !== facultyId && req.user.role !== 'hod') {
-      return res.status(403).json({ error: 'Unauthorized to act on this guide request' });
-    }
-
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      await client.query(
-        `UPDATE project_guide_requests
-         SET status = $1, decided_at = NOW(), decided_by = $2, remarks = $3
-         WHERE id = $4`,
-        [status, req.user.id, remarks || '', requestId]
-      );
-
-      if (status === 'APPROVED') {
-        await client.query(
-          `UPDATE project_groups SET guide_id = $1, status = 'ACTIVE' WHERE id = $2`,
-          [reqObj.requested_guide_id, reqObj.group_id]
-        );
-      } else {
-        await client.query(
-          `UPDATE project_groups SET status = 'DRAFT' WHERE id = $1`,
-          [reqObj.group_id]
-        );
-      }
-
-      await client.query('COMMIT');
-      res.json({ message: `Guide request ${status.toLowerCase()} successfully` });
-    } catch (e) {
-      await client.query('ROLLBACK');
-      throw e;
-    } finally {
-      client.release();
-    }
-  } catch (err) {
-    console.error('[Decide Guide Request Error]', err);
-    res.status(500).json({ error: 'Failed to update guide request' });
-  }
+  res.json({ message: 'Guide requests are deprecated. Guides are assigned directly by the HOD.' });
 });
 
 /**
@@ -940,16 +803,21 @@ router.get('/hod/groups', verifyToken, requireRole('hod'), async (req, res) => {
 router.patch('/hod/groups/:id/guide', verifyToken, requireRole('hod'), async (req, res) => {
   try {
     const groupId = req.params.id;
-    const { guide_id } = req.body; // faculty id
+    const { guide_id } = req.body; // faculty id or null
 
-    if (!guide_id) return res.status(400).json({ error: 'guide_id is required' });
-
-    await pool.query(
-      `UPDATE project_groups SET guide_id = $1, status = 'ACTIVE' WHERE id = $2`,
-      [guide_id, groupId]
-    );
-
-    res.json({ message: 'Guide assigned successfully by HOD' });
+    if (guide_id) {
+      await pool.query(
+        `UPDATE project_groups SET guide_id = $1, status = 'ACTIVE' WHERE id = $2`,
+        [guide_id, groupId]
+      );
+      res.json({ message: 'Guide assigned successfully by HOD' });
+    } else {
+      await pool.query(
+        `UPDATE project_groups SET guide_id = NULL, status = 'DRAFT' WHERE id = $1`,
+        [groupId]
+      );
+      res.json({ message: 'Guide unassigned successfully' });
+    }
   } catch (err) {
     console.error('[HOD Assign Guide Error]', err);
     res.status(500).json({ error: 'Failed to assign guide' });

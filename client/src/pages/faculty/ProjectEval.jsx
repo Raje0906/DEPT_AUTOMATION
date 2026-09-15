@@ -9,7 +9,6 @@ export default function ProjectEval() {
   // Backend data states
   const [assignments, setAssignments] = useState([]);
   const [guidedGroups, setGuidedGroups] = useState([]);
-  const [guideRequests, setGuideRequests] = useState([]);
   
   // Evaluation modal states
   const [selectedAssignment, setSelectedAssignment] = useState(null);
@@ -21,14 +20,12 @@ export default function ProjectEval() {
   const fetchFacultyData = async () => {
     setLoading(true);
     try {
-      const [assRes, guidedRes, reqRes] = await Promise.all([
+      const [assRes, guidedRes] = await Promise.all([
         api.get('/projects/evaluator/assignments'),
         api.get('/projects/guide/my-groups'),
-        api.get('/projects/guide/requests'),
       ]);
       setAssignments(assRes.data);
       setGuidedGroups(guidedRes.data);
-      setGuideRequests(reqRes.data);
     } catch (err) {
       toast.error('Failed to fetch faculty project data');
     } finally {
@@ -90,15 +87,7 @@ export default function ProjectEval() {
     }
   };
 
-  const handleGuideRequestDecision = async (requestId, status) => {
-    try {
-      const res = await api.patch(`/projects/guide/requests/${requestId}`, { status });
-      toast.success(res.data.message);
-      fetchFacultyData();
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to update request');
-    }
-  };
+
 
   if (loading) {
     return (
@@ -125,12 +114,6 @@ export default function ProjectEval() {
             Continuous Rubric Assessment &amp; Project Supervision Center · 2025–26
           </p>
         </div>
-        {guideRequests.length > 0 && (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">
-            <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
-            {guideRequests.length} Pending Guide Requests
-          </span>
-        )}
       </div>
 
       {/* Summary Stat Cards */}
@@ -178,21 +161,6 @@ export default function ProjectEval() {
           }`}
         >
           My Guided Groups ({guidedGroups.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('requests')}
-          className={`px-4 py-2 text-xs font-semibold rounded transition-colors relative ${
-            activeTab === 'requests'
-              ? 'bg-navy text-white'
-              : 'bg-white border border-rule text-ink hover:bg-paper'
-          }`}
-        >
-          Pending Requests
-          {guideRequests.length > 0 && (
-            <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-mono font-bold">
-              {guideRequests.length}
-            </span>
-          )}
         </button>
       </div>
 
@@ -316,49 +284,7 @@ export default function ProjectEval() {
         </div>
       )}
 
-      {/* TAB 3: PENDING GUIDE REQUESTS */}
-      {activeTab === 'requests' && (
-        <div className="panel">
-          <div className="panel-header">
-            <h2 className="font-serif text-xl font-semibold">Pending Guide Requests</h2>
-          </div>
-          <div className="divide-y divide-rule">
-            {guideRequests.length === 0 ? (
-              <div className="p-8 text-center text-draft">No pending guide requests.</div>
-            ) : (
-              guideRequests.map((req) => (
-                <div key={req.id} className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-navy bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
-                        {req.group_code}
-                      </span>
-                      <h3 className="font-serif text-base font-bold text-ink">{req.title}</h3>
-                    </div>
-                    <p className="text-xs text-draft mt-1 font-medium">Domain: <span className="text-ink font-semibold">{req.domain}</span></p>
-                    <p className="text-xs text-draft mt-1">Requested by Leader: <span className="font-semibold text-ink">{req.leader_name}</span> ({req.leader_email})</p>
-                    <p className="text-xs text-ink italic mt-2 bg-paper p-2.5 border border-rule rounded">{req.abstract || 'No abstract provided'}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => handleGuideRequestDecision(req.id, 'REJECTED')}
-                      className="px-4 py-2 border border-red-300 text-red-700 bg-red-50 hover:bg-red-100 rounded text-xs font-semibold"
-                    >
-                      Decline
-                    </button>
-                    <button
-                      onClick={() => handleGuideRequestDecision(req.id, 'APPROVED')}
-                      className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-xs font-semibold shadow-xs"
-                    >
-                      Approve &amp; Supervise →
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
+
 
       {/* RUBRIC EVALUATION MODAL */}
       {selectedAssignment && formData && (

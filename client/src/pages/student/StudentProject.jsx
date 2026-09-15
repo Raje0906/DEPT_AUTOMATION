@@ -5,15 +5,14 @@ import toast from 'react-hot-toast';
 export default function StudentProject() {
   const [loading, setLoading] = useState(true);
   const [groupData, setGroupData] = useState(null);
-  const [availableGuides, setAvailableGuides] = useState([]);
-  
+
   // Registration form state matching PDF sheet layout
   const [domain, setDomain] = useState('');
   const [title1, setTitle1] = useState('');
   const [title2, setTitle2] = useState('');
   const [title3, setTitle3] = useState('');
   const [abstract, setAbstract] = useState('');
-  
+
   const [members, setMembers] = useState([
     { name: '', roll_no: '', division: 'BE-1', mobile_no: '', email: '', is_leader: true },
     { name: '', roll_no: '', division: 'BE-1', mobile_no: '', email: '', is_leader: false },
@@ -21,7 +20,6 @@ export default function StudentProject() {
     { name: '', roll_no: '', division: 'BE-1', mobile_no: '', email: '', is_leader: false },
   ]);
 
-  const [selectedGuideId, setSelectedGuideId] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const fetchProjectData = async () => {
@@ -29,13 +27,6 @@ export default function StudentProject() {
     try {
       const res = await api.get('/projects/student/my-group');
       setGroupData(res.data);
-      if (!res.data.hasGroup) {
-        const gRes = await api.get('/projects/student/available-guides');
-        setAvailableGuides(gRes.data);
-      } else if (!res.data.group.guide_id && res.data.isLeader) {
-        const gRes = await api.get('/projects/student/available-guides');
-        setAvailableGuides(gRes.data);
-      }
     } catch (err) {
       toast.error('Failed to load project group data');
     } finally {
@@ -98,23 +89,7 @@ export default function StudentProject() {
     }
   };
 
-  const handleRequestGuide = async (e) => {
-    e.preventDefault();
-    if (!selectedGuideId) return toast.error('Please select a faculty guide');
-    setSubmitting(true);
-    try {
-      const res = await api.post('/projects/student/guide-requests', {
-        group_id: groupData.group.id,
-        requested_guide_id: Number(selectedGuideId),
-      });
-      toast.success(res.data.message);
-      fetchProjectData();
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to submit guide request');
-    } finally {
-      setSubmitting(false);
-    }
-  };
+
 
   if (loading) {
     return (
@@ -509,46 +484,21 @@ export default function StudentProject() {
                     </div>
                   </div>
                   <div className="p-3 bg-emerald-50 border border-emerald-200 rounded text-xs text-emerald-800 font-medium">
-                    ✓ Approved Project Supervisor assigned.
+                    ✓ Approved Project Supervisor (Assigned by HOD).
                   </div>
                 </div>
-              ) : latestGuideReq && latestGuideReq.status === 'PENDING' ? (
+              ) : (
                 <div className="space-y-3">
                   <div className="p-3.5 bg-amber-50 border border-amber-200 rounded">
-                    <p className="text-xs font-bold text-amber-800 uppercase tracking-wider">Request Pending Approval</p>
-                    <p className="text-sm font-semibold text-ink mt-1">{latestGuideReq.requested_guide_name}</p>
-                    <p className="text-xs text-draft mt-0.5">{latestGuideReq.designation}</p>
+                    <p className="text-xs font-bold text-amber-900 uppercase tracking-wider">Pending HOD Allocation</p>
+                    <p className="text-xs text-amber-800 mt-1 font-medium leading-relaxed">
+                      Your project guide will be allocated directly by the Head of Department (HOD).
+                    </p>
                   </div>
                   <p className="text-xs text-draft italic">
-                    Awaiting confirmation from faculty. You will be notified once approved.
+                    No action is required from student group members for guide allocation.
                   </p>
                 </div>
-              ) : isLeader ? (
-                <form onSubmit={handleRequestGuide} className="space-y-4">
-                  <div>
-                    <label className="input-label">Select Faculty Guide *</label>
-                    <select
-                      value={selectedGuideId}
-                      onChange={(e) => setSelectedGuideId(e.target.value)}
-                      className="input-field"
-                      required
-                    >
-                      <option value="">Select Faculty Guide...</option>
-                      {availableGuides.map((g) => (
-                        <option key={g.faculty_id} value={g.faculty_id} disabled={g.current_guided_groups >= 5}>
-                          {g.name} ({g.designation}) — {g.current_guided_groups}/5 groups
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <button type="submit" disabled={submitting} className="btn-primary w-full text-center">
-                    {submitting ? 'Submitting...' : 'Request Guide Selection'}
-                  </button>
-                </form>
-              ) : (
-                <p className="text-xs text-draft italic">
-                  Guide request not yet initiated. Group leader must select a guide.
-                </p>
               )}
             </div>
           </div>
