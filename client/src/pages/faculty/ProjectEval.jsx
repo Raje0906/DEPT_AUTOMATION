@@ -170,7 +170,7 @@ export default function ProjectEval() {
           <div className="panel-header flex items-center justify-between">
             <h2 className="font-serif text-xl font-semibold">Panel Evaluator Assignments</h2>
             <span className="text-xs font-medium text-draft bg-gray-100 px-2.5 py-1 rounded">
-              Continuous Assessment Rubric
+              Evaluation Criteria
             </span>
           </div>
           <div className="overflow-x-auto">
@@ -263,7 +263,7 @@ export default function ProjectEval() {
                       <h3 className="font-serif text-lg font-bold text-ink">{g.title}</h3>
                     </div>
                     <span className="text-xs font-mono font-medium text-draft bg-gray-100 px-2.5 py-1 rounded">
-                      {g.batch} · {g.academic_year}
+                      {g.academic_year}
                     </span>
                   </div>
                   <p className="text-xs text-draft font-medium">Domain: <span className="text-ink font-semibold">{g.domain}</span></p>
@@ -308,13 +308,6 @@ export default function ProjectEval() {
               </button>
             </div>
 
-            {/* COI Warning Box if applicable */}
-            {formData.isGuide ? (
-              <div className="p-4 bg-red-50 border border-red-200 rounded text-red-800 text-xs font-semibold space-y-1">
-                <p className="font-bold uppercase tracking-wider text-red-900">⚠️ Conflict of Interest Warning</p>
-                <p>You are recorded as the Project Guide for this group. Per departmental governance rules, guides cannot submit panel evaluation scores for their own guided groups.</p>
-              </div>
-            ) : (
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -335,50 +328,34 @@ export default function ProjectEval() {
                 </div>
 
                 {/* Criteria Scoring Inputs */}
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <h4 className="font-serif text-sm font-bold text-ink uppercase tracking-wider border-b border-rule pb-1">
-                    Continuous Evaluation Rubric Criteria
+                    Evaluation Criteria
                   </h4>
                   {formData.criteria.map((crit) => {
                     const curr = scoresInput[crit.id] || { marks_awarded: 0, remark: '' };
                     return (
-                      <div key={crit.id} className="p-4 bg-gray-50/50 border border-rule rounded space-y-2">
-                        <div className="flex items-center justify-between">
+                      <div key={crit.id} className="p-3 bg-gray-50/50 border border-rule rounded flex items-center justify-between gap-4">
+                        <div>
                           <label className="text-xs font-bold text-ink">{crit.name}</label>
-                          <span className="text-xs font-mono text-draft font-semibold">Max: {crit.max_marks} Marks</span>
+                          <span className="text-xs font-mono text-draft font-semibold block">Max: {crit.max_marks} Marks</span>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <div>
-                            <input
-                              type="number"
-                              min="0"
-                              max={crit.max_marks}
-                              step="0.5"
-                              value={curr.marks_awarded}
-                              onChange={(e) =>
-                                setScoresInput({
-                                  ...scoresInput,
-                                  [crit.id]: { ...curr, marks_awarded: e.target.value },
-                                })
-                              }
-                              className="input-field font-mono font-bold text-navy"
-                              required
-                            />
-                          </div>
-                          <div className="col-span-2">
-                            <input
-                              type="text"
-                              placeholder="Criterion specific feedback / observation..."
-                              value={curr.remark}
-                              onChange={(e) =>
-                                setScoresInput({
-                                  ...scoresInput,
-                                  [crit.id]: { ...curr, remark: e.target.value },
-                                })
-                              }
-                              className="input-field text-xs"
-                            />
-                          </div>
+                        <div className="w-32">
+                          <input
+                            type="number"
+                            min="0"
+                            max={crit.max_marks}
+                            step="0.5"
+                            value={curr.marks_awarded}
+                            onChange={(e) =>
+                              setScoresInput({
+                                ...scoresInput,
+                                [crit.id]: { ...curr, marks_awarded: e.target.value },
+                              })
+                            }
+                            className="input-field font-mono font-bold text-navy text-right"
+                            required
+                          />
                         </div>
                       </div>
                     );
@@ -431,7 +408,6 @@ export default function ProjectEval() {
                   </button>
                 </div>
               </form>
-            )}
           </div>
         </div>
       )}
