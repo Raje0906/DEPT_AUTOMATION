@@ -5,15 +5,14 @@ import toast from 'react-hot-toast';
 export default function StudentProject() {
   const [loading, setLoading] = useState(true);
   const [groupData, setGroupData] = useState(null);
-  const [availableGuides, setAvailableGuides] = useState([]);
-  
+
   // Registration form state matching PDF sheet layout
   const [domain, setDomain] = useState('');
   const [title1, setTitle1] = useState('');
   const [title2, setTitle2] = useState('');
   const [title3, setTitle3] = useState('');
   const [abstract, setAbstract] = useState('');
-  
+
   const [members, setMembers] = useState([
     { name: '', roll_no: '', division: 'BE-1', mobile_no: '', email: '', is_leader: true },
     { name: '', roll_no: '', division: 'BE-1', mobile_no: '', email: '', is_leader: false },
@@ -21,7 +20,6 @@ export default function StudentProject() {
     { name: '', roll_no: '', division: 'BE-1', mobile_no: '', email: '', is_leader: false },
   ]);
 
-  const [selectedGuideId, setSelectedGuideId] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const fetchProjectData = async () => {
@@ -29,13 +27,6 @@ export default function StudentProject() {
     try {
       const res = await api.get('/projects/student/my-group');
       setGroupData(res.data);
-      if (!res.data.hasGroup) {
-        const gRes = await api.get('/projects/student/available-guides');
-        setAvailableGuides(gRes.data);
-      } else if (!res.data.group.guide_id && res.data.isLeader) {
-        const gRes = await api.get('/projects/student/available-guides');
-        setAvailableGuides(gRes.data);
-      }
     } catch (err) {
       toast.error('Failed to load project group data');
     } finally {
@@ -61,9 +52,9 @@ export default function StudentProject() {
     if (!title2.trim()) return toast.error('Please specify Project Title 2');
     if (!title3.trim()) return toast.error('Please specify Project Title 3');
 
-    // Filter active members (Student 1 and 2 mandatory, Student 3 & 4 optional unless filled)
+    // Filter active members (Student 1, 2, and 3 mandatory, Student 4 optional unless filled)
     const validMembers = members.filter((m, idx) => {
-      if (idx < 2) return true;
+      if (idx < 3) return true;
       return m.name.trim() !== '' || m.roll_no.trim() !== '' || m.email.trim() !== '';
     });
 
@@ -98,30 +89,14 @@ export default function StudentProject() {
     }
   };
 
-  const handleRequestGuide = async (e) => {
-    e.preventDefault();
-    if (!selectedGuideId) return toast.error('Please select a faculty guide');
-    setSubmitting(true);
-    try {
-      const res = await api.post('/projects/student/guide-requests', {
-        group_id: groupData.group.id,
-        requested_guide_id: Number(selectedGuideId),
-      });
-      toast.success(res.data.message);
-      fetchProjectData();
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to submit guide request');
-    } finally {
-      setSubmitting(false);
-    }
-  };
+
 
   if (loading) {
     return (
       <div className="p-8 max-w-7xl mx-auto flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-4 border-navy border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-sm font-medium text-draft">Loading BE Capstone Project details...</p>
+          <p className="text-sm font-medium text-draft">Loading BE Project details...</p>
         </div>
       </div>
     );
@@ -136,7 +111,7 @@ export default function StudentProject() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-200 text-navy font-mono text-xs font-bold rounded mb-2">
-                BE CAPSTONE PROJECT REGISTRATION
+                BE PROJECT REGISTRATION
               </div>
               <h1 className="font-serif text-2xl lg:text-3xl font-bold text-ink">Project Group Registration Form</h1>
               <p className="text-sm text-draft mt-1 font-medium">
@@ -162,7 +137,7 @@ export default function StudentProject() {
                   <span className="w-6 h-6 rounded bg-navy text-white text-xs flex items-center justify-center font-sans font-bold">1</span>
                   Student Team Members Details
                 </h2>
-                <p className="text-xs text-draft mt-0.5">Minimum 2 students · Maximum 4 students per group</p>
+                <p className="text-xs text-draft mt-0.5">Minimum 3 students · Maximum 4 students per group</p>
               </div>
               <span className="text-xs font-mono text-draft bg-paper px-3 py-1 border border-rule rounded">
                 Table Format (Sheet Upload)
@@ -172,7 +147,7 @@ export default function StudentProject() {
             <div className="space-y-6 divide-y divide-rule">
               {members.map((m, idx) => {
                 const sNum = idx + 1;
-                const isRequired = idx < 2;
+                const isRequired = idx < 3;
                 return (
                   <div key={idx} className={idx > 0 ? 'pt-6' : ''}>
                     <div className="flex items-center justify-between mb-4">
@@ -235,6 +210,7 @@ export default function StudentProject() {
                           <option value="BE-1">BE-1</option>
                           <option value="BE-2">BE-2</option>
                           <option value="BE-3">BE-3</option>
+                          <option value="BE-4">BE-4</option>
                         </select>
                       </div>
 
@@ -288,18 +264,18 @@ export default function StudentProject() {
               {/* Domain Name */}
               <div>
                 <label className="input-label font-bold text-ink">
-                  Project Domain (Write project Domain Name) *
+                  Project Domain *
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Artificial Intelligence, AIML, Data Science, Cyber Security, Full Stack Web Development, Blockchain, Cloud Computing, AIDS"
+                  placeholder="Enter Project Domain"
                   value={domain}
                   onChange={(e) => setDomain(e.target.value)}
                   className="input-field"
                 />
                 <p className="text-[11px] text-draft mt-1">
-                  Suggestions: Artificial Intelligence &amp; Machine Learning (AIML), Cyber Security &amp; Cryptography, Full Stack Web Development, Cloud &amp; DevOps, Data Science &amp; Data Analytics.
+                  Suggestions: AIML, Cyber Security, Web Development, Cloud &amp; DevOps, Data Science
                 </p>
               </div>
 
@@ -508,46 +484,21 @@ export default function StudentProject() {
                     </div>
                   </div>
                   <div className="p-3 bg-emerald-50 border border-emerald-200 rounded text-xs text-emerald-800 font-medium">
-                    ✓ Approved Project Supervisor assigned.
+                    ✓ Approved Project Supervisor (Assigned by HOD).
                   </div>
                 </div>
-              ) : latestGuideReq && latestGuideReq.status === 'PENDING' ? (
+              ) : (
                 <div className="space-y-3">
                   <div className="p-3.5 bg-amber-50 border border-amber-200 rounded">
-                    <p className="text-xs font-bold text-amber-800 uppercase tracking-wider">Request Pending Approval</p>
-                    <p className="text-sm font-semibold text-ink mt-1">{latestGuideReq.requested_guide_name}</p>
-                    <p className="text-xs text-draft mt-0.5">{latestGuideReq.designation}</p>
+                    <p className="text-xs font-bold text-amber-900 uppercase tracking-wider">Pending HOD Allocation</p>
+                    <p className="text-xs text-amber-800 mt-1 font-medium leading-relaxed">
+                      Your project guide will be allocated directly by the Head of Department (HOD).
+                    </p>
                   </div>
                   <p className="text-xs text-draft italic">
-                    Awaiting confirmation from faculty. You will be notified once approved.
+                    No action is required from student group members for guide allocation.
                   </p>
                 </div>
-              ) : isLeader ? (
-                <form onSubmit={handleRequestGuide} className="space-y-4">
-                  <div>
-                    <label className="input-label">Select Faculty Guide *</label>
-                    <select
-                      value={selectedGuideId}
-                      onChange={(e) => setSelectedGuideId(e.target.value)}
-                      className="input-field"
-                      required
-                    >
-                      <option value="">Select Faculty Guide...</option>
-                      {availableGuides.map((g) => (
-                        <option key={g.faculty_id} value={g.faculty_id} disabled={g.current_guided_groups >= 5}>
-                          {g.name} ({g.designation}) — {g.current_guided_groups}/5 groups
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <button type="submit" disabled={submitting} className="btn-primary w-full text-center">
-                    {submitting ? 'Submitting...' : 'Request Guide Selection'}
-                  </button>
-                </form>
-              ) : (
-                <p className="text-xs text-draft italic">
-                  Guide request not yet initiated. Group leader must select a guide.
-                </p>
               )}
             </div>
           </div>

@@ -305,21 +305,16 @@ async function seed() {
     await client.query(`INSERT INTO project_group_members (group_id, student_id, roll_no, is_leader) VALUES ($1, $2, 'CE6A008', false)`, [g3Id, studentIds[7]]);
     await client.query(`INSERT INTO project_group_members (group_id, student_id, roll_no, is_leader) VALUES ($1, $2, 'CE6A009', false)`, [g3Id, studentIds[8]]);
 
-    // Group 4: Legal Doc Summarization (Pending Guide Request to Rajan Mehta)
+    // Group 4: Legal Doc Summarization (Unassigned Guide - Pending HOD Assignment)
     const grp4User = await client.query(`SELECT user_id FROM students WHERE id=$1`, [studentIds[9]]);
     const g4 = await client.query(`
       INSERT INTO project_groups (group_code, academic_year, batch, title, domain, abstract, status, guide_id, created_by)
-      VALUES ('GRP-2026-04', '2025-26', 'BE-CE-A', 'Cross-lingual Indian Legal Document Summarization using LLMs', 'NLP & Generative AI', 'Fine-tuning LLaMA 3 for Marathi & Hindi high court judgment summarization.', 'PENDING_GUIDE_APPROVAL', NULL, $1)
+      VALUES ('GRP-2026-04', '2025-26', 'BE-CE-A', 'Cross-lingual Indian Legal Document Summarization using LLMs', 'NLP & Generative AI', 'Fine-tuning LLaMA 3 for Marathi & Hindi high court judgment summarization.', 'DRAFT', NULL, $1)
       RETURNING id
     `, [grp4User.rows[0].user_id]);
     const g4Id = g4.rows[0].id;
     await client.query(`INSERT INTO project_group_members (group_id, student_id, roll_no, is_leader) VALUES ($1, $2, 'CE6A010', true)`, [g4Id, studentIds[9]]);
     await client.query(`INSERT INTO project_group_members (group_id, student_id, roll_no, is_leader) VALUES ($1, $2, 'CE6A011', false)`, [g4Id, studentIds[10]]);
-
-    await client.query(`
-      INSERT INTO project_guide_requests (group_id, requested_guide_id, status)
-      VALUES ($1, $2, 'PENDING')
-    `, [g4Id, facultyIds[0]]);
 
     // 4. Panel Assignments (Respecting Conflict of Interest: Guide cannot evaluate own group!)
     // For G1 (Guide = Rajan Mehta/facultyIds[0]), Panelists = Sunita Patil (facultyIds[1]) & Arjun Sharma (facultyIds[2])

@@ -67,11 +67,11 @@ export default function HODProjectMgmt() {
   // Handlers
   const handleAssignGuide = async (e) => {
     e.preventDefault();
-    if (!guideModalGroup || !selectedGuideId) return;
+    if (!guideModalGroup) return;
     setSubmitting(true);
     try {
       const res = await api.patch(`/projects/hod/groups/${guideModalGroup.id}/guide`, {
-        guide_id: Number(selectedGuideId),
+        guide_id: selectedGuideId ? Number(selectedGuideId) : null,
       });
       toast.success(res.data.message);
       setGuideModalGroup(null);
@@ -259,11 +259,11 @@ export default function HODProjectMgmt() {
               <p className="text-xs text-emerald-700 mt-1 font-medium">Guide assigned</p>
             </div>
             <div className="p-4 bg-white border border-rule rounded">
-              <p className="text-xs uppercase tracking-wider text-draft font-semibold">Pending Guide Approval</p>
+              <p className="text-xs uppercase tracking-wider text-draft font-semibold">Unassigned Guide Groups</p>
               <p className="font-serif text-3xl font-bold text-amber-700 mt-1">
-                {dashboardData.group_status_breakdown.find((b) => b.status === 'PENDING_GUIDE_APPROVAL')?.count || 0}
+                {groups.filter((g) => !g.guide_id).length}
               </p>
-              <p className="text-xs text-amber-700 mt-1 font-medium">Action required</p>
+              <p className="text-xs text-amber-700 mt-1 font-medium">Awaiting HOD assignment</p>
             </div>
             <div className="p-4 bg-white border border-rule rounded">
               <p className="text-xs uppercase tracking-wider text-draft font-semibold">Evaluation Stages</p>
@@ -663,9 +663,8 @@ export default function HODProjectMgmt() {
                   value={selectedGuideId}
                   onChange={(e) => setSelectedGuideId(e.target.value)}
                   className="input-field"
-                  required
                 >
-                  <option value="">Select Guide...</option>
+                  <option value="">-- Leave Unassigned --</option>
                   {availableGuides.map((g) => (
                     <option key={g.faculty_id} value={g.faculty_id}>
                       {g.name} ({g.designation}) — {g.current_guided_groups} guided
@@ -682,7 +681,7 @@ export default function HODProjectMgmt() {
                   Cancel
                 </button>
                 <button type="submit" disabled={submitting} className="btn-primary">
-                  Assign Guide
+                  {selectedGuideId ? 'Assign Guide' : 'Clear / Unassign Guide'}
                 </button>
               </div>
             </form>

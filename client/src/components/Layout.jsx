@@ -109,7 +109,7 @@ const roleNav = {
         { to: '/student/results',     label: 'Results & Marks',       icon: Icons.results },
         { to: '/student/cgpa',        label: 'CGPA Overview',         icon: Icons.cgpa },
         { to: '/student/revaluation', label: 'Revaluation Cell',      icon: Icons.reval },
-        { to: '/student/project',     label: 'BE Capstone Project',   icon: Icons.project },
+        { to: '/student/project',     label: 'BE Project',            icon: Icons.project },
         { to: '/student/seminar',     label: 'TE Seminar Registration', icon: Icons.seminar },
       ],
     },
@@ -128,7 +128,7 @@ const roleNav = {
       group: 'Department Administration',
       items: [
         { to: '/faculty/lab-maintenance', label: 'Lab Maintenance',      icon: Icons.lab },
-        { to: '/faculty/project-eval',    label: 'Project Evaluation',   icon: Icons.project },
+        { to: '/faculty/project-eval',    label: 'BE Project Evaluation', icon: Icons.project },
         { to: '/faculty/magazines',       label: 'Magazines & Research', icon: Icons.magazines },
         { to: '/faculty/seminar',         label: 'TE Seminar Tool',      icon: Icons.seminar },
         { to: '/faculty/seminar/my-groups', label: 'My Assigned Groups', icon: Icons.teachers },
