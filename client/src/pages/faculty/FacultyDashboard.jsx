@@ -35,10 +35,13 @@ export default function FacultyDashboard() {
     );
   }
 
-  const allSubjects         = data?.subjects || [];
-  const academicYears       = data?.academicYears || [];
-  const faculty             = data?.faculty;
-  const pendingRevals       = data?.pendingRevaluations || 0;
+  const allSubjects               = data?.subjects || [];
+  const academicYears             = data?.academicYears || [];
+  const faculty                   = data?.faculty;
+  const pendingRevals             = data?.pendingRevaluations || 0;
+  const panelAssignments         = data?.panelAssignments || [];
+  const pendingPanelEvaluations   = data?.pendingPanelEvaluations || 0;
+  const completedPanelEvaluations = data?.completedPanelEvaluations || 0;
 
   // Filter by SE, TE, BE
   const subjects = allSubjects.filter(s => {
@@ -114,6 +117,25 @@ export default function FacultyDashboard() {
           </div>
         )}
 
+        {pendingPanelEvaluations > 0 && (
+          <div className="notification-strip py-3.5 px-5 text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-purple-50/90 border-purple-200">
+            <div className="flex items-center">
+              <span className="text-xs font-bold text-purple-900 uppercase tracking-wider mr-2.5 bg-purple-200/80 px-2 py-0.5 rounded">
+                Panel Evaluation
+              </span>
+              <span className="font-medium text-purple-950">
+                {pendingPanelEvaluations} BE Project group{pendingPanelEvaluations > 1 ? 's' : ''} assigned for panel rubric evaluation.
+              </span>
+            </div>
+            <Link
+              to="/faculty/project-eval"
+              className="text-xs font-semibold text-purple-900 hover:text-purple-950 hover:underline flex-shrink-0"
+            >
+              Evaluate in Portal →
+            </Link>
+          </div>
+        )}
+
         {pendingRevals > 0 && (
           <div className="notification-strip py-3.5 px-5 text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-amber-50 border-amber-200">
             <div className="flex items-center">
@@ -135,7 +157,7 @@ export default function FacultyDashboard() {
       </div>
 
       {/* Key Metric KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
         <div className="panel p-5">
           <p className="text-xs text-draft uppercase tracking-wider font-semibold mb-1">Assigned Classes</p>
           <p className="font-serif text-3xl font-bold text-ink">{allSubjects.length}</p>
@@ -158,6 +180,20 @@ export default function FacultyDashboard() {
           <p className="text-xs text-draft uppercase tracking-wider font-semibold mb-1">Students Taught</p>
           <p className="font-serif text-3xl font-bold text-ink">{totalEnrolled}</p>
           <p className="text-xs text-draft mt-1">Across 4 divisions per year</p>
+        </div>
+
+        <div className="panel p-5">
+          <p className="text-xs text-draft uppercase tracking-wider font-semibold mb-1">Panel Evaluations</p>
+          <p className="font-serif text-3xl font-bold text-navy">{panelAssignments.length}</p>
+          <p className="text-xs mt-1 font-medium">
+            {pendingPanelEvaluations > 0 ? (
+              <span className="text-amber-700">{pendingPanelEvaluations} pending review</span>
+            ) : panelAssignments.length > 0 ? (
+              <span className="text-emerald-700">All completed</span>
+            ) : (
+              <span className="text-draft">No assignments</span>
+            )}
+          </p>
         </div>
       </div>
 
@@ -350,6 +386,118 @@ export default function FacultyDashboard() {
                       className="text-xs font-semibold text-maroon hover:text-[#4E1C27] hover:underline"
                     >
                       {s.submission_status === 'not_started' || s.submission_status === 'draft' ? 'Enter Marks →' : 'View Marks →'}
+                    </Link>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* BE Project Panel Evaluations Overview */}
+      <div className="panel mt-8">
+        <div className="panel-header flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <h2 className="font-serif text-xl font-semibold">Assigned Panel Evaluations</h2>
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-900 border border-purple-200">
+              {panelAssignments.length} Assigned
+            </span>
+          </div>
+          <Link
+            to="/faculty/project-eval"
+            className="text-xs font-semibold text-maroon hover:underline"
+          >
+            Open Evaluation Portal →
+          </Link>
+        </div>
+
+        {panelAssignments.length === 0 ? (
+          <div className="empty-state py-10 text-center">
+            <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-purple-50 text-purple-700 flex items-center justify-center text-xl font-bold">
+              🎓
+            </div>
+            <p className="text-base font-semibold text-ink">No Panel Evaluations Assigned</p>
+            <p className="text-xs text-draft mt-1 max-w-md mx-auto">
+              You do not have any project groups assigned for panel evaluation in {academicYear || data?.selectedYear} yet.
+              When assigned by the HOD or Project Coordinator, they will appear here with rubric evaluation links.
+            </p>
+            <Link
+              to="/faculty/project-eval"
+              className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-maroon hover:underline"
+            >
+              <span>Open Project Supervision Center</span>
+              <span>→</span>
+            </Link>
+          </div>
+        ) : (
+          <div className="divide-y divide-rule">
+            {panelAssignments.map((ass) => {
+              const isSubmitted = ass.evaluation_status === 'SUBMITTED' || ass.evaluation_status === 'LOCKED';
+              const isDraft = ass.evaluation_status === 'DRAFT';
+              return (
+                <div
+                  key={ass.assignment_id}
+                  className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-paper/40 transition-colors"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                      <span className="font-mono text-xs font-bold text-navy bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
+                        {ass.group_code}
+                      </span>
+                      <span className="font-semibold text-ink text-base">
+                        {ass.title}
+                      </span>
+                      {isSubmitted ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                          Submitted &amp; Locked
+                        </span>
+                      ) : isDraft ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                          Draft Saved
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                          Pending Evaluation
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-draft">
+                      <span>
+                        <strong className="text-ink font-medium">Domain:</strong> {ass.domain || 'General'}
+                      </span>
+                      <span>·</span>
+                      <span>
+                        <strong className="text-ink font-medium">Stage:</strong> {ass.stage_name} ({Math.round(ass.max_marks_total || 50)} Marks)
+                      </span>
+                      <span>·</span>
+                      <span>
+                        <strong className="text-ink font-medium">Guide:</strong> {ass.guide_name || 'Unassigned'}
+                      </span>
+                    </div>
+
+                    {ass.members && ass.members.length > 0 && (
+                      <p className="text-xs text-draft mt-1.5 flex items-center gap-1 truncate">
+                        <span className="font-medium text-ink">Students:</span>
+                        <span>{ass.members.map((m) => `${m.name} (${m.roll_no})`).join(', ')}</span>
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-end flex-shrink-0">
+                    <Link
+                      to="/faculty/project-eval"
+                      className={`inline-flex items-center gap-1 px-3.5 py-1.5 text-xs font-semibold rounded transition-all ${
+                        isSubmitted
+                          ? 'border border-rule text-ink hover:bg-paper'
+                          : 'bg-maroon text-white hover:bg-[#4E1C27] shadow-xs'
+                      }`}
+                    >
+                      {isSubmitted ? 'View Rubric Scorecard →' : 'Evaluate Group →'}
                     </Link>
                   </div>
                 </div>

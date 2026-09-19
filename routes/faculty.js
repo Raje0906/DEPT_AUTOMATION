@@ -86,6 +86,43 @@ router.get('/dashboard', async (req, res) => {
     );
     const classTeacherOf = ctRes.rows.map(r => r.class_name);
 
+    // BE Project Panel Evaluations
+    const panelAssignmentsRes = await pool.query(
+      `SELECT pa.id as assignment_id, pa.status as assignment_status, pa.assigned_at,
+              s.id as stage_id, s.name as stage_name, s.sequence_order, s.max_marks_total, s.scheduled_date_from, s.scheduled_date_to,
+              g.id as group_id, g.group_code, g.title, g.domain, g.academic_year, g.batch, g.guide_id,
+              gu.name as guide_name,
+              pe.id as evaluation_id, pe.status as evaluation_status, pe.submitted_at, pe.overall_remarks
+       FROM project_panel_assignments pa
+       JOIN project_evaluation_stages s ON pa.stage_id = s.id
+       JOIN project_groups g ON pa.group_id = g.id
+       LEFT JOIN faculty gf ON g.guide_id = gf.id
+       LEFT JOIN users gu ON gf.user_id = gu.id
+       LEFT JOIN project_evaluations pe ON pa.id = pe.panel_assignment_id
+       WHERE pa.panel_member_id = $1 AND (g.academic_year = $2 OR $2 IS NULL)
+       ORDER BY s.sequence_order ASC, g.group_code ASC`,
+      [faculty.id, selectedYear]
+    );
+
+    const panelAssignments = panelAssignmentsRes.rows;
+    for (const row of panelAssignments) {
+      const membersRes = await pool.query(
+        `SELECT gm.roll_no, u.name FROM project_group_members gm
+         JOIN students st ON gm.student_id = st.id
+         JOIN users u ON st.user_id = u.id
+         WHERE gm.group_id = $1`,
+        [row.group_id]
+      );
+      row.members = membersRes.rows;
+    }
+
+    const pendingPanelEvaluations = panelAssignments.filter(
+      (a) => a.assignment_status !== 'COMPLETED' && a.evaluation_status !== 'SUBMITTED' && a.evaluation_status !== 'LOCKED'
+    ).length;
+    const completedPanelEvaluations = panelAssignments.filter(
+      (a) => a.assignment_status === 'COMPLETED' || a.evaluation_status === 'SUBMITTED' || a.evaluation_status === 'LOCKED'
+    ).length;
+
     res.json({
       faculty,
       academicYears,
@@ -93,6 +130,9 @@ router.get('/dashboard', async (req, res) => {
       subjects: subjectsRes.rows,
       classTeacherOf,
       pendingRevaluations: parseInt(revalRes.rows[0]?.count || 0, 10),
+      panelAssignments,
+      pendingPanelEvaluations,
+      completedPanelEvaluations,
     });
   } catch (err) {
     console.error('[Faculty] Dashboard error:', err.message);
