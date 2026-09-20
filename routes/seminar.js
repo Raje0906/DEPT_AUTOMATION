@@ -15,7 +15,7 @@ const {
   normPrn,
   normEmail,
 } = require('../services/seminarParser');
-const { buildWorkbook, getExportLifecycleLabel } = require('../services/seminarExporter');
+const { buildWorkbook, buildMarksWorkbook, getExportLifecycleLabel } = require('../services/seminarExporter');
 
 const router = express.Router();
 
@@ -91,12 +91,31 @@ router.post('/coordinators/assign', verifyToken, requireRole('hod'), async (req,
     const fac = facRes.rows[0];
 
     if (replaceExisting) {
+      // Find current coordinators to record revocation
+      const prevCoords = await pool.query(
+        'SELECT f.id, u.name FROM faculty f JOIN users u ON f.user_id = u.id WHERE f.is_seminar_coordinator = TRUE'
+      );
+      for (const prev of prevCoords.rows) {
+        if (prev.id !== facultyId) {
+          await pool.query(
+            `INSERT INTO seminar_coordinator_history (faculty_id, faculty_name, action, performed_by, notes)
+             VALUES ($1, $2, 'REVOKED', $3, $4)`,
+            [prev.id, prev.name, req.user.id, `Replaced by ${fac.name}`]
+          );
+        }
+      }
       await pool.query('UPDATE faculty SET is_seminar_coordinator = FALSE');
     }
 
     await pool.query(
       'UPDATE faculty SET is_seminar_coordinator = TRUE WHERE id = $1',
       [facultyId]
+    );
+
+    await pool.query(
+      `INSERT INTO seminar_coordinator_history (faculty_id, faculty_name, action, performed_by, notes)
+       VALUES ($1, $2, 'APPOINTED', $3, $4)`,
+      [facultyId, fac.name, req.user.id, `Appointed by ${req.user.name || 'HOD'}`]
     );
 
     await auditRecord({
@@ -125,9 +144,21 @@ router.post('/coordinators/remove', verifyToken, requireRole('hod'), async (req,
     const { facultyId } = req.body;
     if (!facultyId) return res.status(400).json({ error: 'Faculty ID is required' });
 
+    const facRes = await pool.query(
+      `SELECT f.id, u.name FROM faculty f JOIN users u ON f.user_id = u.id WHERE f.id = $1`,
+      [facultyId]
+    );
+    const facName = facRes.rows[0]?.name || 'Faculty Member';
+
     await pool.query(
       'UPDATE faculty SET is_seminar_coordinator = FALSE WHERE id = $1',
       [facultyId]
+    );
+
+    await pool.query(
+      `INSERT INTO seminar_coordinator_history (faculty_id, faculty_name, action, performed_by, notes)
+       VALUES ($1, $2, 'REVOKED', $3, $4)`,
+      [facultyId, facName, req.user.id, `Revoked by ${req.user.name || 'HOD'}`]
     );
 
     await auditRecord({
@@ -137,13 +168,29 @@ router.post('/coordinators/remove', verifyToken, requireRole('hod'), async (req,
       action: 'REVOKE_SEMINAR_COORDINATOR',
       oldValue: null,
       newValue: { facultyId, is_seminar_coordinator: false },
-      reason: `HOD revoked Seminar Coordinator role for faculty ID ${facultyId}`,
+      reason: `HOD revoked Seminar Coordinator role for ${facName}`,
     });
 
     res.json({ message: 'Seminar Coordinator role revoked successfully' });
   } catch (err) {
     console.error('[Seminar] POST /coordinators/remove:', err.message);
     res.status(500).json({ error: 'Failed to revoke seminar coordinator' });
+  }
+});
+
+// GET /api/seminar/coordinators/history (HOD and faculty)
+router.get('/coordinators/history', verifyToken, requireRole('hod', 'faculty'), async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT sch.*, u.name as performed_by_name
+       FROM seminar_coordinator_history sch
+       LEFT JOIN users u ON sch.performed_by = u.id
+       ORDER BY sch.created_at DESC`
+    );
+    res.json({ history: r.rows });
+  } catch (err) {
+    console.error('[Seminar] GET /coordinators/history:', err.message);
+    res.status(500).json({ error: 'Failed to fetch coordinator history' });
   }
 });
 
@@ -361,13 +408,16 @@ router.get('/my-submission', verifyToken, async (req, res) => {
       delete group.guide_name;
     }
 
-    // Fetch individual marks for this student if group is approved
+    // Fetch individual marks for this student if group is approved and marks are submitted
     let myMarks = null;
     if (group.status === 'APPROVED' && studentProfile.prn) {
-       const mRes = await pool.query('SELECT * FROM seminar_marks WHERE prn = $1 AND group_id = $2', [studentProfile.prn, group.id]);
-       if (mRes.rows.length) {
-         myMarks = mRes.rows[0];
-       }
+      const mRes = await pool.query(
+        "SELECT * FROM seminar_marks WHERE prn = $1 AND group_id = $2 AND status IN ('SUBMITTED', 'FINALIZED')",
+        [studentProfile.prn, group.id]
+      );
+      if (mRes.rows.length) {
+        myMarks = mRes.rows[0];
+      }
     }
 
     res.json({
@@ -1268,26 +1318,50 @@ router.get('/sessions/:id/export', verifyToken, requireCoordinator, async (req, 
 
 // ─── Guide-facing view ────────────────────────────────────────────────────────
 
-// GET /api/seminar/my-groups  — guide sees only their own groups (any published session)
+// ─── Guide-facing view ────────────────────────────────────────────────────────
+
+// GET /api/seminar/my-groups — guide sees their assigned groups (where HOD has approved or session is published)
 router.get('/my-groups', verifyToken, requireRole('faculty', 'hod'), async (req, res) => {
   try {
     const fid = await getFacultyId(req.user.id);
     if (!fid) return res.status(404).json({ error: 'Faculty record not found' });
+
     const r = await pool.query(
-      `SELECT sg.id, sg.group_no, sg.domain, ss.name as session_name, ss.academic_year, ss.batch,
-              json_agg(json_build_object('name',m.student_name,'prn',m.prn,'division',m.division,'mobile',m.mobile,'email',m.email,'topic1',m.topic1,'topic2',m.topic2,'topic3',m.topic3,'is_leader',m.is_leader) ORDER BY m.member_index) as members
+      `SELECT sg.id, sg.group_no, sg.domain, sg.status as approval_status,
+              ss.id as session_id, ss.name as session_name, ss.academic_year, ss.batch, ss.status as session_status,
+              COALESCE(
+                (SELECT sm.status FROM seminar_marks sm WHERE sm.group_id = sg.id LIMIT 1),
+                'NOT_STARTED'
+              ) as evaluation_status,
+              (SELECT COUNT(*) FROM seminar_marks sm WHERE sm.group_id = sg.id) as marks_count,
+              (SELECT ROUND(AVG(sm.total_marks), 2) FROM seminar_marks sm WHERE sm.group_id = sg.id) as avg_marks,
+              (SELECT MAX(sm.submitted_at) FROM seminar_marks sm WHERE sm.group_id = sg.id) as submitted_at,
+              json_agg(
+                json_build_object(
+                  'id', m.id,
+                  'name', m.student_name,
+                  'prn', m.prn,
+                  'division', m.division,
+                  'mobile', m.mobile,
+                  'email', m.email,
+                  'topic1', m.topic1,
+                  'topic2', m.topic2,
+                  'topic3', m.topic3,
+                  'is_leader', m.is_leader
+                ) ORDER BY m.member_index
+              ) as members
        FROM seminar_groups sg
        JOIN seminar_sessions ss ON sg.session_id = ss.id
        LEFT JOIN seminar_group_members m ON m.group_id = sg.id
-       WHERE sg.guide_id = $1 AND ss.status = 'PUBLISHED'
-       GROUP BY sg.id, sg.group_no, sg.domain, ss.name, ss.academic_year, ss.batch
+       WHERE sg.guide_id = $1 AND (sg.status = 'APPROVED' OR ss.status = 'PUBLISHED')
+       GROUP BY sg.id, sg.group_no, sg.domain, sg.status, ss.id, ss.name, ss.academic_year, ss.batch, ss.status
        ORDER BY ss.id DESC, sg.group_no ASC`,
       [fid]
     );
     res.json({ groups: r.rows });
   } catch (err) {
     console.error('[Seminar] my-groups:', err.message);
-    res.status(500).json({ error: 'Failed to fetch groups' });
+    res.status(500).json({ error: 'Failed to fetch assigned groups' });
   }
 });
 
@@ -1297,7 +1371,6 @@ router.get('/my-groups', verifyToken, requireRole('faculty', 'hod'), async (req,
 router.get('/sessions/:id/audit', verifyToken, requireCoordinator, async (req, res) => {
   try {
     const sessionId = parseInt(req.params.id, 10);
-    // Gather group IDs for this session
     const groupIds = await pool.query(
       'SELECT id FROM seminar_groups WHERE session_id = $1',
       [sessionId]
@@ -1311,6 +1384,7 @@ router.get('/sessions/:id/audit', verifyToken, requireCoordinator, async (req, r
           OR (al.table_name = 'seminar_uploads' AND al.record_id IN (
                SELECT id FROM seminar_uploads WHERE session_id = $1))
           OR (al.table_name = 'seminar_groups' AND al.record_id = ANY($2))
+          OR (al.table_name = 'seminar_marks' AND al.record_id = ANY($2))
           OR (al.table_name = 'seminar_issue_overrides' AND al.record_id IN (
                SELECT id FROM seminar_issue_overrides WHERE session_id = $1))
        ORDER BY al.created_at DESC`,
@@ -1322,14 +1396,14 @@ router.get('/sessions/:id/audit', verifyToken, requireCoordinator, async (req, r
   }
 });
 
-// ─── Seminar V3: HOD Approval & Marks Entry ────────────────────────────────
+// ─── Seminar V3: HOD Approval & Guide Assignment State Machine ────────────
 
 // POST /api/seminar/sessions/:id/submit-approvals (Coordinator submits assignments to HOD)
 router.post('/sessions/:id/submit-approvals', verifyToken, requireCoordinator, async (req, res) => {
   const sessionId = parseInt(req.params.id, 10);
   try {
     const { groupIds } = req.body;
-    if (!groupIds || !Array.isArray(groupIds)) {
+    if (!groupIds || !Array.isArray(groupIds) || groupIds.length === 0) {
       return res.status(400).json({ error: 'groupIds array is required' });
     }
     await pool.query(
@@ -1338,8 +1412,18 @@ router.post('/sessions/:id/submit-approvals', verifyToken, requireCoordinator, a
        WHERE id = ANY($2) AND session_id = $3 AND (guide_id IS NOT NULL OR seminar_guide_id IS NOT NULL)`,
       [req.user.id, groupIds, sessionId]
     );
+    await auditRecord({
+      tableName: 'seminar_sessions',
+      recordId: sessionId,
+      changedBy: req.user.id,
+      action: 'SUBMIT_SEMINAR_APPROVALS',
+      oldValue: null,
+      newValue: { count: groupIds.length, groupIds },
+      reason: 'Coordinator submitted guide assignments for HOD approval'
+    });
     res.json({ message: 'Submitted for HOD approval' });
   } catch (err) {
+    console.error('[Seminar] submit-approvals:', err.message);
     res.status(500).json({ error: 'Failed to submit approvals' });
   }
 });
@@ -1349,14 +1433,18 @@ router.get('/hod/pending-approvals', verifyToken, requireRole('hod'), async (req
   try {
     const r = await pool.query(
       `SELECT sg.*, u.name as assigned_by_name,
-              (SELECT json_agg(json_build_object('name',m.student_name,'prn',m.prn)) 
+              ss.name as session_name, ss.academic_year, ss.batch,
+              (SELECT json_agg(json_build_object('name',m.student_name,'prn',m.prn,'topic1',m.topic1)) 
                FROM seminar_group_members m WHERE m.group_id = sg.id) as members
        FROM seminar_groups sg
+       JOIN seminar_sessions ss ON sg.session_id = ss.id
        LEFT JOIN users u ON sg.assigned_by = u.id
-       WHERE sg.status = 'AWAITING_HOD_APPROVAL'`
+       WHERE sg.status = 'AWAITING_HOD_APPROVAL'
+       ORDER BY sg.session_id DESC, sg.group_no ASC`
     );
     res.json({ pending: r.rows });
   } catch (err) {
+    console.error('[Seminar] pending-approvals:', err.message);
     res.status(500).json({ error: 'Failed to fetch pending approvals' });
   }
 });
@@ -1370,8 +1458,18 @@ router.patch('/hod/groups/:id/approve', verifyToken, requireRole('hod'), async (
        WHERE id = $2`,
       [req.user.id, req.params.id]
     );
+    await auditRecord({
+      tableName: 'seminar_groups',
+      recordId: parseInt(req.params.id, 10),
+      changedBy: req.user.id,
+      action: 'APPROVE_SEMINAR_ASSIGNMENT',
+      oldValue: { status: 'AWAITING_HOD_APPROVAL' },
+      newValue: { status: 'APPROVED' },
+      reason: 'HOD approved seminar guide assignment'
+    });
     res.json({ message: 'Assignment approved' });
   } catch (err) {
+    console.error('[Seminar] approve group:', err.message);
     res.status(500).json({ error: 'Failed to approve' });
   }
 });
@@ -1386,67 +1484,388 @@ router.patch('/hod/groups/:id/reject', verifyToken, requireRole('hod'), async (r
        WHERE id = $2`,
       [remark || null, req.params.id]
     );
+    await auditRecord({
+      tableName: 'seminar_groups',
+      recordId: parseInt(req.params.id, 10),
+      changedBy: req.user.id,
+      action: 'REJECT_SEMINAR_ASSIGNMENT',
+      oldValue: { status: 'AWAITING_HOD_APPROVAL' },
+      newValue: { status: 'PENDING_GUIDE_ASSIGNMENT', hod_remarks: remark },
+      reason: remark || 'HOD rejected assignment'
+    });
     res.json({ message: 'Assignment rejected' });
   } catch (err) {
+    console.error('[Seminar] reject group:', err.message);
     res.status(500).json({ error: 'Failed to reject' });
   }
 });
 
-// GET /api/seminar/sessions/:id/groups/:groupId/marks
-router.get('/sessions/:id/groups/:groupId/marks', verifyToken, requireCoordinator, async (req, res) => {
+// ─── Seminar Evaluation & Marks Entry System ───────────────────────────────
+
+// GET /api/seminar/groups/:groupId/evaluation
+// Fetch group details, member roster, rubric structure, and existing marks
+router.get('/groups/:groupId/evaluation', verifyToken, requireRole('faculty', 'hod'), async (req, res) => {
   try {
-    // Check if approved
-    const groupRes = await pool.query('SELECT status FROM seminar_groups WHERE id = $1', [req.params.groupId]);
-    if (!groupRes.rows.length || groupRes.rows[0].status !== 'APPROVED') {
-      return res.status(403).json({ error: 'Marks can only be entered for HOD-approved groups' });
+    const groupId = parseInt(req.params.groupId, 10);
+    const grpRes = await pool.query(
+      `SELECT sg.id, sg.group_no, sg.domain, sg.status as approval_status, sg.guide_id, sg.guide_name,
+              ss.id as session_id, ss.name as session_name, ss.academic_year, ss.batch, ss.status as session_status
+       FROM seminar_groups sg
+       JOIN seminar_sessions ss ON sg.session_id = ss.id
+       WHERE sg.id = $1`,
+      [groupId]
+    );
+    if (!grpRes.rows.length) return res.status(404).json({ error: 'Seminar group not found' });
+    const group = grpRes.rows[0];
+
+    const isHod = req.user.role === 'hod' || req.user.role === 'admin';
+    let isCoordinator = false;
+    let facultyId = null;
+
+    if (!isHod) {
+      const fac = await pool.query('SELECT id, is_seminar_coordinator FROM faculty WHERE user_id = $1', [req.user.id]);
+      if (!fac.rows.length) return res.status(403).json({ error: 'Faculty record not found' });
+      facultyId = fac.rows[0].id;
+      isCoordinator = !!fac.rows[0].is_seminar_coordinator;
+
+      if (!isCoordinator && group.guide_id !== facultyId) {
+        return res.status(403).json({ error: 'Access denied: You are not the assigned guide for this seminar group' });
+      }
     }
-    const marksRes = await pool.query('SELECT * FROM seminar_marks WHERE group_id = $1', [req.params.groupId]);
-    res.json({ marks: marksRes.rows });
+
+    if (group.approval_status !== 'APPROVED') {
+      return res.status(400).json({
+        error: 'Evaluation cannot be conducted: This group has not been approved by the HOD yet.',
+        approval_status: group.approval_status
+      });
+    }
+
+    const membersRes = await pool.query(
+      `SELECT m.* FROM seminar_group_members m WHERE m.group_id = $1 ORDER BY m.member_index ASC`,
+      [groupId]
+    );
+
+    const marksRes = await pool.query(
+      `SELECT sm.*, u.name as entered_by_name, u2.name as submitted_by_name, u3.name as unlocked_by_name
+       FROM seminar_marks sm
+       LEFT JOIN users u ON sm.entered_by = u.id
+       LEFT JOIN users u2 ON sm.submitted_by = u2.id
+       LEFT JOIN users u3 ON sm.unlocked_by = u3.id
+       WHERE sm.group_id = $1`,
+      [groupId]
+    );
+
+    const rubrics = [
+      { key: 'attendance_marks', name: 'Attendance', max: 10, required: true, desc: 'Regularity in weekly progress reporting and guide interaction' },
+      { key: 'presentation_marks', name: 'Presentation', max: 10, required: false, desc: 'Slide aesthetics, verbal delivery, professional demeanor, and time management' },
+      { key: 'subject_understanding_marks', name: 'Subject Understanding', max: 10, required: false, desc: 'Comprehension of domain concepts, technical clarity, and methodology' },
+      { key: 'publication_marks', name: 'Publication', max: 10, required: false, desc: 'Research paper manuscript quality, literature depth, and citation integrity' },
+      { key: 'viva_marks', name: 'Viva', max: 10, required: false, desc: 'Technical defense, conceptual depth, and response accuracy in viva voce' }
+    ];
+
+    const isSubmitted = marksRes.rows.some(m => m.status === 'SUBMITTED' || m.status === 'FINALIZED');
+    const isLocked = isSubmitted;
+    const canEdit = isHod || isCoordinator || !isLocked;
+    const canUnlock = (isHod || isCoordinator) && isLocked;
+
+    res.json({
+      group,
+      members: membersRes.rows,
+      marks: marksRes.rows,
+      rubrics,
+      maxTotal: 50,
+      isLocked,
+      canEdit,
+      canUnlock,
+      userRole: isHod ? 'hod' : isCoordinator ? 'coordinator' : 'guide'
+    });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch marks' });
+    console.error('[Seminar] GET /groups/:groupId/evaluation:', err.message);
+    res.status(500).json({ error: 'Failed to fetch evaluation data' });
   }
 });
 
-// POST /api/seminar/sessions/:id/groups/:groupId/marks
-router.post('/sessions/:id/groups/:groupId/marks', verifyToken, requireCoordinator, async (req, res) => {
+// POST /api/seminar/groups/:groupId/evaluation
+// Save evaluation (Draft or Final Submission)
+router.post('/groups/:groupId/evaluation', verifyToken, requireRole('faculty', 'hod'), async (req, res) => {
   const client = await pool.connect();
   try {
-    const { marks } = req.body; // array of { prn, report_marks, presentation_marks, qa_marks, total_marks }
-    if (!marks || !Array.isArray(marks)) return res.status(400).json({ error: 'Invalid marks payload' });
+    const groupId = parseInt(req.params.groupId, 10);
+    const { status = 'DRAFT', marks, overallRemarks } = req.body;
 
-    // Validate approval
-    const groupRes = await pool.query('SELECT status FROM seminar_groups WHERE id = $1 AND session_id = $2', [req.params.groupId, req.params.id]);
-    if (!groupRes.rows.length) return res.status(404).json({ error: 'Group not found' });
-    if (groupRes.rows[0].status !== 'APPROVED') {
-      return res.status(403).json({ error: 'Marks can only be entered for HOD-approved groups' });
+    if (!['DRAFT', 'SUBMITTED'].includes(status)) {
+      return res.status(400).json({ error: 'Status must be DRAFT or SUBMITTED' });
+    }
+    if (!marks || !Array.isArray(marks) || marks.length === 0) {
+      return res.status(400).json({ error: 'Marks list is required' });
+    }
+
+    const grpRes = await client.query(
+      `SELECT sg.id, sg.session_id, sg.group_no, sg.status as approval_status, sg.guide_id
+       FROM seminar_groups sg WHERE sg.id = $1`,
+      [groupId]
+    );
+    if (!grpRes.rows.length) return res.status(404).json({ error: 'Group not found' });
+    const group = grpRes.rows[0];
+
+    if (group.approval_status !== 'APPROVED') {
+      return res.status(400).json({ error: 'Cannot evaluate: Group is not approved by HOD' });
+    }
+
+    const isHod = req.user.role === 'hod' || req.user.role === 'admin';
+    let isCoordinator = false;
+    if (!isHod) {
+      const fac = await client.query('SELECT id, is_seminar_coordinator FROM faculty WHERE user_id = $1', [req.user.id]);
+      if (!fac.rows.length) return res.status(403).json({ error: 'Faculty record not found' });
+      isCoordinator = !!fac.rows[0].is_seminar_coordinator;
+      if (!isCoordinator && group.guide_id !== fac.rows[0].id) {
+        return res.status(403).json({ error: 'You are not the assigned guide for this group' });
+      }
+    }
+
+    // Check if locked
+    const existingMarks = await client.query(
+      'SELECT status FROM seminar_marks WHERE group_id = $1',
+      [groupId]
+    );
+    const isAlreadySubmitted = existingMarks.rows.some(m => m.status === 'SUBMITTED' || m.status === 'FINALIZED');
+    if (isAlreadySubmitted && !isHod && !isCoordinator) {
+      return res.status(403).json({
+        error: 'Evaluation is finalized and locked. Contact the Seminar Coordinator or HOD to unlock for modifications.'
+      });
+    }
+
+    // Helper to validate decimal score with up to 2 decimal places and between 0 and max
+    const validateScore = (val, fieldName, prn, isRequired = false) => {
+      if (val === undefined || val === null || val === '') {
+        if (isRequired && status === 'SUBMITTED') {
+          throw new Error(`${fieldName} is required for PRN ${prn} before final submission.`);
+        }
+        return 0;
+      }
+      const num = Number(val);
+      if (isNaN(num) || num < 0 || num > 10) {
+        throw new Error(`${fieldName} marks for PRN ${prn} must be between 0 and 10`);
+      }
+      // Round to 2 decimal places
+      return Math.round(num * 100) / 100;
+    };
+
+    // Validate marks limits
+    for (const m of marks) {
+      const att = validateScore(m.attendance_marks, 'Attendance', m.prn, true);
+      const pres = validateScore(m.presentation_marks, 'Presentation', m.prn, false);
+      const sub = validateScore(m.subject_understanding_marks, 'Subject Understanding', m.prn, false);
+      const pub = validateScore(m.publication_marks, 'Publication', m.prn, false);
+      const viva = validateScore(m.viva_marks, 'Viva', m.prn, false);
+
+      const total = Math.round((att + pres + sub + pub + viva) * 100) / 100;
+      if (total > 50) throw new Error(`Total marks for PRN ${m.prn} exceed maximum of 50`);
     }
 
     await client.query('BEGIN');
+
     for (const m of marks) {
-      // Validate marks maximum
-      if (m.report_marks > 20 || m.presentation_marks > 20 || m.qa_marks > 10) {
-        throw new Error('Marks exceed maximum limits');
-      }
-      
-      const stRes = await client.query('SELECT student_id FROM seminar_group_members WHERE prn = $1 AND group_id = $2', [m.prn, req.params.groupId]);
-      const studentId = stRes.rows.length ? stRes.rows[0].student_id : null;
-      
+      const att = validateScore(m.attendance_marks, 'Attendance', m.prn, true);
+      const pres = validateScore(m.presentation_marks, 'Presentation', m.prn, false);
+      const sub = validateScore(m.subject_understanding_marks, 'Subject Understanding', m.prn, false);
+      const pub = validateScore(m.publication_marks, 'Publication', m.prn, false);
+      const viva = validateScore(m.viva_marks, 'Viva', m.prn, false);
+      const total = Math.round((att + pres + sub + pub + viva) * 100) / 100;
+
+      const stRes = await client.query(
+        'SELECT student_id FROM seminar_group_members WHERE prn = $1 AND group_id = $2',
+        [m.prn, groupId]
+      );
+      const studentId = stRes.rows[0]?.student_id || null;
+
       await client.query(
-        `INSERT INTO seminar_marks (session_id, group_id, student_id, prn, report_marks, presentation_marks, qa_marks, total_marks, max_marks, entered_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 50, $9)
-         ON CONFLICT (group_id, prn) 
-         DO UPDATE SET report_marks = EXCLUDED.report_marks, presentation_marks = EXCLUDED.presentation_marks, 
-                       qa_marks = EXCLUDED.qa_marks, total_marks = EXCLUDED.total_marks, entered_by = EXCLUDED.entered_by, entered_at = NOW()`,
-        [req.params.id, req.params.groupId, studentId, m.prn, m.report_marks, m.presentation_marks, m.qa_marks, m.total_marks, req.user.id]
+        `INSERT INTO seminar_marks (
+           session_id, group_id, student_id, prn,
+           attendance_marks, presentation_marks, subject_understanding_marks, publication_marks, viva_marks,
+           total_marks, max_marks,
+           status, entered_by, entered_at,
+           submitted_at, submitted_by, remarks
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 50, $11, $12, NOW(),
+                 CASE WHEN $11 = 'SUBMITTED' THEN NOW() ELSE NULL END,
+                 CASE WHEN $11 = 'SUBMITTED' THEN $12 ELSE NULL END,
+                 $13)
+         ON CONFLICT (group_id, prn)
+         DO UPDATE SET
+           attendance_marks = EXCLUDED.attendance_marks,
+           presentation_marks = EXCLUDED.presentation_marks,
+           subject_understanding_marks = EXCLUDED.subject_understanding_marks,
+           publication_marks = EXCLUDED.publication_marks,
+           viva_marks = EXCLUDED.viva_marks,
+           total_marks = EXCLUDED.total_marks,
+           status = EXCLUDED.status,
+           entered_by = EXCLUDED.entered_by,
+           entered_at = NOW(),
+           submitted_at = CASE WHEN EXCLUDED.status = 'SUBMITTED' THEN NOW() ELSE seminar_marks.submitted_at END,
+           submitted_by = CASE WHEN EXCLUDED.status = 'SUBMITTED' THEN EXCLUDED.entered_by ELSE seminar_marks.submitted_by END,
+           remarks = COALESCE(EXCLUDED.remarks, seminar_marks.remarks)`,
+        [
+          group.session_id,
+          groupId,
+          studentId,
+          m.prn,
+          att,
+          pres,
+          sub,
+          pub,
+          viva,
+          total,
+          status,
+          req.user.id,
+          m.remarks || overallRemarks || null
+        ]
       );
     }
+
     await client.query('COMMIT');
-    res.json({ message: 'Marks saved successfully' });
+
+    await auditRecord({
+      tableName: 'seminar_marks',
+      recordId: groupId,
+      changedBy: req.user.id,
+      action: status === 'SUBMITTED' ? 'SUBMIT_SEMINAR_EVALUATION' : 'SAVE_SEMINAR_DRAFT',
+      oldValue: null,
+      newValue: { groupId, status, studentCount: marks.length },
+      reason: `${status === 'SUBMITTED' ? 'Finalized evaluation submitted' : 'Draft marks saved'} for Seminar Group #${group.group_no}`
+    });
+
+    res.json({
+      message: status === 'SUBMITTED' ? 'Evaluation finalized and submitted successfully' : 'Draft evaluation saved successfully',
+      status
+    });
   } catch (err) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: err.message || 'Failed to save marks' });
+    console.error('[Seminar] POST /groups/:groupId/evaluation:', err.message);
+    res.status(400).json({ error: err.message || 'Failed to save evaluation' });
   } finally {
     client.release();
+  }
+});
+
+// POST /api/seminar/groups/:groupId/marks/unlock (HOD or Coordinator only)
+router.post('/groups/:groupId/marks/unlock', verifyToken, async (req, res) => {
+  try {
+    const groupId = parseInt(req.params.groupId, 10);
+    const { reason = 'Unlocked for corrections' } = req.body;
+
+    const isHod = req.user.role === 'hod' || req.user.role === 'admin';
+    if (!isHod) {
+      const fac = await pool.query('SELECT is_seminar_coordinator FROM faculty WHERE user_id = $1', [req.user.id]);
+      if (!fac.rows[0]?.is_seminar_coordinator) {
+        return res.status(403).json({ error: 'Only HOD or Seminar Coordinator can unlock submitted evaluations' });
+      }
+    }
+
+    const prevMarks = await pool.query("SELECT COUNT(*) FROM seminar_marks WHERE group_id = $1 AND status = 'SUBMITTED'", [groupId]);
+    if (parseInt(prevMarks.rows[0].count, 10) === 0) {
+      return res.status(400).json({ error: 'No finalized evaluation found to unlock' });
+    }
+
+    await pool.query(
+      `UPDATE seminar_marks
+       SET status = 'DRAFT', unlocked_at = NOW(), unlocked_by = $1
+       WHERE group_id = $2`,
+      [req.user.id, groupId]
+    );
+
+    await auditRecord({
+      tableName: 'seminar_marks',
+      recordId: groupId,
+      changedBy: req.user.id,
+      action: 'UNLOCK_SEMINAR_EVALUATION',
+      oldValue: { status: 'SUBMITTED' },
+      newValue: { status: 'DRAFT', unlocked_by: req.user.id },
+      reason
+    });
+
+    res.json({ message: 'Evaluation successfully unlocked. The guide can now edit marks.', status: 'DRAFT' });
+  } catch (err) {
+    console.error('[Seminar] unlock marks error:', err.message);
+    res.status(500).json({ error: 'Failed to unlock evaluation' });
+  }
+});
+
+// GET /api/seminar/sessions/:id/marks-overview (Coordinator & HOD)
+router.get('/sessions/:id/marks-overview', verifyToken, requireCoordinator, async (req, res) => {
+  const sessionId = parseInt(req.params.id, 10);
+  try {
+    const r = await pool.query(
+      `SELECT sg.id, sg.group_no, sg.domain, sg.status as approval_status,
+              COALESCE(sg.guide_name, sem_g.guide_name, u.name, 'Unassigned') as guide_name,
+              COALESCE(
+                (SELECT sm.status FROM seminar_marks sm WHERE sm.group_id = sg.id LIMIT 1),
+                'NOT_STARTED'
+              ) as marks_status,
+              (SELECT COUNT(*) FROM seminar_marks sm WHERE sm.group_id = sg.id) as evaluated_count,
+              (SELECT COUNT(*) FROM seminar_group_members m WHERE m.group_id = sg.id) as member_count,
+              (SELECT ROUND(AVG(sm.total_marks), 2) FROM seminar_marks sm WHERE sm.group_id = sg.id) as avg_marks,
+              (SELECT MAX(sm.submitted_at) FROM seminar_marks sm WHERE sm.group_id = sg.id) as submitted_at,
+              (SELECT u2.name FROM seminar_marks sm JOIN users u2 ON sm.submitted_by = u2.id WHERE sm.group_id = sg.id LIMIT 1) as submitted_by_name
+       FROM seminar_groups sg
+       LEFT JOIN seminar_guides sem_g ON sg.seminar_guide_id = sem_g.id
+       LEFT JOIN faculty f ON (sg.guide_id = f.id OR sem_g.faculty_id = f.id)
+       LEFT JOIN users u ON f.user_id = u.id
+       WHERE sg.session_id = $1
+       ORDER BY sg.group_no ASC`,
+      [sessionId]
+    );
+    res.json({ overview: r.rows });
+  } catch (err) {
+    console.error('[Seminar] marks overview:', err.message);
+    res.status(500).json({ error: 'Failed to fetch marks overview' });
+  }
+});
+
+// GET /api/seminar/sessions/:id/export-marks (Coordinator or HOD)
+router.get('/sessions/:id/export-marks', verifyToken, requireCoordinator, async (req, res) => {
+  const sessionId = parseInt(req.params.id, 10);
+  try {
+    const sessRes = await pool.query('SELECT * FROM seminar_sessions WHERE id = $1', [sessionId]);
+    if (!sessRes.rows.length) return res.status(404).json({ error: 'Session not found' });
+    const session = sessRes.rows[0];
+
+    const r = await pool.query(
+      `SELECT sg.group_no, m.prn, m.student_name, m.division,
+              COALESCE(sg.guide_name, sem_g.guide_name, u.name, 'Unassigned') as guide_name,
+              sm.attendance_marks, sm.presentation_marks, sm.subject_understanding_marks, sm.publication_marks, sm.viva_marks, sm.total_marks,
+              COALESCE(sm.status, 'NOT_STARTED') as marks_status,
+              sm.evaluation_date, sm.submitted_at
+       FROM seminar_groups sg
+       JOIN seminar_group_members m ON m.group_id = sg.id
+       LEFT JOIN seminar_guides sem_g ON sg.seminar_guide_id = sem_g.id
+       LEFT JOIN faculty f ON (sg.guide_id = f.id OR sem_g.faculty_id = f.id)
+       LEFT JOIN users u ON f.user_id = u.id
+       LEFT JOIN seminar_marks sm ON (sm.group_id = sg.id AND sm.prn = m.prn)
+       WHERE sg.session_id = $1
+       ORDER BY sg.group_no ASC, m.member_index ASC`,
+      [sessionId]
+    );
+
+    const buffer = buildMarksWorkbook(session, r.rows);
+    const filename = `${session.name.replace(/[^a-z0-9]/gi, '_')}_Official_Seminar_Marksheet.xlsx`;
+
+    await auditRecord({
+      tableName: 'seminar_sessions',
+      recordId: sessionId,
+      changedBy: req.user.id,
+      action: 'EXPORT_SEMINAR_MARKSHEET',
+      oldValue: null,
+      newValue: { count: r.rows.length, filename },
+      reason: 'Exported seminar marksheet'
+    });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  } catch (err) {
+    console.error('[Seminar] export-marks error:', err.message);
+    res.status(500).json({ error: 'Export marksheet failed' });
   }
 });
 
@@ -1457,7 +1876,15 @@ router.get('/student/marks', verifyToken, requireRole('student'), async (req, re
     if (!stRes.rows.length) return res.status(404).json({ error: 'Student record not found' });
     const prn = stRes.rows[0].enrollment_no || stRes.rows[0].roll_no;
     
-    const marksRes = await pool.query('SELECT * FROM seminar_marks WHERE prn = $1', [prn]);
+    const marksRes = await pool.query(
+      `SELECT sm.*, sg.group_no, sg.domain, sg.guide_name,
+              ss.name as session_name, ss.academic_year, ss.batch
+       FROM seminar_marks sm
+       JOIN seminar_groups sg ON sm.group_id = sg.id
+       JOIN seminar_sessions ss ON sm.session_id = ss.id
+       WHERE sm.prn = $1 AND sm.status IN ('SUBMITTED', 'FINALIZED')`,
+      [prn]
+    );
     res.json({ marks: marksRes.rows });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch marks' });

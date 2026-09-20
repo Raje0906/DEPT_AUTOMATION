@@ -5,8 +5,10 @@ import toast from 'react-hot-toast';
 
 export default function HODSeminarMgmt() {
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('coordinator'); // 'coordinator' | 'approvals' | 'history'
   const [pendingGroups, setPendingGroups] = useState([]);
   const [facultyList, setFacultyList] = useState([]);
+  const [coordinatorHistory, setCoordinatorHistory] = useState([]);
   const [selectedFacultyId, setSelectedFacultyId] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [appointing, setAppointing] = useState(false);
@@ -35,9 +37,18 @@ export default function HODSeminarMgmt() {
     }
   };
 
+  const fetchHistory = async () => {
+    try {
+      const res = await api.get('/seminar/coordinators/history');
+      setCoordinatorHistory(res.data.history || []);
+    } catch (err) {
+      console.error('Failed to load coordinator history:', err);
+    }
+  };
+
   const loadData = async () => {
     setLoading(true);
-    await Promise.all([fetchPending(), fetchCoordinators()]);
+    await Promise.all([fetchPending(), fetchCoordinators(), fetchHistory()]);
     setLoading(false);
   };
 
@@ -143,9 +154,56 @@ export default function HODSeminarMgmt() {
         </div>
       </div>
 
+      {/* ─── TAB NAVIGATION ─────────────────────────────────────────── */}
+      <div className="flex gap-1 bg-[var(--paper)] border border-[var(--rule)] rounded-xl p-1.5">
+        {[
+          {
+            key: 'coordinator',
+            label: 'Coordinator Designation',
+            icon: (
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+              </svg>
+            )
+          },
+          {
+            key: 'approvals',
+            label: `Guide Approvals ${pendingGroups.length > 0 ? `(${pendingGroups.length})` : ''}`,
+            icon: (
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            )
+          },
+          {
+            key: 'history',
+            label: 'Appointment History',
+            icon: (
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            )
+          },
+        ].map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+              activeTab === tab.key
+                ? 'bg-white text-[var(--navy)] shadow-sm border border-[var(--rule)]'
+                : 'text-[var(--ink)]/50 hover:text-[var(--ink)] hover:bg-white/50'
+            }`}
+          >
+            <span>{tab.icon}</span>
+            <span>{tab.label}</span>
+          </button>
+        ))}
+      </div>
+
       {/* ─── SECTION 1: SEMINAR COORDINATOR DESIGNATION ───────────────────── */}
-      <div className="bg-white border border-[var(--rule)] rounded-xl p-6 shadow-xs space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
+      {activeTab === 'coordinator' && (
+        <div className="bg-white border border-[var(--rule)] rounded-xl p-6 shadow-xs space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
           <div>
             <h2 className="text-base font-bold text-navy flex items-center gap-2">
               <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -235,8 +293,10 @@ export default function HODSeminarMgmt() {
           </form>
         </div>
       </div>
+      )}
 
       {/* ─── SECTION 2: PENDING SEMINAR GUIDE APPROVALS ───────────────────── */}
+      {activeTab === 'approvals' && (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
@@ -250,6 +310,7 @@ export default function HODSeminarMgmt() {
           <thead className="bg-[#EEF0F7] border-b border-[var(--rule)] text-[var(--navy)]">
             <tr>
               <th className="p-4 font-semibold">Group</th>
+              <th className="p-4 font-semibold">Session</th>
               <th className="p-4 font-semibold">Domain</th>
               <th className="p-4 font-semibold">Proposed Guide</th>
               <th className="p-4 font-semibold">Submitted By</th>
@@ -259,7 +320,14 @@ export default function HODSeminarMgmt() {
           <tbody className="divide-y divide-[var(--rule)]">
             {pendingGroups.length === 0 ? (
               <tr>
-                <td colSpan={5} className="p-8 text-center text-[var(--ink)]/40">No pending approvals at this time.</td>
+                <td colSpan={6} className="p-8 text-center text-[var(--ink)]/40">
+                  <div className="flex flex-col items-center gap-2">
+                    <svg className="w-8 h-8 text-[var(--ink)]/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-sm">No pending approvals at this time.</span>
+                  </div>
+                </td>
               </tr>
             ) : (
               pendingGroups.map(g => (
@@ -270,13 +338,17 @@ export default function HODSeminarMgmt() {
                       {g.members?.length || 0} Members
                     </div>
                   </td>
-                  <td className="p-4 text-[var(--ink)] font-medium max-w-[200px] truncate">{g.domain}</td>
+                  <td className="p-4">
+                    <div className="text-xs font-medium text-[var(--ink)]">{g.session_name}</div>
+                    <div className="text-[11px] text-[var(--ink)]/50">{g.academic_year} · Batch {g.batch}</div>
+                  </td>
+                  <td className="p-4 text-[var(--ink)] font-medium max-w-[180px] truncate">{g.domain}</td>
                   <td className="p-4">
                     <div className="font-bold text-emerald-800">{g.guide_name || 'Assigned Guide'}</div>
                   </td>
                   <td className="p-4">
                     <div className="text-[var(--ink)] font-medium">{g.assigned_by_name}</div>
-                    <div className="text-xs text-[var(--ink)]/50">{new Date(g.assigned_at).toLocaleDateString()}</div>
+                    <div className="text-xs text-[var(--ink)]/50">{g.assigned_at ? new Date(g.assigned_at).toLocaleDateString() : '—'}</div>
                   </td>
                   <td className="p-4 text-right space-x-2">
                     <button
@@ -340,6 +412,62 @@ export default function HODSeminarMgmt() {
         </div>
       )}
       </div>
+      )}
+
+      {/* ─── SECTION 3: COORDINATOR APPOINTMENT HISTORY ───────────────────── */}
+      {activeTab === 'history' && (
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-lg font-bold text-navy">Coordinator Appointment History</h2>
+          <p className="text-xs text-draft">Immutable record of all coordinator appointments and revocations.</p>
+        </div>
+
+        <div className="bg-white border border-[var(--rule)] rounded-xl overflow-hidden shadow-xs">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-[#EEF0F7] border-b border-[var(--rule)] text-[var(--navy)]">
+              <tr>
+                <th className="p-4 font-semibold">Action</th>
+                <th className="p-4 font-semibold">Faculty Member</th>
+                <th className="p-4 font-semibold">Performed By</th>
+                <th className="p-4 font-semibold">Notes</th>
+                <th className="p-4 font-semibold">Date & Time</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--rule)]">
+              {coordinatorHistory.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="p-8 text-center text-[var(--ink)]/40">No coordinator appointment history recorded.</td>
+                </tr>
+              ) : (
+                coordinatorHistory.map(h => (
+                  <tr key={h.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="p-4">
+                      <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full ${
+                        h.action === 'APPOINTED'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-red-100 text-red-700'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${h.action === 'APPOINTED' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                        {h.action === 'APPOINTED' ? 'Appointed' : 'Revoked'}
+                      </span>
+                    </td>
+                    <td className="p-4">
+                      <div className="font-semibold text-[var(--ink)]">{h.faculty_name}</div>
+                    </td>
+                    <td className="p-4 text-[var(--ink)]/70 text-xs">{h.performed_by_name || 'HOD'}</td>
+                    <td className="p-4 text-[var(--ink)]/60 text-xs max-w-[200px] truncate">{h.notes || '—'}</td>
+                    <td className="p-4 text-[var(--ink)]/60 text-xs font-mono">
+                      {new Date(h.created_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      )}
     </div>
   );
 }
+

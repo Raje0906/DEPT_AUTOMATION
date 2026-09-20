@@ -12,7 +12,6 @@
   "dependencies": {
     "@heroicons/react": "^2.2.0",
     "axios": "^1.20.0",
-    "dept-automation": "file:..",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
     "react": "^19.2.8",
