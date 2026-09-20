@@ -475,8 +475,12 @@ async function runMigrations() {
         group_id INTEGER NOT NULL REFERENCES seminar_groups(id) ON DELETE CASCADE,
         student_id INTEGER REFERENCES students(id) ON DELETE SET NULL,
         prn VARCHAR(60) NOT NULL,
-        report_marks NUMERIC(5,2),
+        attendance_marks NUMERIC(5,2),
         presentation_marks NUMERIC(5,2),
+        subject_understanding_marks NUMERIC(5,2),
+        publication_marks NUMERIC(5,2),
+        viva_marks NUMERIC(5,2),
+        report_marks NUMERIC(5,2),
         qa_marks NUMERIC(5,2),
         total_marks NUMERIC(5,2),
         max_marks NUMERIC(5,2) DEFAULT 50,
@@ -484,6 +488,37 @@ async function runMigrations() {
         entered_at TIMESTAMPTZ DEFAULT NOW(),
         UNIQUE(group_id, prn)
       );
+
+      CREATE TABLE IF NOT EXISTS seminar_coordinator_history (
+        id           SERIAL PRIMARY KEY,
+        faculty_id   INTEGER REFERENCES faculty(id) ON DELETE SET NULL,
+        faculty_name VARCHAR(200),
+        action       VARCHAR(20) NOT NULL CHECK (action IN ('APPOINTED', 'REVOKED')),
+        performed_by INTEGER NOT NULL REFERENCES users(id),
+        notes        TEXT,
+        created_at   TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_sem_coord_hist_fac ON seminar_coordinator_history(faculty_id);
+      CREATE INDEX IF NOT EXISTS idx_sem_coord_hist_created ON seminar_coordinator_history(created_at DESC);
+
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS attendance_marks NUMERIC(5,2);
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS presentation_marks NUMERIC(5,2);
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS subject_understanding_marks NUMERIC(5,2);
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS publication_marks NUMERIC(5,2);
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS viva_marks NUMERIC(5,2);
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS report_marks NUMERIC(5,2);
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS qa_marks NUMERIC(5,2);
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'DRAFT'
+        CHECK (status IN ('DRAFT', 'SUBMITTED', 'FINALIZED'));
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ;
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS submitted_by INTEGER REFERENCES users(id);
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS unlocked_at TIMESTAMPTZ;
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS unlocked_by INTEGER REFERENCES users(id);
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS remarks TEXT;
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS evaluation_date DATE DEFAULT CURRENT_DATE;
+      CREATE INDEX IF NOT EXISTS idx_sem_marks_group ON seminar_marks(group_id);
+      CREATE INDEX IF NOT EXISTS idx_sem_marks_session ON seminar_marks(session_id);
+      CREATE INDEX IF NOT EXISTS idx_sem_marks_prn ON seminar_marks(prn);
     `);
 
     // ─── AUDIT LOG ENHANCEMENTS (Cybersecurity & Auth Events) ─────────────────

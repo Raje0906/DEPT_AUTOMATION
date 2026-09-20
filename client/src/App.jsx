@@ -43,12 +43,14 @@ import HODProjectMgmt from './pages/hod/HODProjectMgmt'
 import AuditLog       from './pages/hod/AuditLog'
 
 // Seminar Tool
-import SeminarSessions   from './pages/seminar/SeminarSessions'
-import SeminarUpload     from './pages/seminar/SeminarUpload'
-import SeminarAssignment from './pages/seminar/SeminarAssignment'
-import SeminarReview     from './pages/seminar/SeminarReview'
-import SeminarGuideView  from './pages/seminar/SeminarGuideView'
-import SeminarAuditLog   from './pages/seminar/SeminarAuditLog'
+import SeminarSessions      from './pages/seminar/SeminarSessions'
+import SeminarUpload        from './pages/seminar/SeminarUpload'
+import SeminarAssignment    from './pages/seminar/SeminarAssignment'
+import SeminarReview        from './pages/seminar/SeminarReview'
+import SeminarGuideView     from './pages/seminar/SeminarGuideView'
+import SeminarAuditLog      from './pages/seminar/SeminarAuditLog'
+import SeminarEvaluation    from './pages/seminar/SeminarEvaluation'
+import SeminarMarksOverview from './pages/seminar/SeminarMarksOverview'
 
 // Alumni
 import AlumniFeedback      from './pages/alumni/AlumniFeedback'
@@ -114,16 +116,19 @@ export default function App() {
           <Route path="/faculty/magazines/view/:id" element={<OnlineMagazineViewer />} />
 
           {/* Seminar Tool — Coordinator */}
-          <Route path="/faculty/seminar"              element={<CoordinatorLayout><SeminarSessions /></CoordinatorLayout>} />
-          <Route path="/faculty/seminar/:id/upload"   element={<CoordinatorLayout><SeminarUpload /></CoordinatorLayout>} />
-          <Route path="/faculty/seminar/:id/assign"   element={<CoordinatorLayout><SeminarAssignment /></CoordinatorLayout>} />
-          <Route path="/faculty/seminar/:id/review"   element={<CoordinatorLayout><SeminarReview /></CoordinatorLayout>} />
-          <Route path="/faculty/seminar/:id/audit"    element={<CoordinatorLayout><SeminarAuditLog /></CoordinatorLayout>} />
-          {/* Seminar Tool — Guide view */}
-          <Route path="/faculty/seminar/my-groups"    element={<FacultyLayout><SeminarGuideView /></FacultyLayout>} />
+          <Route path="/faculty/seminar"                    element={<CoordinatorLayout><SeminarSessions /></CoordinatorLayout>} />
+          <Route path="/faculty/seminar/:id/upload"         element={<CoordinatorLayout><SeminarUpload /></CoordinatorLayout>} />
+          <Route path="/faculty/seminar/:id/assign"         element={<CoordinatorLayout><SeminarAssignment /></CoordinatorLayout>} />
+          <Route path="/faculty/seminar/:id/review"         element={<CoordinatorLayout><SeminarReview /></CoordinatorLayout>} />
+          <Route path="/faculty/seminar/:id/audit"          element={<CoordinatorLayout><SeminarAuditLog /></CoordinatorLayout>} />
+          <Route path="/faculty/seminar/:id/marks-overview" element={<CoordinatorLayout><SeminarMarksOverview /></CoordinatorLayout>} />
+          {/* Seminar Tool — Guide view and Evaluation */}
+          <Route path="/faculty/seminar/my-groups"          element={<FacultyLayout><SeminarGuideView /></FacultyLayout>} />
+          <Route path="/faculty/seminar/evaluate/:groupId"  element={<FacultyLayout><SeminarEvaluation /></FacultyLayout>} />
           {/* HOD also accesses seminar */}
-          <Route path="/hod/seminar"                  element={<HODLayout><SeminarSessions /></HODLayout>} />
-          <Route path="/hod/seminar-approvals"        element={<HODLayout><HODSeminarMgmt /></HODLayout>} />
+          <Route path="/hod/seminar"                        element={<HODLayout><SeminarSessions /></HODLayout>} />
+          <Route path="/hod/seminar/:id/marks-overview"     element={<HODLayout><SeminarMarksOverview /></HODLayout>} />
+          <Route path="/hod/seminar-approvals"              element={<HODLayout><HODSeminarMgmt /></HODLayout>} />
 
           {/* HOD */}
           <Route path="/hod" element={<HODLayout><HODDashboard /></HODLayout>} />

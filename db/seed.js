@@ -418,8 +418,140 @@ async function seed() {
       VALUES ($1, $2)
     `, [stage1Id, hodUser.rows[0].id]);
 
+    // ─── SEMINAR MODULE SEEDING ───────────────────────────────────────────────
+    console.log('[Seed] Seeding Seminar Module (Coordinator, Sessions, Guides, Groups, Marks)...');
+
+    await client.query(`
+      TRUNCATE seminar_marks, seminar_group_members, seminar_groups,
+               seminar_guides, seminar_issue_overrides, seminar_uploads,
+               seminar_coordinator_history, seminar_sessions
+      RESTART IDENTITY CASCADE;
+    `);
+
+    // 1. Appoint Prof. Sunita Patil (facultyIds[1]) as Seminar Coordinator
+    await client.query('UPDATE faculty SET is_seminar_coordinator = (id = $1)', [facultyIds[1]]);
+    
+    // Fetch faculty user_ids for audit history
+    const coordUserRes = await client.query('SELECT user_id, name FROM faculty f JOIN users u ON f.user_id = u.id WHERE f.id = $1', [facultyIds[1]]);
+    const coordUserId = coordUserRes.rows[0].user_id;
+
+    // Seed appointment history
+    await client.query(`
+      INSERT INTO seminar_coordinator_history (faculty_id, faculty_name, action, performed_by, notes, created_at)
+      VALUES ($1, 'Prof. Rajan Mehta', 'APPOINTED', $2, 'Appointed for AY 2024-25 term', NOW() - INTERVAL '6 months')
+    `, [facultyIds[0], hodUser.rows[0].id]);
+
+    await client.query(`
+      INSERT INTO seminar_coordinator_history (faculty_id, faculty_name, action, performed_by, notes, created_at)
+      VALUES ($1, 'Prof. Rajan Mehta', 'REVOKED', $2, 'Term concluded; designated Prof. Sunita Patil for AY 2025-26', NOW() - INTERVAL '1 month')
+    `, [facultyIds[0], hodUser.rows[0].id]);
+
+    await client.query(`
+      INSERT INTO seminar_coordinator_history (faculty_id, faculty_name, action, performed_by, notes, created_at)
+      VALUES ($1, 'Prof. Sunita Patil', 'APPOINTED', $2, 'Appointed as Seminar Coordinator for AY 2025-26', NOW() - INTERVAL '1 month')
+    `, [facultyIds[1], hodUser.rows[0].id]);
+
+    // 2. Seminar Session
+    const sessRes = await client.query(`
+      INSERT INTO seminar_sessions (name, academic_year, batch, status, is_locked, created_by, created_at)
+      VALUES ('TE Seminar 2025–26', '2025-26', 'TE-2025', 'ASSIGNMENT', false, $1, NOW() - INTERVAL '20 days')
+      RETURNING id
+    `, [hodUser.rows[0].id]);
+    const sessionId = sessRes.rows[0].id;
+
+    // 3. Seminar Guides Roster
+    const sg1 = await client.query(`INSERT INTO seminar_guides (session_id, faculty_id, guide_name, designation, quota, display_order) VALUES ($1, $2, 'Prof. Rajan Mehta', 'Associate Professor', 4, 1) RETURNING id`, [sessionId, facultyIds[0]]);
+    const sg2 = await client.query(`INSERT INTO seminar_guides (session_id, faculty_id, guide_name, designation, quota, display_order) VALUES ($1, $2, 'Prof. Sunita Patil', 'Associate Professor', 4, 2) RETURNING id`, [sessionId, facultyIds[1]]);
+    const sg3 = await client.query(`INSERT INTO seminar_guides (session_id, faculty_id, guide_name, designation, quota, display_order) VALUES ($1, $2, 'Prof. Arjun Sharma', 'Assistant Professor', 4, 3) RETURNING id`, [sessionId, facultyIds[2]]);
+    const sg4 = await client.query(`INSERT INTO seminar_guides (session_id, faculty_id, guide_name, designation, quota, display_order) VALUES ($1, $2, 'Prof. Priya Kulkarni', 'Assistant Professor', 4, 4) RETURNING id`, [sessionId, facultyIds[3]]);
+
+    // Helper: get student user_id and PRN
+    const studentUsers = [];
+    for (let i = 0; i < 15 && i < studentIds.length; i++) {
+      const su = await client.query('SELECT s.id as student_id, s.user_id, s.roll_no, s.enrollment_no, u.name, u.email FROM students s JOIN users u ON s.user_id = u.id WHERE s.id = $1', [studentIds[i]]);
+      studentUsers.push(su.rows[0]);
+    }
+
+    // 4. Sample Seminar Groups (covering all lifecycle states)
+
+    // ─── Group 1: Approved & Evaluated (Guide: Prof. Rajan Mehta) ─────────────
+    const g1Res = await client.query(`
+      INSERT INTO seminar_groups (session_id, group_no, domain, guide_id, seminar_guide_id, guide_name, leader_user_id, status, assigned_by, assigned_at, approved_by, approved_at, submitted_at)
+      VALUES ($1, 1, 'Artificial Intelligence & Machine Learning', $2, $3, 'Prof. Rajan Mehta', $4, 'APPROVED', $5, NOW() - INTERVAL '10 days', $6, NOW() - INTERVAL '9 days', NOW() - INTERVAL '15 days')
+      RETURNING id
+    `, [sessionId, facultyIds[0], sg1.rows[0].id, studentUsers[0].user_id, coordUserId, hodUser.rows[0].id]);
+    const semG1Id = g1Res.rows[0].id;
+
+    await client.query(`INSERT INTO seminar_group_members (group_id, member_index, student_name, prn, division, mobile, email, topic1, topic2, topic3, is_leader) VALUES ($1, 1, $2, $3, 'A', '9822012345', $4, 'Deep Learning for Autonomous Drone Obstacle Detection', 'Transformer-based Vision Systems', 'Real-time Object Detection', true)`, [semG1Id, studentUsers[0].name, studentUsers[0].enrollment_no, studentUsers[0].email]);
+    await client.query(`INSERT INTO seminar_group_members (group_id, member_index, student_name, prn, division, mobile, email, topic1, topic2, topic3, is_leader) VALUES ($1, 2, $2, $3, 'A', '9822012346', $4, 'Edge AI Inference on Embedded Devices', 'Model Quantization Techniques', 'FPGA Acceleration for Neural Nets', false)`, [semG1Id, studentUsers[1].name, studentUsers[1].enrollment_no, studentUsers[1].email]);
+    await client.query(`INSERT INTO seminar_group_members (group_id, member_index, student_name, prn, division, mobile, email, topic1, topic2, topic3, is_leader) VALUES ($1, 3, $2, $3, 'A', '9822012347', $4, 'Real-time Object Classification using YOLOv8', 'Zero-shot Learning for Aerial Imagery', 'Semantic Segmentation in Robotics', false)`, [semG1Id, studentUsers[2].name, studentUsers[2].enrollment_no, studentUsers[2].email]);
+
+    // Group 1 Individual Marks (5 criteria: attendance, presentation, subject_understanding, publication, viva)
+    await client.query(`
+      INSERT INTO seminar_marks (session_id, group_id, student_id, prn, attendance_marks, presentation_marks, subject_understanding_marks, publication_marks, viva_marks, total_marks, max_marks, status, entered_by, submitted_by, submitted_at, remarks)
+      VALUES ($1, $2, $3, $4, 9.5, 9.0, 9.5, 8.5, 9.5, 46.0, 50, 'SUBMITTED', $5, $5, NOW() - INTERVAL '3 days', 'Excellent presentation delivery and comprehensive literature survey.')
+    `, [sessionId, semG1Id, studentUsers[0].student_id, studentUsers[0].enrollment_no, facultyIds[0]]);
+
+    await client.query(`
+      INSERT INTO seminar_marks (session_id, group_id, student_id, prn, attendance_marks, presentation_marks, subject_understanding_marks, publication_marks, viva_marks, total_marks, max_marks, status, entered_by, submitted_by, submitted_at, remarks)
+      VALUES ($1, $2, $3, $4, 9.0, 8.5, 8.5, 8.0, 8.5, 42.5, 50, 'SUBMITTED', $5, $5, NOW() - INTERVAL '3 days', 'Strong technical defense and thorough analysis.')
+    `, [sessionId, semG1Id, studentUsers[1].student_id, studentUsers[1].enrollment_no, facultyIds[0]]);
+
+    await client.query(`
+      INSERT INTO seminar_marks (session_id, group_id, student_id, prn, attendance_marks, presentation_marks, subject_understanding_marks, publication_marks, viva_marks, total_marks, max_marks, status, entered_by, submitted_by, submitted_at, remarks)
+      VALUES ($1, $2, $3, $4, 10.0, 9.5, 9.0, 9.0, 9.5, 47.0, 50, 'SUBMITTED', $5, $5, NOW() - INTERVAL '3 days', 'Outstanding technical depth, flawless answers in Q&A session.')
+    `, [sessionId, semG1Id, studentUsers[2].student_id, studentUsers[2].enrollment_no, facultyIds[0]]);
+
+    // ─── Group 2: Approved, Pending Evaluation (Guide: Prof. Sunita Patil) ─────
+    const g2Res = await client.query(`
+      INSERT INTO seminar_groups (session_id, group_no, domain, guide_id, seminar_guide_id, guide_name, leader_user_id, status, assigned_by, assigned_at, approved_by, approved_at, submitted_at)
+      VALUES ($1, 2, 'Blockchain & Decentralized Systems', $2, $3, 'Prof. Sunita Patil', $4, 'APPROVED', $5, NOW() - INTERVAL '8 days', $6, NOW() - INTERVAL '7 days', NOW() - INTERVAL '14 days')
+      RETURNING id
+    `, [sessionId, facultyIds[1], sg2.rows[0].id, studentUsers[3].user_id, coordUserId, hodUser.rows[0].id]);
+    const semG2Id = g2Res.rows[0].id;
+
+    await client.query(`INSERT INTO seminar_group_members (group_id, member_index, student_name, prn, division, mobile, email, topic1, topic2, topic3, is_leader) VALUES ($1, 1, $2, $3, 'A', '9822012348', $4, 'Zero-Knowledge Proofs for Healthcare Privacy', 'zk-SNARKs on Layer 2', 'Decentralized Key Management', true)`, [semG2Id, studentUsers[3].name, studentUsers[3].enrollment_no, studentUsers[3].email]);
+    await client.query(`INSERT INTO seminar_group_members (group_id, member_index, student_name, prn, division, mobile, email, topic1, topic2, topic3, is_leader) VALUES ($1, 2, $2, $3, 'A', '9822012349', $4, 'Layer-2 Optimistic Rollups on Ethereum', 'State Channel Protocols', 'Cross-chain Interoperability Bridges', false)`, [semG2Id, studentUsers[4].name, studentUsers[4].enrollment_no, studentUsers[4].email]);
+    await client.query(`INSERT INTO seminar_group_members (group_id, member_index, student_name, prn, division, mobile, email, topic1, topic2, topic3, is_leader) VALUES ($1, 3, $2, $3, 'A', '9822012350', $4, 'Decentralized Identity Verification using DIDs', 'Verifiable Credentials in Education', 'SBTs for Academic Records', false)`, [semG2Id, studentUsers[5].name, studentUsers[5].enrollment_no, studentUsers[5].email]);
+
+    // ─── Group 3: Awaiting HOD Approval (Proposed Guide: Prof. Arjun Sharma) ──
+    const g3Res = await client.query(`
+      INSERT INTO seminar_groups (session_id, group_no, domain, guide_id, seminar_guide_id, guide_name, leader_user_id, status, assigned_by, assigned_at, submitted_at)
+      VALUES ($1, 3, 'Cloud Computing & Distributed Systems', $2, $3, 'Prof. Arjun Sharma', $4, 'AWAITING_HOD_APPROVAL', $5, NOW() - INTERVAL '2 days', NOW() - INTERVAL '12 days')
+      RETURNING id
+    `, [sessionId, facultyIds[2], sg3.rows[0].id, studentUsers[6].user_id, coordUserId]);
+    const semG3Id = g3Res.rows[0].id;
+
+    await client.query(`INSERT INTO seminar_group_members (group_id, member_index, student_name, prn, division, mobile, email, topic1, topic2, topic3, is_leader) VALUES ($1, 1, $2, $3, 'A', '9822012351', $4, 'Serverless Microservice Orchestration with Event-Driven Architecture', 'KEDA Autoscaling', 'Distributed Tracing with OpenTelemetry', true)`, [semG3Id, studentUsers[6].name, studentUsers[6].enrollment_no, studentUsers[6].email]);
+    await client.query(`INSERT INTO seminar_group_members (group_id, member_index, student_name, prn, division, mobile, email, topic1, topic2, topic3, is_leader) VALUES ($1, 2, $2, $3, 'A', '9822012352', $4, 'Kubernetes Dynamic Resource Scheduling using Reinforcement Learning', 'Pod Disruption Budgets', 'Service Mesh Security with Istio', false)`, [semG3Id, studentUsers[7].name, studentUsers[7].enrollment_no, studentUsers[7].email]);
+    await client.query(`INSERT INTO seminar_group_members (group_id, member_index, student_name, prn, division, mobile, email, topic1, topic2, topic3, is_leader) VALUES ($1, 3, $2, $3, 'A', '9822012353', $4, 'Predictive Autoscaling in Hybrid Cloud Microservices', 'Cost Optimization in AWS/GCP', 'eBPF for Cloud Observability', false)`, [semG3Id, studentUsers[8].name, studentUsers[8].enrollment_no, studentUsers[8].email]);
+
+    // ─── Group 4: Pending Guide Assignment (Fresh Student Registration) ───────
+    const g4Res = await client.query(`
+      INSERT INTO seminar_groups (session_id, group_no, domain, leader_user_id, status, submitted_at)
+      VALUES ($1, 4, 'Cybersecurity & Network Defense', $2, 'PENDING_GUIDE_ASSIGNMENT', NOW() - INTERVAL '3 days')
+      RETURNING id
+    `, [sessionId, studentUsers[9].user_id]);
+    const semG4Id = g4Res.rows[0].id;
+
+    await client.query(`INSERT INTO seminar_group_members (group_id, member_index, student_name, prn, division, mobile, email, topic1, topic2, topic3, is_leader) VALUES ($1, 1, $2, $3, 'A', '9822012354', $4, 'Automated Threat Hunting using Graph Neural Networks', 'SIEM Integration with AI', 'MITRE ATT&CK Mapping', true)`, [semG4Id, studentUsers[9].name, studentUsers[9].enrollment_no, studentUsers[9].email]);
+    await client.query(`INSERT INTO seminar_group_members (group_id, member_index, student_name, prn, division, mobile, email, topic1, topic2, topic3, is_leader) VALUES ($1, 2, $2, $3, 'A', '9822012355', $4, 'Zero Trust Architecture Implementation in Enterprise Clouds', 'Micro-segmentation Strategies', 'Software-Defined Perimeter Protocols', false)`, [semG4Id, studentUsers[10].name, studentUsers[10].enrollment_no, studentUsers[10].email]);
+    await client.query(`INSERT INTO seminar_group_members (group_id, member_index, student_name, prn, division, mobile, email, topic1, topic2, topic3, is_leader) VALUES ($1, 3, $2, $3, 'A', '9822012356', $4, 'Post-Quantum Cryptographic Key Exchange Mechanisms', 'Kyber Algorithm Optimization', 'Quantum Resistant TLS Handshakes', false)`, [semG4Id, studentUsers[11].name, studentUsers[11].enrollment_no, studentUsers[11].email]);
+
+    // ─── Group 5: Rejected by HOD with Remark (Returned to Coordinator) ───────
+    const g5Res = await client.query(`
+      INSERT INTO seminar_groups (session_id, group_no, domain, leader_user_id, status, hod_remarks, submitted_at)
+      VALUES ($1, 5, 'Internet of Things & Embedded AI', $2, 'PENDING_GUIDE_ASSIGNMENT', 'Please reassign to faculty with specialized Embedded Systems / IoT laboratory experience.', NOW() - INTERVAL '4 days')
+      RETURNING id
+    `, [sessionId, studentUsers[12].user_id]);
+    const semG5Id = g5Res.rows[0].id;
+
+    await client.query(`INSERT INTO seminar_group_members (group_id, member_index, student_name, prn, division, mobile, email, topic1, topic2, topic3, is_leader) VALUES ($1, 1, $2, $3, 'A', '9822012357', $4, 'TinyML for Predictive Equipment Maintenance on Microcontrollers', 'BLE 5.3 Sensor Meshes', 'Ultra-low Power Edge Inference', true)`, [semG5Id, studentUsers[12].name, studentUsers[12].enrollment_no, studentUsers[12].email]);
+    await client.query(`INSERT INTO seminar_group_members (group_id, member_index, student_name, prn, division, mobile, email, topic1, topic2, topic3, is_leader) VALUES ($1, 2, $2, $3, 'A', '9822012358', $4, 'LoRaWAN Long-Range Mesh Protocols for Precision Agriculture', 'Gateway Optimization', 'End-to-end AES-128 Encryption in LoRaWAN', false)`, [semG5Id, studentUsers[13].name, studentUsers[13].enrollment_no, studentUsers[13].email]);
+    await client.query(`INSERT INTO seminar_group_members (group_id, member_index, student_name, prn, division, mobile, email, topic1, topic2, topic3, is_leader) VALUES ($1, 3, $2, $3, 'A', '9822012359', $4, 'Secure OTA Firmware Update Protocols for Industrial IoT', 'Rollback Protection', 'Hardware Root of Trust Integration', false)`, [semG5Id, studentUsers[14].name, studentUsers[14].enrollment_no, studentUsers[14].email]);
+
     await client.query('COMMIT');
-    console.log(`[Seed] Successfully seeded ${studentIds.length} MES Wadia students!`);
+    console.log(`[Seed] Successfully seeded ${studentIds.length} MES Wadia students and full Seminar module dataset!`);
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('[Seed] Failed:', err.message);

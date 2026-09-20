@@ -93,4 +93,87 @@ function buildWorkbook(session, groups, membersByGroupId) {
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 }
 
-module.exports = { buildWorkbook, getExportLifecycleLabel };
+/**
+ * Build official Seminar Evaluation Marksheet XLSX workbook
+ * @param {Object} session - seminar session record
+ * @param {Array} rows - array of evaluated student objects with marks and guide info
+ * @returns {Buffer} XLSX file buffer
+ */
+function buildMarksWorkbook(session, rows) {
+  const wb = XLSX.utils.book_new();
+  const wsData = [];
+  const merges = [];
+  const NUM_MARKS_COLS = 14;
+
+  // Header rows
+  wsData.push([INSTITUTION, ...new Array(NUM_MARKS_COLS - 1).fill('')]);
+  merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: NUM_MARKS_COLS - 1 } });
+
+  wsData.push([DEPARTMENT, ...new Array(NUM_MARKS_COLS - 1).fill('')]);
+  merges.push({ s: { r: 1, c: 0 }, e: { r: 1, c: NUM_MARKS_COLS - 1 } });
+
+  const title = `${session?.name || 'TE Seminar'} — Official Evaluation Marksheet (${session?.academic_year || ''} - Batch ${session?.batch || ''})`;
+  wsData.push([title, ...new Array(NUM_MARKS_COLS - 1).fill('')]);
+  merges.push({ s: { r: 2, c: 0 }, e: { r: 2, c: NUM_MARKS_COLS - 1 } });
+
+  // Column headers
+  wsData.push([
+    'Sr No',
+    'Group #',
+    'PRN / Roll No',
+    'Student Name',
+    'Div',
+    'Seminar Guide',
+    'Attendance (/10)',
+    'Presentation (/10)',
+    'Subject Understanding (/10)',
+    'Publication (/10)',
+    'Viva (/10)',
+    'Total (/50)',
+    'Status',
+    'Evaluation Date'
+  ]);
+
+  rows.forEach((r, idx) => {
+    wsData.push([
+      idx + 1,
+      r.group_no ? `#${r.group_no}` : '-',
+      r.prn || '',
+      r.student_name || '',
+      r.division || '',
+      r.guide_name || 'Unassigned',
+      r.attendance_marks != null ? Number(r.attendance_marks) : '-',
+      r.presentation_marks != null ? Number(r.presentation_marks) : '-',
+      r.subject_understanding_marks != null ? Number(r.subject_understanding_marks) : '-',
+      r.publication_marks != null ? Number(r.publication_marks) : '-',
+      r.viva_marks != null ? Number(r.viva_marks) : '-',
+      r.total_marks != null ? Number(r.total_marks) : '-',
+      r.marks_status || 'NOT_STARTED',
+      r.evaluation_date ? new Date(r.evaluation_date).toLocaleDateString('en-GB') : (r.submitted_at ? new Date(r.submitted_at).toLocaleDateString('en-GB') : '-')
+    ]);
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  ws['!merges'] = merges;
+  ws['!cols'] = [
+    { wch: 8 },  // Sr No
+    { wch: 10 }, // Group No
+    { wch: 16 }, // PRN
+    { wch: 28 }, // Student Name
+    { wch: 8 },  // Div
+    { wch: 24 }, // Guide
+    { wch: 16 }, // Attendance
+    { wch: 18 }, // Presentation
+    { wch: 26 }, // Subject Understanding
+    { wch: 16 }, // Publication
+    { wch: 14 }, // Viva
+    { wch: 14 }, // Total
+    { wch: 14 }, // Status
+    { wch: 16 }  // Date
+  ];
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Marksheet');
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+}
+
+module.exports = { buildWorkbook, buildMarksWorkbook, getExportLifecycleLabel };

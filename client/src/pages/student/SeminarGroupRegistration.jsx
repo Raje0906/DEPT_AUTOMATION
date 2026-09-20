@@ -49,7 +49,7 @@ export default function SeminarGroupRegistration() {
 
       if (data.hasSubmission) {
         setHasSubmission(true);
-        setGroupData(data.group);
+        setGroupData({ ...data.group, myMarks: data.myMarks });
         setMembersData(data.members || []);
         setIsLeader(data.isLeader);
         setCanEdit(data.canEdit);
@@ -420,23 +420,33 @@ export default function SeminarGroupRegistration() {
                 </div>
                 {groupData.myMarks ? (
                   <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
-                    <p className="text-xs font-semibold text-blue-800 uppercase tracking-wide mb-3">Your Marks (Max 50)</p>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <p className="text-xs font-semibold text-blue-800 uppercase tracking-wide mb-3">Your Marks (Max 50.00)</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
                       <div>
-                        <p className="text-[10px] text-[var(--ink)]/60">Report (20)</p>
-                        <p className="text-sm font-bold text-[var(--navy)]">{groupData.myMarks.report_marks || 0}</p>
+                        <p className="text-[10px] text-[var(--ink)]/60 font-medium">Attendance (10)</p>
+                        <p className="text-sm font-bold text-[var(--navy)]">{Number(groupData.myMarks.attendance_marks ?? 0).toFixed(2)}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-[var(--ink)]/60">Presentation (20)</p>
-                        <p className="text-sm font-bold text-[var(--navy)]">{groupData.myMarks.presentation_marks || 0}</p>
+                        <p className="text-[10px] text-[var(--ink)]/60 font-medium">Presentation (10)</p>
+                        <p className="text-sm font-bold text-[var(--navy)]">{Number(groupData.myMarks.presentation_marks ?? 0).toFixed(2)}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-[var(--ink)]/60">Q&A (10)</p>
-                        <p className="text-sm font-bold text-[var(--navy)]">{groupData.myMarks.qa_marks || 0}</p>
+                        <p className="text-[10px] text-[var(--ink)]/60 font-medium">Subject Understanding (10)</p>
+                        <p className="text-sm font-bold text-[var(--navy)]">{Number(groupData.myMarks.subject_understanding_marks ?? 0).toFixed(2)}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-[var(--ink)]/60">Total</p>
-                        <p className="text-base font-bold text-emerald-700">{groupData.myMarks.total_marks || 0}</p>
+                        <p className="text-[10px] text-[var(--ink)]/60 font-medium">Publication (10)</p>
+                        <p className="text-sm font-bold text-[var(--navy)]">{Number(groupData.myMarks.publication_marks ?? 0).toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-[var(--ink)]/60 font-medium">Viva (10)</p>
+                        <p className="text-sm font-bold text-[var(--navy)]">{Number(groupData.myMarks.viva_marks ?? 0).toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-[var(--ink)]/60 font-medium">Total</p>
+                        <p className="text-base font-bold text-emerald-700">
+                          {Number(groupData.myMarks.total_marks ?? 0).toFixed(2)} / 50.00
+                        </p>
                       </div>
                     </div>
                   </div>
