@@ -23,39 +23,36 @@ router.post('/login', async (req, res) => {
 
     const trimmed = identifier.trim();
     const lower = trimmed.toLowerCase();
+    const cleanId = lower.replace(/\s+/g, '');
+    const userPrefix = cleanId.includes('@') ? cleanId.split('@')[0] : cleanId;
 
     // 1. Try to find by email first (case-insensitive)
     let userResult = await pool.query(
       `SELECT u.id, u.name, u.role, u.email, u.password_hash, u.department, u.is_active
-       FROM users u WHERE LOWER(u.email) = $1`,
+       FROM users u WHERE LOWER(TRIM(u.email)) = $1`,
       [lower]
     );
 
-    // 2. If not found by email, try student roll_no / enrollment_no / roll aliases
+    // 2. If not found by email, try student roll_no / enrollment_no (PRN) / roll aliases
     if (userResult.rows.length === 0) {
-      const emailMatch = lower.match(/^(?:ce6a|student)(\d+)@meswadiacoe\.edu$/);
-      let parsedRoll = null;
-      if (emailMatch) {
-        parsedRoll = String(parseInt(emailMatch[1], 10));
-      } else {
-        const rollMatch = lower.match(/^(?:ce6a)?0*(\d+)$/);
-        if (rollMatch) {
-          parsedRoll = String(parseInt(rollMatch[1], 10));
-        }
-      }
+      const rollMatch = cleanId.match(/^(?:ce6a)?0*(\d+)$/i) || userPrefix.match(/^(?:ce6a)?0*(\d+)$/i);
+      const parsedRoll = rollMatch ? String(parseInt(rollMatch[1], 10)) : null;
 
       userResult = await pool.query(
         `SELECT u.id, u.name, u.role, u.email, u.password_hash, u.department, u.is_active
          FROM users u
          JOIN students s ON s.user_id = u.id
-         WHERE LOWER(s.roll_no) = $1 
-            OR LOWER(s.enrollment_no) = $1
-            OR ($2::text IS NOT NULL AND (
-                s.roll_no = $2 
-                OR s.roll_no = LPAD($2, 3, '0') 
-                OR LOWER(s.roll_no) = 'ce6a' || LPAD($2, 3, '0')
+         WHERE LOWER(TRIM(s.roll_no)) = $1 
+            OR LOWER(TRIM(s.enrollment_no)) = $1
+            OR LOWER(TRIM(s.enrollment_no)) = $2
+            OR LOWER(TRIM(s.roll_no)) = $2
+            OR ($3::text IS NOT NULL AND (
+                s.roll_no = $3 
+                OR s.roll_no = LPAD($3, 3, '0') 
+                OR LOWER(TRIM(s.roll_no)) = 'ce6a' || LPAD($3, 3, '0')
+                OR LOWER(TRIM(s.roll_no)) = 'ce6a' || $3
             ))`,
-        [lower, parsedRoll]
+        [cleanId, userPrefix, parsedRoll]
       );
     }
 
@@ -65,8 +62,8 @@ router.post('/login', async (req, res) => {
         `SELECT u.id, u.name, u.role, u.email, u.password_hash, u.department, u.is_active
          FROM users u
          JOIN faculty f ON f.user_id = u.id
-         WHERE LOWER(f.employee_id) = $1`,
-        [lower]
+         WHERE LOWER(TRIM(f.employee_id)) = $1 OR LOWER(TRIM(f.employee_id)) = $2`,
+        [cleanId, userPrefix]
       );
     }
 
@@ -111,13 +108,13 @@ router.post('/login', async (req, res) => {
     let roleData = {};
     if (user.role === 'student') {
       const s = await pool.query(
-        `SELECT roll_no, enrollment_no, batch, current_semester, division FROM students WHERE user_id = $1`,
+        `SELECT id AS student_id, roll_no, enrollment_no, batch, current_semester, division FROM students WHERE user_id = $1`,
         [user.id]
       );
       roleData = s.rows[0] || {};
     } else if (user.role === 'faculty' || user.role === 'hod') {
       const f = await pool.query(
-        `SELECT employee_id, designation FROM faculty WHERE user_id = $1`,
+        `SELECT id AS faculty_id, employee_id, designation, is_seminar_coordinator FROM faculty WHERE user_id = $1`,
         [user.id]
       );
       roleData = f.rows[0] || {};
@@ -278,7 +275,22 @@ router.get('/me', verifyToken, async (req, res) => {
       [req.user.id]
     );
     if (userResult.rows.length === 0) return res.status(404).json({ error: 'User not found' });
-    res.json({ user: userResult.rows[0] });
+    const user = userResult.rows[0];
+    let extra = {};
+    if (user.role === 'faculty' || user.role === 'hod') {
+      const f = await pool.query(
+        `SELECT id AS faculty_id, employee_id, designation, is_seminar_coordinator FROM faculty WHERE user_id = $1`,
+        [user.id]
+      );
+      extra = f.rows[0] || {};
+    } else if (user.role === 'student') {
+      const s = await pool.query(
+        `SELECT id AS student_id, roll_no, enrollment_no, batch, current_semester, division FROM students WHERE user_id = $1`,
+        [user.id]
+      );
+      extra = s.rows[0] || {};
+    }
+    res.json({ user: { ...user, ...extra } });
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
   }

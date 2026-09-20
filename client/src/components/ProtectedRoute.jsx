@@ -2,7 +2,7 @@ import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
-export default function ProtectedRoute({ children, role }) {
+export default function ProtectedRoute({ children, role, requireCoordinator }) {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -19,6 +19,10 @@ export default function ProtectedRoute({ children, role }) {
     // Redirect to correct dashboard
     const roleRoutes = { student: '/student', faculty: '/faculty', hod: '/hod' };
     return <Navigate to={roleRoutes[user.role] || '/login'} replace />;
+  }
+
+  if (requireCoordinator && user.role === 'faculty' && !user.is_seminar_coordinator) {
+    return <Navigate to="/faculty" replace />;
   }
 
   return children;

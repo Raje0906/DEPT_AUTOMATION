@@ -22,7 +22,11 @@ export default function Login() {
     setLoading(true);
     try {
       const user = await login(identifier.trim(), password);
-      const routes = { student: '/student', faculty: '/faculty', hod: '/hod' };
+      const routes = {
+        student: '/student',
+        faculty: user?.is_seminar_coordinator ? '/faculty/seminar' : '/faculty',
+        hod: '/hod'
+      };
       navigate(routes[user?.role] || '/student', { replace: true });
     } catch (err) {
       const msg = err.response?.data?.error || 'Login failed. Please check your credentials.';
@@ -32,13 +36,21 @@ export default function Login() {
     }
   };
 
-  const handleQuickDemo = (role) => {
+  const handleQuickDemo = async (role) => {
+    setLoading(true);
     try {
-      const user = loginDemo(role);
-      const routes = { student: '/student', faculty: '/faculty', hod: '/hod' };
-      navigate(routes[user?.role] || '/student', { replace: true });
-    } catch {
-      toast.error('Unable to sign in as demo user');
+      const user = await loginDemo(role);
+      const routes = {
+        student: '/student',
+        faculty: user?.is_seminar_coordinator ? '/faculty/seminar' : '/faculty',
+        coordinator: '/faculty/seminar',
+        hod: '/hod'
+      };
+      navigate(routes[role] || routes[user?.role] || '/student', { replace: true });
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Unable to sign in as demo user');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -134,14 +146,14 @@ export default function Login() {
                 <div className="mb-7">
                   <h2 className="font-serif text-2xl font-bold text-ink tracking-tight">Sign in</h2>
                   <p className="text-xs sm:text-sm text-draft mt-1.5">
-                    Use your email address, roll number, or employee ID
+                    Use your Email address, PRN / Enrollment No, Roll No, or Employee ID
                   </p>
                 </div>
 
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div>
                     <label htmlFor="identifier" className="input-label">
-                      Email / Roll No / Employee ID
+                      Email / PRN / Roll No / Employee ID
                     </label>
                     <input
                       id="identifier"
@@ -149,7 +161,7 @@ export default function Login() {
                       autoComplete="username"
                       value={identifier}
                       onChange={(e) => setIdentifier(e.target.value)}
-                      placeholder="e.g. CE6A001 or rajan@meswadiacoe.edu"
+                      placeholder="e.g. 72312799K, F23112151, CE6A001, or email"
                       className="input-field"
                       required
                       disabled={loading}
@@ -201,20 +213,35 @@ export default function Login() {
                 {/* Dev credentials hint */}
                 <div className="mt-8 pt-6 border-t border-rule/70">
                   <p className="text-[11px] font-semibold text-draft uppercase tracking-wider mb-2.5 flex items-center justify-between">
-                    <span>Demo credentials</span>
-                    <span className="text-[10px] text-draft font-normal">Click to quick sign-in</span>
+                    <span>Quick Sign-In Credentials</span>
+                    <span className="text-[10px] text-draft font-normal">Click to sign in</span>
                   </p>
-                  <div className="space-y-2">
+                  <div className="grid grid-cols-1 gap-2">
                     <button
                       type="button"
-                      onClick={() => handleQuickDemo('student')}
+                      onClick={() => handleQuickDemo('hod')}
                       className="w-full text-left px-3 py-2 rounded border border-rule hover:border-navy hover:bg-blue-50/60 transition-colors flex items-center justify-between group"
                     >
                       <div className="flex flex-col">
-                        <span className="text-xs font-semibold text-ink">Student</span>
-                        <span className="text-[11px] font-mono text-draft group-hover:text-navy">ce6a001@meswadiacoe.edu</span>
+                        <span className="text-xs font-semibold text-ink flex items-center gap-1.5">
+                          HOD <span className="text-[10px] bg-purple-100 text-purple-800 font-bold px-1.5 py-0.2 rounded">Authority</span>
+                        </span>
+                        <span className="text-[11px] font-mono text-draft group-hover:text-navy">hod@meswadiacoe.edu</span>
                       </div>
                       <span className="text-[11px] text-navy font-semibold uppercase group-hover:translate-x-0.5 transition-transform">Sign in →</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickDemo('coordinator')}
+                      className="w-full text-left px-3 py-2 rounded border border-amber-300 bg-amber-50/30 hover:border-amber-600 hover:bg-amber-50/80 transition-colors flex items-center justify-between group"
+                    >
+                      <div className="flex flex-col">
+                        <span className="text-xs font-semibold text-amber-900 flex items-center gap-1.5">
+                          Seminar Coordinator <span className="text-[10px] bg-amber-200 text-amber-900 font-bold px-1.5 py-0.2 rounded">Coordinator</span>
+                        </span>
+                        <span className="text-[11px] font-mono text-draft group-hover:text-amber-900">shobha.raskar@meswadiacoe.edu</span>
+                      </div>
+                      <span className="text-[11px] text-amber-800 font-semibold uppercase group-hover:translate-x-0.5 transition-transform">Sign in →</span>
                     </button>
                     <button
                       type="button"
@@ -222,19 +249,19 @@ export default function Login() {
                       className="w-full text-left px-3 py-2 rounded border border-rule hover:border-navy hover:bg-blue-50/60 transition-colors flex items-center justify-between group"
                     >
                       <div className="flex flex-col">
-                        <span className="text-xs font-semibold text-ink">Faculty</span>
+                        <span className="text-xs font-semibold text-ink">Faculty / Guide</span>
                         <span className="text-[11px] font-mono text-draft group-hover:text-navy">rajan@meswadiacoe.edu</span>
                       </div>
                       <span className="text-[11px] text-navy font-semibold uppercase group-hover:translate-x-0.5 transition-transform">Sign in →</span>
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleQuickDemo('hod')}
+                      onClick={() => handleQuickDemo('student')}
                       className="w-full text-left px-3 py-2 rounded border border-rule hover:border-navy hover:bg-blue-50/60 transition-colors flex items-center justify-between group"
                     >
                       <div className="flex flex-col">
-                        <span className="text-xs font-semibold text-ink">HOD</span>
-                        <span className="text-[11px] font-mono text-draft group-hover:text-navy">hod@meswadiacoe.edu</span>
+                        <span className="text-xs font-semibold text-ink">Student (PRN: 72312799K)</span>
+                        <span className="text-[11px] font-mono text-draft group-hover:text-navy">ce6a001@meswadiacoe.edu</span>
                       </div>
                       <span className="text-[11px] text-navy font-semibold uppercase group-hover:translate-x-0.5 transition-transform">Sign in →</span>
                     </button>

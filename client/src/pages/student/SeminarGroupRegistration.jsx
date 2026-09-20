@@ -406,6 +406,55 @@ export default function SeminarGroupRegistration() {
           </div>
         )}
 
+        {/* Guide Status & Marks Card */}
+        <div className="bg-white border border-[var(--rule)] rounded-xl overflow-hidden shadow-xs mt-6 mb-6">
+          <div className="px-6 py-4 border-b border-[var(--rule)] bg-[#F8FAFC]">
+            <h2 className="text-sm font-bold text-[var(--navy)]">Guide Assignment & Evaluation</h2>
+          </div>
+          <div className="p-6 space-y-4">
+            {groupData.status === 'APPROVED' ? (
+              <div className="flex flex-col gap-4">
+                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
+                  <p className="text-xs font-semibold text-emerald-800 uppercase tracking-wide">Assigned Guide</p>
+                  <p className="text-base font-bold text-[var(--navy)] mt-1">{groupData.guide_name || 'Assigned'}</p>
+                </div>
+                {groupData.myMarks ? (
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                    <p className="text-xs font-semibold text-blue-800 uppercase tracking-wide mb-3">Your Marks (Max 50)</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div>
+                        <p className="text-[10px] text-[var(--ink)]/60">Report (20)</p>
+                        <p className="text-sm font-bold text-[var(--navy)]">{groupData.myMarks.report_marks || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-[var(--ink)]/60">Presentation (20)</p>
+                        <p className="text-sm font-bold text-[var(--navy)]">{groupData.myMarks.presentation_marks || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-[var(--ink)]/60">Q&A (10)</p>
+                        <p className="text-sm font-bold text-[var(--navy)]">{groupData.myMarks.qa_marks || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-[var(--ink)]/60">Total</p>
+                        <p className="text-base font-bold text-emerald-700">{groupData.myMarks.total_marks || 0}</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded text-xs text-slate-600">
+                    Marks have not been entered yet.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl text-center">
+                <p className="text-sm font-semibold text-blue-800">Guide assignment in progress...</p>
+                <p className="text-xs text-blue-600/80 mt-1">Your assigned guide will be displayed here once approved by the HOD.</p>
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Group Details Card */}
         <div className="bg-white border border-[var(--rule)] rounded-xl overflow-hidden shadow-xs">
           <div className="px-6 py-4 border-b border-[var(--rule)] bg-[#F8FAFC] flex items-center justify-between">

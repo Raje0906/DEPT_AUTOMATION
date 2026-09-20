@@ -125,6 +125,19 @@ export default function SeminarAssignment() {
     } catch { toast.error('Reassignment failed'); }
   };
 
+  // Submit to HOD
+  const handleSubmitToHOD = async () => {
+    const groupsToSubmit = groups.filter(g => g.guide_id && g.status === 'PENDING_GUIDE_ASSIGNMENT');
+    if (groupsToSubmit.length === 0) return toast.error('No new assignments to submit');
+    if (!window.confirm(`Submit ${groupsToSubmit.length} assignment(s) for HOD approval?`)) return;
+    
+    try {
+      await api.post(`/seminar/sessions/${id}/submit-approvals`, { groupIds: groupsToSubmit.map(g => g.id) });
+      toast.success('Assignments submitted for HOD approval');
+      await load();
+    } catch (err) { toast.error(err?.response?.data?.error || 'Submission failed'); }
+  };
+
   // Publish
   const handlePublish = async () => {
     if (unassigned > 0) return toast.error(`${unassigned} group(s) still unassigned`);
@@ -158,6 +171,12 @@ export default function SeminarAssignment() {
             className="px-4 py-2 text-sm font-medium border border-[var(--navy)] text-[var(--navy)] rounded-md hover:bg-[var(--navy)] hover:text-white disabled:opacity-50 transition-colors"
           >
             {autoRunning ? 'Running…' : '⚡ Auto-Assign'}
+          </button>
+          <button
+            onClick={handleSubmitToHOD}
+            className="px-4 py-2 bg-[var(--navy)] text-white text-sm font-medium rounded-md hover:bg-[#2a3d7a] transition-colors"
+          >
+            Submit for HOD Approval
           </button>
           <button
             onClick={handlePublish}
@@ -306,7 +325,18 @@ export default function SeminarAssignment() {
                 {groups.map(g => (
                   <tr key={g.id} className={!g.guide_id ? 'bg-amber-50/50' : 'hover:bg-[var(--paper)]/50'}>
                     <td className="px-3 py-2 font-mono font-semibold text-[var(--navy)]">{g.group_no}</td>
-                    <td className="px-3 py-2 max-w-[160px] truncate text-[var(--ink)]">{g.domain}</td>
+                    <td className="px-3 py-2 max-w-[160px] truncate text-[var(--ink)]">
+                      {g.domain}
+                      <div className="mt-1">
+                        {g.status === 'APPROVED' ? (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">APPROVED</span>
+                        ) : g.status === 'AWAITING_HOD_APPROVAL' ? (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">WAITING HOD</span>
+                        ) : (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-800">DRAFT</span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-3 py-2 text-[var(--ink)]/60">
                       {(g.members || []).map(m => (
                         <div key={m.prn} className="truncate">{m.name} <span className="text-[var(--ink)]/30 font-mono">{m.prn}</span></div>
@@ -315,8 +345,9 @@ export default function SeminarAssignment() {
                     <td className="px-3 py-2">
                       <select
                         value={g.guide_id || ''}
+                        disabled={g.status === 'AWAITING_HOD_APPROVAL' || g.status === 'APPROVED'}
                         onChange={e => handleReassign(g.id, e.target.value)}
-                        className={`w-full border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--navy)]/30 ${!g.guide_id ? 'border-amber-300 bg-amber-50' : 'border-[var(--rule)]'}`}
+                        className={`w-full border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--navy)]/30 ${!g.guide_id ? 'border-amber-300 bg-amber-50' : 'border-[var(--rule)]'} disabled:bg-slate-50 disabled:text-slate-500`}
                       >
                         <option value="">— Unassigned —</option>
                         {guides.map(guide => (

@@ -9,6 +9,9 @@ export default function SeminarReview() {
   const [groups, setGroups]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [marksModalGroup, setMarksModalGroup] = useState(null);
+  const [marksForm, setMarksForm] = useState([]); // array of { prn, name, report_marks, presentation_marks, qa_marks, total_marks }
 
   const load = useCallback(async () => {
     try {
@@ -23,6 +26,52 @@ export default function SeminarReview() {
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  const handleOpenMarksModal = async (group) => {
+    setMarksModalGroup(group);
+    try {
+      const res = await api.get(`/seminar/sessions/${id}/groups/${group.id}/marks`);
+      const existingMarks = res.data.marks || [];
+      const initialForm = (group.members || []).map(m => {
+        const existing = existingMarks.find(em => em.prn === m.prn) || {};
+        return {
+          prn: m.prn,
+          name: m.name,
+          report_marks: existing.report_marks || 0,
+          presentation_marks: existing.presentation_marks || 0,
+          qa_marks: existing.qa_marks || 0,
+          total_marks: existing.total_marks || 0,
+        };
+      });
+      setMarksForm(initialForm);
+    } catch (err) {
+      toast.error('Failed to load marks');
+    }
+  };
+
+  const handleMarksChange = (index, field, value) => {
+    setMarksForm(prev => {
+      const newForm = [...prev];
+      const parsedVal = parseInt(value, 10) || 0;
+      newForm[index] = { ...newForm[index], [field]: parsedVal };
+      newForm[index].total_marks = newForm[index].report_marks + newForm[index].presentation_marks + newForm[index].qa_marks;
+      return newForm;
+    });
+  };
+
+  const handleSaveMarks = async () => {
+    setSubmitting(true);
+    try {
+      await api.post(`/seminar/sessions/${id}/groups/${marksModalGroup.id}/marks`, { marks: marksForm });
+      toast.success('Marks saved successfully');
+      setMarksModalGroup(null);
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to save marks');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const handleExport = async () => {
     setDownloading(true);
@@ -51,9 +100,10 @@ export default function SeminarReview() {
         <span className="text-[var(--ink)]/60 truncate">{session?.name}</span>
         <span>/</span><span>Review</span>
       </div>
+
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-[var(--navy)]">Final Group List</h1>
+          <h1 className="text-2xl font-bold text-[var(--navy)]">Final Group List & Marks Entry</h1>
           <p className="text-sm text-[var(--ink)]/50 mt-0.5">{session?.batch} · {session?.academic_year} · {groups.length} groups</p>
         </div>
         <div className="flex gap-3">
@@ -76,7 +126,7 @@ export default function SeminarReview() {
       <div className="bg-[#EEF0F7] border border-[var(--rule)] rounded-t-xl px-6 py-3 text-center">
         <p className="text-sm font-bold text-[var(--navy)]">MES Wadia College of Engineering, Pune</p>
         <p className="text-xs text-[var(--ink)]/60">Department of Computer Engineering</p>
-        <p className="text-xs text-[var(--ink)]/80 font-medium mt-0.5">{session?.name} — Guide Assignment List</p>
+        <p className="text-xs text-[var(--ink)]/80 font-medium mt-0.5">{session?.name} — Guide Assignment List & Evaluation</p>
       </div>
 
       {/* Group table */}
@@ -90,8 +140,7 @@ export default function SeminarReview() {
               <th className="px-3 py-2 text-left">Student Name</th>
               <th className="px-3 py-2 text-left">PRN</th>
               <th className="px-3 py-2 text-left">Topic 1</th>
-              <th className="px-3 py-2 text-left">Topic 2</th>
-              <th className="px-3 py-2 text-left">Topic 3</th>
+              <th className="px-3 py-2 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -117,18 +166,98 @@ export default function SeminarReview() {
                       <td className="px-3 py-2 font-medium text-[var(--ink)]">{m.name}</td>
                       <td className="px-3 py-2 font-mono text-[var(--ink)]/70">{m.prn}</td>
                       <td className="px-3 py-2 text-[var(--ink)]/60 max-w-[180px] truncate">{m.topic1}</td>
-                      <td className="px-3 py-2 text-[var(--ink)]/60 max-w-[180px] truncate">{m.topic2}</td>
-                      <td className="px-3 py-2 text-[var(--ink)]/60 max-w-[180px] truncate">{m.topic3}</td>
+                      {mi === 0 && (
+                        <td rowSpan={members.length} className="px-3 py-2 text-right border-b border-[var(--rule)] align-middle">
+                          {g.status === 'APPROVED' ? (
+                            <button
+                              onClick={() => handleOpenMarksModal(g)}
+                              className="px-3 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded text-xs font-semibold hover:bg-blue-100"
+                            >
+                              Enter Marks
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-[var(--ink)]/50 italic">Not Approved</span>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                   {/* Blank separator */}
-                  <tr><td colSpan={8} className="h-2 bg-[var(--paper)]" /></tr>
+                  <tr><td colSpan={7} className="h-2 bg-[var(--paper)]" /></tr>
                 </React.Fragment>
               );
             })}
           </tbody>
         </table>
       </div>
+
+      {marksModalGroup && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-3xl w-full overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="px-6 py-4 border-b border-[var(--rule)] bg-[#F8FAFC]">
+              <h3 className="font-bold text-[var(--navy)]">Enter Marks - Group #{marksModalGroup.group_no}</h3>
+              <p className="text-xs text-[var(--ink)]/60 mt-0.5">Enter individual marks (Max 50: Report 20, Presentation 20, Q&A 10)</p>
+            </div>
+            <div className="p-6 overflow-y-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="bg-[#EEF0F7] border-b border-[var(--rule)]">
+                    <th className="p-3">Student & PRN</th>
+                    <th className="p-3 w-24 text-center">Report (20)</th>
+                    <th className="p-3 w-24 text-center">Present (20)</th>
+                    <th className="p-3 w-24 text-center">Q&A (10)</th>
+                    <th className="p-3 w-24 text-center">Total (50)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--rule)]">
+                  {marksForm.map((mf, i) => (
+                    <tr key={mf.prn}>
+                      <td className="p-3">
+                        <div className="font-semibold">{mf.name}</div>
+                        <div className="text-xs font-mono text-[var(--ink)]/60">{mf.prn}</div>
+                      </td>
+                      <td className="p-3">
+                        <input type="number" min="0" max="20" required value={mf.report_marks}
+                          onChange={e => handleMarksChange(i, 'report_marks', e.target.value)}
+                          className="w-full border rounded px-2 py-1 text-center font-mono text-sm" />
+                      </td>
+                      <td className="p-3">
+                        <input type="number" min="0" max="20" required value={mf.presentation_marks}
+                          onChange={e => handleMarksChange(i, 'presentation_marks', e.target.value)}
+                          className="w-full border rounded px-2 py-1 text-center font-mono text-sm" />
+                      </td>
+                      <td className="p-3">
+                        <input type="number" min="0" max="10" required value={mf.qa_marks}
+                          onChange={e => handleMarksChange(i, 'qa_marks', e.target.value)}
+                          className="w-full border rounded px-2 py-1 text-center font-mono text-sm" />
+                      </td>
+                      <td className="p-3 text-center font-bold text-[var(--navy)] font-mono text-base">
+                        {mf.total_marks}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-6 py-4 border-t border-[var(--rule)] bg-slate-50 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setMarksModalGroup(null)}
+                className="px-4 py-2 border border-[var(--rule)] text-[var(--ink)]/70 text-sm font-semibold rounded hover:bg-white"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveMarks}
+                disabled={submitting}
+                className="px-6 py-2 bg-emerald-600 text-white text-sm font-bold rounded hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {submitting ? 'Saving...' : 'Save Marks'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
