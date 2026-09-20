@@ -143,6 +143,7 @@ const roleNav = {
         { to: '/hod/teachers',        label: 'Faculty Allocation',    icon: Icons.teachers },
         { to: '/hod/projects',        label: 'BE Project Governance', icon: Icons.project },
         { to: '/hod/seminar',         label: 'TE Seminar Tool',       icon: Icons.seminar },
+        { to: '/hod/seminar-approvals', label: 'Seminar Approvals',   icon: Icons.approval },
         { to: '/hod/approval',        label: 'Mark Approvals',        icon: Icons.approval },
         { to: '/hod/publish',         label: 'Publish Results',       icon: Icons.publish },
         { to: '/hod/analytics',       label: 'Academic Analytics',    icon: Icons.analytics },
@@ -166,7 +167,13 @@ export default function Layout({ children }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [alumniOpen, setAlumniOpen] = useState(false);
 
-  const navGroups = roleNav[user?.role] || [];
+  let navGroups = roleNav[user?.role] || [];
+  if (user?.role === 'faculty' && !user?.is_seminar_coordinator) {
+    navGroups = navGroups.map(group => ({
+      ...group,
+      items: group.items.filter(item => item.to !== '/faculty/seminar')
+    }));
+  }
 
   const handleLogout = () => {
     logout();

@@ -456,6 +456,36 @@ async function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_sem_member_email ON seminar_group_members(email);
     `);
 
+    // ─── SEMINAR V3 ENHANCEMENTS (HOD Approval & State Machine) ──────────────
+    await client.query(`
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS status VARCHAR(30) NOT NULL DEFAULT 'PENDING_GUIDE_ASSIGNMENT'
+        CHECK (status IN ('PENDING_GUIDE_ASSIGNMENT','AWAITING_HOD_APPROVAL','APPROVED'));
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS assigned_by INTEGER REFERENCES users(id);
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS assigned_at TIMESTAMPTZ;
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS approved_by INTEGER REFERENCES users(id);
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ;
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS hod_remarks TEXT;
+    `);
+
+    // ─── SEMINAR MARKS ────────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS seminar_marks (
+        id SERIAL PRIMARY KEY,
+        session_id INTEGER NOT NULL REFERENCES seminar_sessions(id) ON DELETE CASCADE,
+        group_id INTEGER NOT NULL REFERENCES seminar_groups(id) ON DELETE CASCADE,
+        student_id INTEGER REFERENCES students(id) ON DELETE SET NULL,
+        prn VARCHAR(60) NOT NULL,
+        report_marks NUMERIC(5,2),
+        presentation_marks NUMERIC(5,2),
+        qa_marks NUMERIC(5,2),
+        total_marks NUMERIC(5,2),
+        max_marks NUMERIC(5,2) DEFAULT 50,
+        entered_by INTEGER REFERENCES users(id),
+        entered_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(group_id, prn)
+      );
+    `);
+
     // ─── AUDIT LOG ENHANCEMENTS (Cybersecurity & Auth Events) ─────────────────
     await client.query(`
       ALTER TABLE audit_log ALTER COLUMN record_id DROP NOT NULL;
