@@ -14,7 +14,6 @@ import Register from './pages/auth/Register'
 import StudentDashboard  from './pages/student/StudentDashboard'
 import StudentResults    from './pages/student/StudentResults'
 import CGPAView          from './pages/student/CGPAView'
-import StudentRevaluation from './pages/student/StudentRevaluation'
 import StudentProject    from './pages/student/StudentProject'
 import SeminarGroupRegistration from './pages/student/SeminarGroupRegistration'
 
@@ -22,7 +21,6 @@ import SeminarGroupRegistration from './pages/student/SeminarGroupRegistration'
 import FacultyDashboard  from './pages/faculty/FacultyDashboard'
 import ResultGeneration  from './pages/faculty/ResultGeneration'
 import MarksEntry        from './pages/faculty/MarksEntry'
-import FacultyRevaluation from './pages/faculty/FacultyRevaluation'
 import ClassReports      from './pages/faculty/ClassReports'
 import LabMaintenance   from './pages/faculty/LabMaintenance'
 import ProjectEval       from './pages/faculty/ProjectEval'
@@ -38,7 +36,6 @@ import TeacherManagement from './pages/hod/TeacherManagement'
 import MarksApproval  from './pages/hod/MarksApproval'
 import PublishResults from './pages/hod/PublishResults'
 import HODAnalytics   from './pages/hod/HODAnalytics'
-import HODRevaluation from './pages/hod/HODRevaluation'
 import HODProjectMgmt from './pages/hod/HODProjectMgmt'
 import AuditLog       from './pages/hod/AuditLog'
 
@@ -97,7 +94,6 @@ export default function App() {
           <Route path="/student" element={<StudentLayout><StudentDashboard /></StudentLayout>} />
           <Route path="/student/results" element={<StudentLayout><StudentResults /></StudentLayout>} />
           <Route path="/student/cgpa" element={<StudentLayout><CGPAView /></StudentLayout>} />
-          <Route path="/student/revaluation" element={<StudentLayout><StudentRevaluation /></StudentLayout>} />
           <Route path="/student/project" element={<StudentLayout><StudentProject /></StudentLayout>} />
           <Route path="/student/seminar" element={<StudentLayout><SeminarGroupRegistration /></StudentLayout>} />
 
@@ -105,7 +101,6 @@ export default function App() {
           <Route path="/faculty" element={<FacultyLayout><FacultyDashboard /></FacultyLayout>} />
           <Route path="/faculty/subjects" element={<FacultyLayout><ResultGeneration /></FacultyLayout>} />
           <Route path="/faculty/marks/:subjectId" element={<FacultyLayout><MarksEntry /></FacultyLayout>} />
-          <Route path="/faculty/revaluation" element={<FacultyLayout><FacultyRevaluation /></FacultyLayout>} />
           <Route path="/faculty/reports" element={<FacultyLayout><ClassReports /></FacultyLayout>} />
           <Route path="/faculty/lab-maintenance" element={<FacultyLayout><LabMaintenance /></FacultyLayout>} />
           <Route path="/faculty/project-eval" element={<FacultyLayout><ProjectEval /></FacultyLayout>} />
@@ -136,7 +131,6 @@ export default function App() {
           <Route path="/hod/approval" element={<HODLayout><MarksApproval /></HODLayout>} />
           <Route path="/hod/publish" element={<HODLayout><PublishResults /></HODLayout>} />
           <Route path="/hod/analytics" element={<HODLayout><HODAnalytics /></HODLayout>} />
-          <Route path="/hod/revaluation" element={<HODLayout><HODRevaluation /></HODLayout>} />
           <Route path="/hod/projects" element={<HODLayout><HODProjectMgmt /></HODLayout>} />
           <Route path="/hod/audit" element={<HODLayout><AuditLog /></HODLayout>} />
 

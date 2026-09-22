@@ -38,7 +38,6 @@ export default function FacultyDashboard() {
   const allSubjects               = data?.subjects || [];
   const academicYears             = data?.academicYears || [];
   const faculty                   = data?.faculty;
-  const pendingRevals             = data?.pendingRevaluations || 0;
   const panelAssignments         = data?.panelAssignments || [];
   const pendingPanelEvaluations   = data?.pendingPanelEvaluations || 0;
   const completedPanelEvaluations = data?.completedPanelEvaluations || 0;
@@ -136,24 +135,6 @@ export default function FacultyDashboard() {
           </div>
         )}
 
-        {pendingRevals > 0 && (
-          <div className="notification-strip py-3.5 px-5 text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-amber-50 border-amber-200">
-            <div className="flex items-center">
-              <span className="text-xs font-bold text-amber-800 uppercase tracking-wider mr-2.5 bg-amber-100 px-2 py-0.5 rounded">
-                Revaluation
-              </span>
-              <span className="font-medium text-amber-900">
-                {pendingRevals} student revaluation request{pendingRevals > 1 ? 's' : ''} awaiting review.
-              </span>
-            </div>
-            <Link
-              to="/faculty/revaluation"
-              className="text-xs font-semibold text-amber-900 hover:underline flex-shrink-0"
-            >
-              Review Requests →
-            </Link>
-          </div>
-        )}
       </div>
 
       {/* Key Metric KPI Cards */}
@@ -232,23 +213,6 @@ export default function FacultyDashboard() {
             </div>
             <p className="text-xs text-draft leading-relaxed">
               Generate divisional result gazettes and analytics for Comp 1 to Comp 4.
-            </p>
-          </Link>
-
-          <Link
-            to="/faculty/revaluation"
-            className="panel p-5 hover:border-maroon/40 hover:shadow-sm transition-all group block"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <span className="w-8 h-8 rounded bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-sm">
-                🔄
-              </span>
-              <h3 className="font-semibold text-ink text-base group-hover:text-maroon transition-colors">
-                Revaluation Cell
-              </h3>
-            </div>
-            <p className="text-xs text-draft leading-relaxed">
-              Review and address student revaluation queries and mark verification requests.
             </p>
           </Link>
 

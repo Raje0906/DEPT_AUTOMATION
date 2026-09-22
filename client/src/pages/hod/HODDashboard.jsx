@@ -35,22 +35,13 @@ export default function HODDashboard() {
       </div>
 
       {/* Alert strip */}
-      {(needsAction.length > 0 || data?.pendingRevaluations > 0) && (
+      {needsAction.length > 0 && (
         <div className="space-y-2 mb-6">
-          {needsAction.length > 0 && (
-            <div className="notification-strip">
-              <span className="text-xs font-semibold text-navy uppercase tracking-wide mr-2">Awaiting review</span>
-              {needsAction.length} subject{needsAction.length > 1 ? 's' : ''} submitted for approval.
-              <Link to="/hod/approval" className="ml-2 text-maroon font-medium hover:underline">Review now</Link>
-            </div>
-          )}
-          {data?.pendingRevaluations > 0 && (
-            <div className="notification-strip">
-              <span className="text-xs font-semibold text-navy uppercase tracking-wide mr-2">Revaluation</span>
-              {data.pendingRevaluations} pending revaluation request{data.pendingRevaluations > 1 ? 's' : ''}.
-              <Link to="/hod/revaluation" className="ml-2 text-maroon font-medium hover:underline">View</Link>
-            </div>
-          )}
+          <div className="notification-strip">
+            <span className="text-xs font-semibold text-navy uppercase tracking-wide mr-2">Awaiting review</span>
+            {needsAction.length} subject{needsAction.length > 1 ? 's' : ''} submitted for approval.
+            <Link to="/hod/approval" className="ml-2 text-maroon font-medium hover:underline">Review now</Link>
+          </div>
         </div>
       )}
 

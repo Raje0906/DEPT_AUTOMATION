@@ -74,7 +74,7 @@ DEPT AUTOMATION/
 │   └── auditLogger.js     # Audit log utility
 ├── routes/
 │   ├── auth.js            # Login, forgot/reset password
-│   ├── student.js         # Student API (results, revaluation)
+│   ├── student.js         # Student API (results, notifications)
 │   ├── faculty.js         # Faculty API (marks entry, submit, CSV upload)
 │   └── hod.js             # HOD API (approve, publish, analytics, audit)
 ├── services/
@@ -83,9 +83,9 @@ DEPT AUTOMATION/
     └── src/
         ├── pages/
         │   ├── auth/      Login, ForgotPassword
-        │   ├── student/   Dashboard, Results, CGPA, Revaluation
-        │   ├── faculty/   Dashboard, MarksEntry, Revaluation
-        │   └── hod/       Dashboard, Approval, Publish, Analytics, AuditLog, Revaluation
+        │   ├── student/   Dashboard, Results, CGPA
+        │   ├── faculty/   Dashboard, MarksEntry, Reports, Maintenance
+        │   └── hod/       Dashboard, Approval, Publish, Analytics, AuditLog
         ├── components/    Layout, ResultTable, ProtectedRoute
         ├── contexts/      AuthContext (JWT + role)
         └── api/           Axios instance with token interceptor

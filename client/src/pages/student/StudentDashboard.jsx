@@ -148,7 +148,6 @@ export default function StudentDashboard() {
       <div className="flex flex-wrap gap-3">
         <Link to="/student/results" className="btn-secondary">View detailed results</Link>
         <Link to="/student/cgpa" className="btn-secondary">CGPA overview</Link>
-        <Link to="/student/revaluation" className="btn-secondary">Revaluation requests</Link>
       </div>
     </div>
   );

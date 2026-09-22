@@ -38,13 +38,6 @@ router.get('/dashboard', async (req, res) => {
       [req.user.dept, selectedYear]
     );
 
-    // Pending revaluation requests
-    const revalResult = await pool.query(
-      `SELECT COUNT(*) AS pending FROM revaluation_requests r
-       JOIN subjects s ON s.id = r.subject_id
-       WHERE s.department = $1 AND r.status = 'pending'`,
-      [req.user.dept]
-    );
 
     // Publication status per division for this semester & year
     const pubStatusRes = await pool.query(
@@ -57,7 +50,6 @@ router.get('/dashboard', async (req, res) => {
     res.json({
       subjects: result.rows,
       publishStatus: pubStatusRes.rows,
-      pendingRevaluations: parseInt(revalResult.rows[0]?.pending || 0, 10),
     });
   } catch (err) {
     console.error('[HOD] Dashboard error:', err.message);
@@ -420,31 +412,6 @@ router.get('/audit-log', async (req, res) => {
   }
 });
 
-// ─── GET /api/hod/revaluation ─────────────────────────────────────────────────
-router.get('/revaluation', async (req, res) => {
-  try {
-    const result = await pool.query(
-      `SELECT r.id, r.status, r.student_remark, r.hod_remark, r.requested_at, r.updated_at,
-              u.name AS student_name, s2.roll_no, sub.name AS subject_name, sub.code,
-              r.semester, r.academic_year, uf.name AS faculty_name
-       FROM revaluation_requests r
-       JOIN students s2 ON s2.id = r.student_id
-       JOIN users u ON u.id = s2.user_id
-       JOIN subjects sub ON sub.id = r.subject_id
-       LEFT JOIN faculty_subject_map fsm ON fsm.subject_id = r.subject_id
-       LEFT JOIN faculty f ON f.id = fsm.faculty_id
-       LEFT JOIN users uf ON uf.id = f.user_id
-       WHERE sub.department = $1
-       ORDER BY r.requested_at DESC`,
-      [req.user.dept]
-    );
-
-    res.json({ requests: result.rows });
-  } catch (err) {
-    console.error('[HOD] Revaluation list error:', err.message);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
 
 // ─── POST /api/hod/manual-override ────────────────────────────────────────────
 router.post('/manual-override', async (req, res) => {

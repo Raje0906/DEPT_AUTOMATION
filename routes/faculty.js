@@ -70,15 +70,6 @@ router.get('/dashboard', async (req, res) => {
       [faculty.id, selectedYear]
     );
 
-    // Pending revaluations
-    const revalRes = await pool.query(
-      `SELECT COUNT(DISTINCT r.id) AS count
-       FROM revaluation_requests r
-       JOIN faculty_subject_map fsm ON fsm.subject_id = r.subject_id
-       WHERE fsm.faculty_id = $1 AND r.status = 'pending'`,
-      [faculty.id]
-    );
-
     // Check if class teacher
     const ctRes = await pool.query(
       `SELECT class_name, academic_year FROM class_teachers WHERE faculty_id = $1 AND academic_year = $2`,
@@ -129,7 +120,6 @@ router.get('/dashboard', async (req, res) => {
       selectedYear,
       subjects: subjectsRes.rows,
       classTeacherOf,
-      pendingRevaluations: parseInt(revalRes.rows[0]?.count || 0, 10),
       panelAssignments,
       pendingPanelEvaluations,
       completedPanelEvaluations,
@@ -599,105 +589,6 @@ router.post('/marks/csv-upload', upload.single('file'), async (req, res) => {
   }
 });
 
-// ─── GET /api/faculty/revaluation ─────────────────────────────────────────────
-router.get('/revaluation', async (req, res) => {
-  try {
-    const faculty = await getFaculty(req.user.id);
-    if (!faculty) return res.status(404).json({ error: 'Faculty record not found' });
-
-    const result = await pool.query(
-      `SELECT r.id, r.status, r.student_remark, r.faculty_remark, r.requested_at, r.updated_at,
-              u.name AS student_name, s2.roll_no, s.name AS subject_name, s.code AS subject_code,
-              r.semester, r.academic_year,
-              m.total AS current_total, m.grade AS current_grade
-       FROM revaluation_requests r
-       JOIN students s2 ON s2.id = r.student_id
-       JOIN users u ON u.id = s2.user_id
-       JOIN subjects s ON s.id = r.subject_id
-       LEFT JOIN marks m ON m.student_id = r.student_id AND m.subject_id = r.subject_id
-         AND m.semester = r.semester AND m.academic_year = r.academic_year
-       WHERE r.subject_id IN (
-         SELECT fsm.subject_id FROM faculty_subject_map fsm WHERE fsm.faculty_id = $1
-       )
-       ORDER BY r.requested_at DESC`,
-      [faculty.id]
-    );
-
-    res.json({ requests: result.rows });
-  } catch (err) {
-    console.error('[Faculty] Revaluation list error:', err.message);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ─── POST /api/faculty/revaluation/:id/update ─────────────────────────────────
-router.post('/revaluation/:id/update', async (req, res) => {
-  try {
-    const faculty = await getFaculty(req.user.id);
-    if (!faculty) return res.status(404).json({ error: 'Faculty record not found' });
-
-    const { id } = req.params;
-    const { cie, practical, endSem, remark } = req.body;
-
-    if (!remark || remark.trim().length < 10) {
-      return res.status(400).json({ error: 'A detailed remark is required for revaluation mark update' });
-    }
-
-    const revalResult = await pool.query(
-      `SELECT r.*, s.faculty_id FROM revaluation_requests r
-       JOIN faculty_subject_map s ON s.subject_id = r.subject_id
-       WHERE r.id = $1 AND s.faculty_id = $2`,
-      [id, faculty.id]
-    );
-    if (revalResult.rows.length === 0) {
-      return res.status(403).json({ error: 'Revaluation request not found or not assigned to you' });
-    }
-
-    const reval = revalResult.rows[0];
-    const subjectResult = await pool.query(`SELECT * FROM subjects WHERE id = $1`, [reval.subject_id]);
-    const subject = subjectResult.rows[0];
-
-    const computed = computeMarks(subject, cie, subject.has_practical ? practical : null, endSem);
-
-    const existingMark = await pool.query(
-      `SELECT * FROM marks WHERE student_id = $1 AND subject_id = $2 AND semester = $3 AND academic_year = $4`,
-      [reval.student_id, reval.subject_id, reval.semester, reval.academic_year]
-    );
-
-    if (existingMark.rows.length === 0) {
-      return res.status(404).json({ error: 'Original mark record not found' });
-    }
-
-    const old = existingMark.rows[0];
-
-    await pool.query(
-      `UPDATE marks SET cie_marks=$1, practical_marks=$2, end_sem_marks=$3,
-       total=$4, grade=$5, grade_points=$6, is_backlog=$7, last_modified_at=NOW()
-       WHERE id=$8`,
-      [cie, subject.has_practical ? practical : null, endSem,
-       computed.total, computed.grade, computed.gradePoints, computed.isBacklog, old.id]
-    );
-
-    await pool.query(
-      `UPDATE revaluation_requests SET status='marks_updated', faculty_remark=$1, updated_at=NOW() WHERE id=$2`,
-      [remark, id]
-    );
-
-    auditMark({
-      recordId: old.id,
-      changedBy: req.user.id,
-      oldValue: { cie_marks: old.cie_marks, practical_marks: old.practical_marks, end_sem_marks: old.end_sem_marks, grade: old.grade },
-      newValue: { cie_marks: cie, practical_marks: practical, end_sem_marks: endSem, grade: computed.grade },
-      action: 'UPDATE',
-      reason: `Revaluation: ${remark}`,
-    });
-
-    res.json({ message: 'Marks updated for revaluation. Audit trail recorded.', computed });
-  } catch (err) {
-    console.error('[Faculty] Revaluation update error:', err.message);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
 
 // ─── GET /api/faculty/reports/:subjectId ──────────────────────────────────────
 router.get('/reports/:subjectId', async (req, res) => {

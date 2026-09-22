@@ -129,23 +129,8 @@ async function runMigrations() {
       )
     `);
 
-    // ─── REVALUATION REQUESTS ─────────────────────────────────────────────────
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS revaluation_requests (
-        id              SERIAL PRIMARY KEY,
-        student_id      INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
-        subject_id      INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
-        semester        INTEGER NOT NULL,
-        academic_year   VARCHAR(20) NOT NULL,
-        status          VARCHAR(20) NOT NULL DEFAULT 'pending'
-                        CHECK (status IN ('pending','under_review','marks_updated','resolved','rejected')),
-        student_remark  TEXT,
-        faculty_remark  TEXT,
-        hod_remark      TEXT,
-        requested_at    TIMESTAMPTZ DEFAULT NOW(),
-        updated_at      TIMESTAMPTZ DEFAULT NOW()
-      )
-    `);
+    // ─── REVALUATION REQUESTS (DROPPED) ───────────────────────────────────────
+    await client.query(`DROP TABLE IF EXISTS revaluation_requests CASCADE;`);
 
     // ─── RESULT PUBLISH STATUS ────────────────────────────────────────────────
     await client.query(`
@@ -321,7 +306,6 @@ async function runMigrations() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_marks_subject ON marks(subject_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_marks_status  ON marks(status)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_audit_record  ON audit_log(table_name, record_id)`);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_reval_student ON revaluation_requests(student_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_proj_group_code ON project_groups(group_code)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_proj_group_guide ON project_groups(guide_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_proj_panel_group ON project_panel_assignments(group_id, stage_id)`);
