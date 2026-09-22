@@ -38,6 +38,7 @@ import PublishResults from './pages/hod/PublishResults'
 import HODAnalytics   from './pages/hod/HODAnalytics'
 import HODProjectMgmt from './pages/hod/HODProjectMgmt'
 import AuditLog       from './pages/hod/AuditLog'
+import HODMagazineApprovals from './pages/hod/HODMagazineApprovals'
 
 // Seminar Tool
 import SeminarSessions      from './pages/seminar/SeminarSessions'
@@ -129,6 +130,8 @@ export default function App() {
           <Route path="/hod" element={<HODLayout><HODDashboard /></HODLayout>} />
           <Route path="/hod/teachers" element={<HODLayout><TeacherManagement /></HODLayout>} />
           <Route path="/hod/approval" element={<HODLayout><MarksApproval /></HODLayout>} />
+          <Route path="/hod/magazine-approvals" element={<HODLayout><HODMagazineApprovals /></HODLayout>} />
+          <Route path="/hod/magazines/preview/:id" element={<HODLayout><MagazinePreview /></HODLayout>} />
           <Route path="/hod/publish" element={<HODLayout><PublishResults /></HODLayout>} />
           <Route path="/hod/analytics" element={<HODLayout><HODAnalytics /></HODLayout>} />
           <Route path="/hod/projects" element={<HODLayout><HODProjectMgmt /></HODLayout>} />

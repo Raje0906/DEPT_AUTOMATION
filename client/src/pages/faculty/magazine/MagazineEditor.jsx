@@ -89,6 +89,17 @@ export default function MagazineEditor() {
         </div>
       </header>
 
+      {/* HOD Revision Remarks Banner if sent back */}
+      {currentMagazine?.reviewComment && magazineStatus === 'draft' && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center gap-2.5 text-xs text-amber-900 flex-shrink-0">
+          <svg className="w-4 h-4 text-amber-700 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+          </svg>
+          <span className="font-semibold text-amber-950 uppercase tracking-wide text-[10px]">HOD Revision Remarks:</span>
+          <span>{currentMagazine.reviewComment}</span>
+        </div>
+      )}
+
       {/* 3-column editor */}
       <div className="flex flex-1 min-h-0 overflow-hidden relative">
         {/* Mobile overlay */}

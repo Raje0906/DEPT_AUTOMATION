@@ -482,12 +482,76 @@ export function MagazineProvider({ children }) {
     setMagazineStatus('under_review');
     if (currentMagazine?.id) {
       persistSectionData(currentMagazine.id, sectionData);
-      const updated = magazines.map(m =>
-        m.id === currentMagazine.id ? { ...m, status: 'Under Review' } : m
+      setMagazines(prev => {
+        const updated = prev.map(m =>
+          m.id === currentMagazine.id
+            ? { ...m, status: 'Under Review', submittedAt: new Date().toISOString() }
+            : m
+        );
+        saveMagazinesList(updated);
+        return updated;
+      });
+      setCurrentMagazine(prev => prev ? { ...prev, status: 'Under Review' } : null);
+    }
+  }, [currentMagazine?.id, sectionData, persistSectionData, saveMagazinesList]);
+
+  // Approve magazine (HOD)
+  const approveMagazine = useCallback((magId) => {
+    const targetId = magId || currentMagazine?.id;
+    if (!targetId) return;
+    setMagazines(prev => {
+      const updated = prev.map(m =>
+        m.id === targetId
+          ? { ...m, status: 'Approved', approvedAt: new Date().toISOString(), reviewComment: null }
+          : m
       );
       saveMagazinesList(updated);
+      return updated;
+    });
+    if (currentMagazine?.id === targetId) {
+      setMagazineStatus('approved');
+      setCurrentMagazine(prev => prev ? { ...prev, status: 'Approved', reviewComment: null } : null);
     }
-  }, [currentMagazine?.id, magazines, sectionData, persistSectionData, saveMagazinesList]);
+  }, [currentMagazine?.id, saveMagazinesList]);
+
+  // Publish magazine (HOD / Faculty)
+  const publishMagazine = useCallback((magId) => {
+    const targetId = magId || currentMagazine?.id;
+    if (!targetId) return;
+    const nowStr = new Date().toISOString().split('T')[0];
+    setMagazines(prev => {
+      const updated = prev.map(m =>
+        m.id === targetId
+          ? { ...m, status: 'Published', publishedDate: nowStr }
+          : m
+      );
+      saveMagazinesList(updated);
+      return updated;
+    });
+    if (currentMagazine?.id === targetId) {
+      setMagazineStatus('published');
+      setCurrentMagazine(prev => prev ? { ...prev, status: 'Published', publishedDate: nowStr } : null);
+    }
+  }, [currentMagazine?.id, saveMagazinesList]);
+
+  // Request changes / Reject (HOD)
+  const requestChangesMagazine = useCallback((magId, comment) => {
+    const targetId = magId || currentMagazine?.id;
+    if (!targetId) return;
+    setMagazines(prev => {
+      const updated = prev.map(m =>
+        m.id === targetId
+          ? { ...m, status: 'Draft', reviewComment: comment || 'Please make updates and resubmit.' }
+          : m
+      );
+      saveMagazinesList(updated);
+      return updated;
+    });
+    if (currentMagazine?.id === targetId) {
+      setMagazineStatus('draft');
+      setCurrentMagazine(prev => prev ? { ...prev, status: 'Draft', reviewComment: comment } : null);
+    }
+  }, [currentMagazine?.id, saveMagazinesList]);
 
   // Load an existing magazine for editing/preview
   const loadMagazine = useCallback((id) => {
@@ -538,6 +602,9 @@ export function MagazineProvider({ children }) {
       completeSection,
       saveDraft,
       submitForApproval,
+      approveMagazine,
+      publishMagazine,
+      requestChangesMagazine,
       loadMagazine,
       setCurrentMagazine,
       addTopperStudent,

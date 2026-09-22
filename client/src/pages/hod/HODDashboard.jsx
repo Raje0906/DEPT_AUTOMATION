@@ -2,10 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api/axios';
 import { StatusBadge } from '../../components/ResultTable';
+import { useMagazine } from '../../contexts/MagazineContext';
 
 export default function HODDashboard() {
   const [data, setData]     = useState(null);
   const [loading, setLoading] = useState(true);
+  const { magazines } = useMagazine();
+
+  const pendingMagazines = magazines?.filter(m => m.status === 'Under Review') || [];
 
   useEffect(() => {
     api.get('/hod/dashboard')
@@ -35,13 +39,22 @@ export default function HODDashboard() {
       </div>
 
       {/* Alert strip */}
-      {needsAction.length > 0 && (
+      {(needsAction.length > 0 || pendingMagazines.length > 0) && (
         <div className="space-y-2 mb-6">
-          <div className="notification-strip">
-            <span className="text-xs font-semibold text-navy uppercase tracking-wide mr-2">Awaiting review</span>
-            {needsAction.length} subject{needsAction.length > 1 ? 's' : ''} submitted for approval.
-            <Link to="/hod/approval" className="ml-2 text-maroon font-medium hover:underline">Review now</Link>
-          </div>
+          {needsAction.length > 0 && (
+            <div className="notification-strip">
+              <span className="text-xs font-semibold text-navy uppercase tracking-wide mr-2">Awaiting review</span>
+              {needsAction.length} subject{needsAction.length > 1 ? 's' : ''} submitted for approval.
+              <Link to="/hod/approval" className="ml-2 text-maroon font-medium hover:underline">Review now</Link>
+            </div>
+          )}
+          {pendingMagazines.length > 0 && (
+            <div className="notification-strip border-amber-300 bg-amber-50/80 text-amber-950">
+              <span className="text-xs font-semibold text-amber-900 uppercase tracking-wide mr-2">Magazine Awaiting Approval</span>
+              {pendingMagazines.length} magazine issue{pendingMagazines.length > 1 ? 's' : ''} submitted for HOD review.
+              <Link to="/hod/magazine-approvals" className="ml-2 text-maroon font-medium hover:underline">Review & Approve</Link>
+            </div>
+          )}
         </div>
       )}
 

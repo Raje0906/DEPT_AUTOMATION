@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useMagazine } from '../contexts/MagazineContext';
 
 const Icons = {
   dashboard: (
@@ -122,7 +123,7 @@ const roleNav = {
       items: [
         { to: '/faculty/lab-maintenance', label: 'Lab Maintenance',      icon: Icons.lab },
         { to: '/faculty/project-eval',    label: 'BE Project Evaluation', icon: Icons.project },
-        { to: '/faculty/magazines',       label: 'Magazines & Research', icon: Icons.magazines },
+        { to: '/faculty/magazines',       label: 'Magazine',              icon: Icons.magazines },
         { to: '/faculty/seminar',         label: 'TE Seminar Tool',      icon: Icons.seminar },
         { to: '/faculty/seminar/my-groups', label: 'My Assigned Groups', icon: Icons.teachers },
       ],
@@ -138,6 +139,7 @@ const roleNav = {
         { to: '/hod/seminar',         label: 'TE Seminar Tool',       icon: Icons.seminar },
         { to: '/hod/seminar-approvals', label: 'Seminar Approvals',   icon: Icons.approval },
         { to: '/hod/approval',        label: 'Mark Approvals',        icon: Icons.approval },
+        { to: '/hod/magazine-approvals', label: 'Magazine Approvals', icon: Icons.magazines },
         { to: '/hod/publish',         label: 'Publish Results',       icon: Icons.publish },
         { to: '/hod/analytics',       label: 'Academic Analytics',    icon: Icons.analytics },
       ],
@@ -155,15 +157,28 @@ const roleLabels = { student: 'Student', faculty: 'Faculty', hod: 'Head of Depar
 
 export default function Layout({ children }) {
   const { user, logout } = useAuth();
+  const { magazines } = useMagazine();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [alumniOpen, setAlumniOpen] = useState(false);
+
+  const pendingMagazinesCount = magazines?.filter(m => m.status === 'Under Review').length || 0;
 
   let navGroups = roleNav[user?.role] || [];
   if (user?.role === 'faculty' && !user?.is_seminar_coordinator) {
     navGroups = navGroups.map(group => ({
       ...group,
       items: group.items.filter(item => item.to !== '/faculty/seminar')
+    }));
+  }
+  if (user?.role === 'hod' && pendingMagazinesCount > 0) {
+    navGroups = navGroups.map(group => ({
+      ...group,
+      items: group.items.map(item =>
+        item.to === '/hod/magazine-approvals'
+          ? { ...item, badge: pendingMagazinesCount }
+          : item
+      )
     }));
   }
 
@@ -227,6 +242,11 @@ export default function Layout({ children }) {
                     {item.icon}
                   </span>
                   <span className="truncate">{item.label}</span>
+                  {item.badge !== undefined && item.badge !== null && (
+                    <span className="ml-auto px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-amber-400 text-slate-950 leading-none">
+                      {item.badge}
+                    </span>
+                  )}
                 </NavLink>
               ))}
             </div>
