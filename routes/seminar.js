@@ -1674,11 +1674,18 @@ router.post('/groups/:groupId/evaluation', verifyToken, requireRole('faculty', '
       const total = Math.round((att + pres + sub + pub + viva) * 100) / 100;
 
       const stRes = await client.query(
-        'SELECT student_id FROM seminar_group_members WHERE prn = $1 AND group_id = $2',
+        `SELECT s.id AS student_id 
+         FROM students s 
+         LEFT JOIN users u ON s.user_id = u.id 
+         WHERE s.enrollment_no = $1 
+            OR s.roll_no = $1 
+            OR u.email = (SELECT email FROM seminar_group_members WHERE prn = $1 AND group_id = $2 LIMIT 1)
+         LIMIT 1`,
         [m.prn, groupId]
       );
       const studentId = stRes.rows[0]?.student_id || null;
 
+      const isSubmitted = status === 'SUBMITTED';
       await client.query(
         `INSERT INTO seminar_marks (
            session_id, group_id, student_id, prn,
@@ -1687,10 +1694,7 @@ router.post('/groups/:groupId/evaluation', verifyToken, requireRole('faculty', '
            status, entered_by, entered_at,
            submitted_at, submitted_by, remarks
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 50, $11, $12, NOW(),
-                 CASE WHEN $11 = 'SUBMITTED' THEN NOW() ELSE NULL END,
-                 CASE WHEN $11 = 'SUBMITTED' THEN $12 ELSE NULL END,
-                 $13)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 50, $11, $12, NOW(), $13, $14, $15)
          ON CONFLICT (group_id, prn)
          DO UPDATE SET
            attendance_marks = EXCLUDED.attendance_marks,
@@ -1718,6 +1722,8 @@ router.post('/groups/:groupId/evaluation', verifyToken, requireRole('faculty', '
           total,
           status,
           req.user.id,
+          isSubmitted ? new Date() : null,
+          isSubmitted ? req.user.id : null,
           m.remarks || overallRemarks || null
         ]
       );
