@@ -1,473 +1,869 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
 
 export default function HODSeminarMgmt() {
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('coordinator'); // 'coordinator' | 'approvals' | 'history'
-  const [pendingGroups, setPendingGroups] = useState([]);
+  const [activeTab, setActiveTab] = useState('approvals'); // 'approvals' | 'marks'
+  const [academicYear, setAcademicYear] = useState('2025-26');
+
+  // Backend state
+  const [groups, setGroups] = useState([]);
+  const [marksData, setMarksData] = useState([]);
   const [facultyList, setFacultyList] = useState([]);
-  const [coordinatorHistory, setCoordinatorHistory] = useState([]);
-  const [selectedFacultyId, setSelectedFacultyId] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [appointing, setAppointing] = useState(false);
-  const [rejectModal, setRejectModal] = useState(null);
+  const [sessions, setSessions] = useState([]);
+  const [activeSession, setActiveSession] = useState(null);
+
+  // Search & Filter state
+  const [groupSearchQuery, setGroupSearchQuery] = useState('');
+  const [groupStatusFilter, setGroupStatusFilter] = useState('ALL');
+  const [marksSearchQuery, setMarksSearchQuery] = useState('');
+  const [marksStatusFilter, setMarksStatusFilter] = useState('ALL');
+
+  // Modal states
+  const [guideModalGroup, setGuideModalGroup] = useState(null);
+  const [selectedGuideId, setSelectedGuideId] = useState('');
+  const [rejectModalGroup, setRejectModalGroup] = useState(null);
   const [rejectRemark, setRejectRemark] = useState('');
+  const [detailModalItem, setDetailModalItem] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
-  const fetchPending = async () => {
-    try {
-      const res = await api.get('/seminar/hod/pending-approvals');
-      setPendingGroups(res.data.pending || []);
-    } catch (err) {
-      toast.error('Failed to load pending seminar approvals');
-    }
-  };
-
-  const fetchCoordinators = async () => {
-    try {
-      const res = await api.get('/seminar/coordinators');
-      const list = res.data.faculty || [];
-      setFacultyList(list);
-      // default select first non-coordinator faculty if available
-      const nonCoord = list.find(f => !f.is_seminar_coordinator);
-      if (nonCoord) setSelectedFacultyId(nonCoord.id);
-    } catch (err) {
-      console.error('Failed to load coordinators:', err);
-    }
-  };
-
-  const fetchHistory = async () => {
-    try {
-      const res = await api.get('/seminar/coordinators/history');
-      setCoordinatorHistory(res.data.history || []);
-    } catch (err) {
-      console.error('Failed to load coordinator history:', err);
-    }
-  };
-
-  const loadData = async () => {
+  // Main Data Fetch
+  const fetchData = async () => {
     setLoading(true);
-    await Promise.all([fetchPending(), fetchCoordinators(), fetchHistory()]);
-    setLoading(false);
+    try {
+      const [groupsRes, marksRes, facultyRes, sessRes] = await Promise.all([
+        api.get(`/seminar/hod/groups?academic_year=${academicYear}`),
+        api.get(`/seminar/hod/marks?academic_year=${academicYear}`),
+        api.get(`/coordinators?academic_year=${academicYear}`),
+        api.get('/seminar/sessions').catch(() => ({ data: { sessions: [] } })),
+      ]);
+
+      setGroups(groupsRes.data || []);
+      setMarksData(marksRes.data || []);
+      setFacultyList(facultyRes.data?.facultyList || []);
+
+      const sessList = sessRes.data?.sessions || [];
+      setSessions(sessList);
+      if (sessList.length > 0) {
+        const matchingSess = sessList.find((s) => s.academic_year === academicYear) || sessList[0];
+        setActiveSession(matchingSess);
+      }
+    } catch (err) {
+      console.error('Failed to load TE Seminar governance data:', err);
+      toast.error('Failed to load TE Seminar governance records');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    loadData();
-  }, []);
+    fetchData();
+  }, [academicYear]);
 
-  const handleAppointCoordinator = async (e) => {
-    e.preventDefault();
-    if (!selectedFacultyId) return toast.error('Please select a faculty member');
-    setAppointing(true);
-    try {
-      const res = await api.post('/seminar/coordinators/assign', { facultyId: parseInt(selectedFacultyId, 10) });
-      toast.success(res.data.message || 'Seminar Coordinator appointed successfully');
-      await fetchCoordinators();
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to appoint coordinator');
-    } finally {
-      setAppointing(false);
-    }
-  };
+  // ─── GUIDE APPROVAL HANDLERS ────────────────────────────────────────────────
 
-  const handleRevokeCoordinator = async (facultyId, name) => {
-    if (!window.confirm(`Revoke Seminar Coordinator status for ${name}?`)) return;
-    setAppointing(true);
-    try {
-      await api.post('/seminar/coordinators/remove', { facultyId });
-      toast.success(`Revoked Seminar Coordinator role for ${name}`);
-      await fetchCoordinators();
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to revoke coordinator');
-    } finally {
-      setAppointing(false);
-    }
-  };
-
-  const currentCoordinators = facultyList.filter(f => f.is_seminar_coordinator);
-
-  const handleApprove = async (groupId) => {
-    if (!window.confirm('Approve this guide assignment?')) return;
+  // Single Approve
+  const handleApproveGuide = async (groupId, groupNo) => {
     setSubmitting(true);
     try {
-      await api.patch(`/seminar/hod/groups/${groupId}/approve`);
-      toast.success('Assignment approved successfully');
-      fetchPending();
+      const res = await api.patch(`/seminar/hod/groups/${groupId}/approve`);
+      toast.success(res.data.message || `Guide allocation for Group #${groupNo} approved`);
+      await fetchData();
     } catch (err) {
-      toast.error('Approval failed');
+      toast.error(err.response?.data?.error || 'Failed to approve guide allocation');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleReject = async (e) => {
+  // Single Reject with Remark
+  const handleConfirmReject = async (e) => {
     e.preventDefault();
-    if (!rejectRemark.trim()) return toast.error('Please enter a rejection remark');
+    if (!rejectModalGroup) return;
     setSubmitting(true);
     try {
-      await api.patch(`/seminar/hod/groups/${rejectModal.id}/reject`, { remark: rejectRemark });
-      toast.success('Assignment rejected');
-      setRejectModal(null);
+      const res = await api.patch(`/seminar/hod/groups/${rejectModalGroup.id}/reject`, {
+        remark: rejectRemark.trim() || 'Allocation rejected by HOD',
+      });
+      toast.success(res.data.message || `Guide allocation for Group #${rejectModalGroup.group_no} rejected`);
+      setRejectModalGroup(null);
       setRejectRemark('');
-      fetchPending();
+      await fetchData();
     } catch (err) {
-      toast.error('Rejection failed');
+      toast.error(err.response?.data?.error || 'Failed to reject guide allocation');
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (loading) {
-    return <div className="p-8 text-center text-sm text-[var(--ink)]/40">Loading seminar governance data...</div>;
-  }
+  // Bulk Approve
+  const handleBulkApprove = async () => {
+    const pendingCount = groups.filter((g) => g.status === 'AWAITING_HOD_APPROVAL').length;
+    if (pendingCount === 0) return toast('No pending guide allocations to approve');
+    if (!window.confirm(`Approve all ${pendingCount} pending guide allocation(s)? Once approved, guides will become active and visible to students and faculty rosters.`)) {
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await api.post('/seminar/hod/groups/bulk-approve', { academic_year: academicYear });
+      toast.success(res.data.message || 'All pending guide allocations approved');
+      await fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to bulk approve guide allocations');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Assign / Reassign Guide directly
+  const handleSaveGuideAssignment = async (e) => {
+    e.preventDefault();
+    if (!guideModalGroup) return;
+    setSubmitting(true);
+    try {
+      const res = await api.patch(`/seminar/hod/groups/${guideModalGroup.id}/guide`, {
+        guide_id: selectedGuideId ? Number(selectedGuideId) : null,
+      });
+      toast.success(res.data.message || 'Guide assigned and approved successfully');
+      setGuideModalGroup(null);
+      await fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to assign guide');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Download Marksheet (.xlsx)
+  const handleDownloadMarksheet = async () => {
+    const targetSessionId = activeSession?.id || sessions[0]?.id;
+    if (!targetSessionId) {
+      toast.error('No active seminar session found for marksheet export.');
+      return;
+    }
+    setDownloading(true);
+    const toastId = toast.loading('Generating official Excel marksheet…');
+    try {
+      const res = await api.get(`/seminar/sessions/${targetSessionId}/export-marks`, { responseType: 'blob' });
+      const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `TE_Seminar_${academicYear}_Official_Marksheet.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success('Marksheet downloaded successfully', { id: toastId });
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to download marksheet', { id: toastId });
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  // Filtered Groups for Tab 1
+  const filteredGroups = groups.filter((g) => {
+    const query = groupSearchQuery.toLowerCase();
+    const matchesSearch =
+      String(g.group_no).includes(query) ||
+      g.domain?.toLowerCase().includes(query) ||
+      g.guide_name?.toLowerCase().includes(query) ||
+      g.members?.some(
+        (m) => m.student_name?.toLowerCase().includes(query) || m.prn?.toLowerCase().includes(query)
+      );
+
+    if (!matchesSearch) return false;
+    if (groupStatusFilter === 'AWAITING') return g.status === 'AWAITING_HOD_APPROVAL';
+    if (groupStatusFilter === 'APPROVED') return g.status === 'APPROVED';
+    if (groupStatusFilter === 'PENDING') return g.status !== 'APPROVED' && g.status !== 'AWAITING_HOD_APPROVAL';
+    return true;
+  });
+
+  // Filtered Marks for Tab 2
+  const filteredMarks = marksData.filter((item) => {
+    const query = marksSearchQuery.toLowerCase();
+    const matchesSearch =
+      String(item.group_no).includes(query) ||
+      item.student_name?.toLowerCase().includes(query) ||
+      item.prn?.toLowerCase().includes(query) ||
+      item.guide_name?.toLowerCase().includes(query) ||
+      item.domain?.toLowerCase().includes(query);
+
+    if (!matchesSearch) return false;
+    if (marksStatusFilter !== 'ALL') return item.marks_status === marksStatusFilter;
+    return true;
+  });
+
+  // Summary Counts
+  const pendingApprovalsCount = groups.filter((g) => g.status === 'AWAITING_HOD_APPROVAL').length;
+  const approvedGroupsCount = groups.filter((g) => g.status === 'APPROVED').length;
+  const unassignedGroupsCount = groups.filter((g) => !g.guide_name || g.guide_name === 'Unassigned').length;
+
+  const submittedMarksCount = marksData.filter((m) => m.marks_status === 'SUBMITTED' || m.marks_status === 'FINALIZED').length;
+  const draftMarksCount = marksData.filter((m) => m.marks_status === 'DRAFT').length;
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--rule)] pb-5">
+    <div className="p-8 lg:p-10 w-full max-w-7xl mx-auto space-y-8">
+      {/* ─── HEADER ─────────────────────────────────────────────────── */}
+      <div className="pb-5 border-b border-rule flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-navy text-white">
-              HOD Authority
-            </span>
-            <span className="text-xs text-draft">Department of Computer Engineering</span>
-          </div>
-          <h1 className="text-2xl lg:text-3xl font-serif font-bold text-[var(--navy)]">
-            Seminar Governance &amp; Guide Approvals
-          </h1>
-          <p className="text-xs sm:text-sm text-[var(--ink)]/60 mt-1">
-            Designate the Seminar Coordinator and review/approve coordinator-assigned faculty guides.
+          <h1 className="font-serif text-3xl font-bold text-ink">TE Seminar Governance</h1>
+          <p className="text-base text-draft mt-1 font-medium">
+            HOD Oversight: Guide Assignment Approvals &amp; Faculty Marks Verification
           </p>
         </div>
+
         <div className="flex items-center gap-3">
-          <Link
-            to="/hod/seminar"
-            className="px-3.5 py-2 rounded-lg border border-navy/30 text-navy bg-blue-50/50 hover:bg-blue-50 text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-colors"
+          <label className="text-xs font-bold text-draft uppercase tracking-wider">Academic Year:</label>
+          <select
+            value={academicYear}
+            onChange={(e) => setAcademicYear(e.target.value)}
+            className="input-field py-1.5 px-3 text-xs font-mono font-bold bg-white border border-rule rounded shadow-xs"
           >
-            <span>View All Sessions</span>
-            <span>→</span>
-          </Link>
-          <div className="bg-amber-50 border border-amber-200 text-amber-900 px-3.5 py-2 rounded-lg text-xs font-bold shadow-xs">
-            {pendingGroups.length} Pending Approval{pendingGroups.length === 1 ? '' : 's'}
-          </div>
+            <option value="2025-26">2025-26</option>
+            <option value="2024-25">2024-25</option>
+            <option value="2026-27">2026-27</option>
+          </select>
         </div>
       </div>
 
-      {/* ─── TAB NAVIGATION ─────────────────────────────────────────── */}
-      <div className="flex gap-1 bg-[var(--paper)] border border-[var(--rule)] rounded-xl p-1.5">
-        {[
-          {
-            key: 'coordinator',
-            label: 'Coordinator Designation',
-            icon: (
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-              </svg>
-            )
-          },
-          {
-            key: 'approvals',
-            label: `Guide Approvals ${pendingGroups.length > 0 ? `(${pendingGroups.length})` : ''}`,
-            icon: (
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            )
-          },
-          {
-            key: 'history',
-            label: 'Appointment History',
-            icon: (
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            )
-          },
-        ].map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
-              activeTab === tab.key
-                ? 'bg-white text-[var(--navy)] shadow-sm border border-[var(--rule)]'
-                : 'text-[var(--ink)]/50 hover:text-[var(--ink)] hover:bg-white/50'
-            }`}
-          >
-            <span>{tab.icon}</span>
-            <span>{tab.label}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* ─── SECTION 1: SEMINAR COORDINATOR DESIGNATION ───────────────────── */}
-      {activeTab === 'coordinator' && (
-        <div className="bg-white border border-[var(--rule)] rounded-xl p-6 shadow-xs space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
-          <div>
-            <h2 className="text-base font-bold text-navy flex items-center gap-2">
-              <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.003 0V12m-5.003 0V9.75a3.375 3.375 0 016.75 0V12m-6.75 0h6.75" />
-              </svg>
-              Designate Faculty Seminar Coordinator
-            </h2>
-            <p className="text-xs text-draft mt-0.5">
-              The appointed coordinator is granted executive authority to configure sessions, manage group registrations, run guide distribution, and assign guides to student groups.
-            </p>
-          </div>
-          <span className="text-[11px] font-mono text-draft bg-slate-50 border border-slate-200 px-2.5 py-1 rounded">
-            Role Hierarchy: HOD &gt; Coordinator &gt; Guide &gt; Student
-          </span>
-        </div>
-
-        {/* Current Coordinator Card */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-          <div className="bg-gradient-to-br from-amber-50/70 via-white to-amber-50/30 border border-amber-200 rounded-xl p-5 space-y-3">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-800 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-              Current Seminar Coordinator
+      {/* ─── TAB NAVIGATION (EXACT 2-TAB SCOPE) ──────────────────────── */}
+      <div className="flex gap-2 border-b border-rule pb-2 overflow-x-auto">
+        <button
+          onClick={() => setActiveTab('approvals')}
+          className={`px-4 py-2 text-xs font-semibold rounded flex items-center gap-2 transition-colors ${
+            activeTab === 'approvals'
+              ? 'bg-navy text-white shadow-xs'
+              : 'bg-paper text-draft hover:text-ink hover:bg-paper/80'
+          }`}
+        >
+          <span>👥 Guide Allocation Approvals</span>
+          {pendingApprovalsCount > 0 && (
+            <span className="bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+              {pendingApprovalsCount}
             </span>
-            {currentCoordinators.length === 0 ? (
-              <div className="py-4 text-center">
-                <p className="text-xs text-draft font-medium">No faculty member is currently designated as Seminar Coordinator.</p>
-                <p className="text-[11px] text-draft/70 mt-1">Select a faculty member from the panel to appoint them.</p>
-              </div>
-            ) : (
-              currentCoordinators.map(coord => (
-                <div key={coord.id} className="flex items-center justify-between bg-white border border-amber-100 rounded-lg p-3.5 shadow-2xs">
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-bold text-ink">{coord.name}</h3>
-                      <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">Active</span>
-                    </div>
-                    <p className="text-xs text-draft">{coord.designation} · {coord.department}</p>
-                    <p className="text-[11px] font-mono text-navy">{coord.email} · Emp ID: {coord.employee_id}</p>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={appointing}
-                    onClick={() => handleRevokeCoordinator(coord.id, coord.name)}
-                    className="px-2.5 py-1 text-xs text-maroon hover:text-red-700 hover:bg-red-50 rounded border border-red-200 font-medium transition-colors"
-                  >
-                    Revoke
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
+          )}
+        </button>
 
-          {/* Appoint New Coordinator Form */}
-          <form onSubmit={handleAppointCoordinator} className="bg-slate-50/70 border border-rule rounded-xl p-5 space-y-4">
-            <div>
-              <label htmlFor="coordinatorSelect" className="block text-xs font-bold text-navy mb-1.5">
-                Select Faculty to Appoint as Coordinator
-              </label>
-              <select
-                id="coordinatorSelect"
-                value={selectedFacultyId}
-                onChange={e => setSelectedFacultyId(e.target.value)}
-                className="input-field text-xs sm:text-sm bg-white"
-                disabled={appointing || facultyList.length === 0}
-              >
-                <option value="">-- Choose Faculty Member --</option>
-                {facultyList.map(f => (
-                  <option key={f.id} value={f.id}>
-                    {f.name} ({f.designation}) {f.is_seminar_coordinator ? '★ [Current Coordinator]' : ''}
-                  </option>
-                ))}
-              </select>
+        <button
+          onClick={() => setActiveTab('marks')}
+          className={`px-4 py-2 text-xs font-semibold rounded flex items-center gap-2 transition-colors ${
+            activeTab === 'marks'
+              ? 'bg-navy text-white shadow-xs'
+              : 'bg-paper text-draft hover:text-ink hover:bg-paper/80'
+          }`}
+        >
+          <span>📊 Faculty Marks &amp; Evaluations (Read-Only)</span>
+          <span className="text-[10px] font-mono text-draft bg-rule/50 px-1.5 py-0.5 rounded">
+            {marksData.length}
+          </span>
+        </button>
+      </div>
+
+      {/* ════════════════════════════════════════════════════════════════ */}
+      {/* TAB 1: GUIDE ALLOCATION APPROVALS                              */}
+      {/* ════════════════════════════════════════════════════════════════ */}
+      {activeTab === 'approvals' && (
+        <div className="space-y-6">
+          {/* KPI Stat Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <div className="panel p-5">
+              <span className="text-xs font-mono font-bold text-draft uppercase tracking-wider">Total Seminar Groups</span>
+              <p className="font-serif text-3xl font-bold text-navy mt-1">{groups.length}</p>
+              <p className="text-xs text-draft mt-1">AY {academicYear} cohort</p>
             </div>
 
-            <div className="flex items-center justify-between pt-1">
-              <p className="text-[11px] text-draft max-w-xs leading-tight">
-                Appointing a faculty member updates their permission profile instantly. They will see the Coordinator panel upon signing in.
+            <div className="panel p-5">
+              <span className="text-xs font-mono font-bold text-draft uppercase tracking-wider">Approved Guide Allocations</span>
+              <p className="font-serif text-3xl font-bold text-emerald-700 mt-1">{approvedGroupsCount}</p>
+              <p className="text-xs text-draft mt-1">Active &amp; published to students</p>
+            </div>
+
+            <div className="panel p-5">
+              <span className="text-xs font-mono font-bold text-draft uppercase tracking-wider">Awaiting HOD Approval</span>
+              <p className={`font-serif text-3xl font-bold mt-1 ${pendingApprovalsCount > 0 ? 'text-amber-600' : 'text-draft'}`}>
+                {pendingApprovalsCount}
               </p>
+              <p className="text-xs text-draft mt-1">Submitted by coordinator</p>
+            </div>
+
+            <div className="panel p-5">
+              <span className="text-xs font-mono font-bold text-draft uppercase tracking-wider">Pending Guide Allocation</span>
+              <p className="font-serif text-3xl font-bold text-draft mt-1">{unassignedGroupsCount}</p>
+              <p className="text-xs text-draft mt-1">Awaiting coordinator allocation</p>
+            </div>
+          </div>
+
+          {/* Actionable Banner for Pending Approvals */}
+          {pendingApprovalsCount > 0 && (
+            <div className="panel p-4 bg-amber-50/80 border-l-4 border-l-amber-500 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">⚡</span>
+                <div>
+                  <h4 className="text-sm font-bold text-amber-900">
+                    {pendingApprovalsCount} Guide Allocation(s) Awaiting HOD Approval
+                  </h4>
+                  <p className="text-xs text-amber-700">
+                    Review the guide assignments submitted below. Approve them to make guides visible in student portals and active for faculty evaluation.
+                  </p>
+                </div>
+              </div>
               <button
-                type="submit"
-                disabled={appointing || !selectedFacultyId}
-                className="btn-primary py-2 px-4 text-xs font-semibold disabled:opacity-50 whitespace-nowrap shadow-xs"
+                onClick={handleBulkApprove}
+                disabled={submitting}
+                className="btn-primary bg-emerald-700 hover:bg-emerald-800 text-white text-xs px-4 py-2 flex items-center gap-1.5 whitespace-nowrap shadow-xs disabled:opacity-50"
               >
-                {appointing ? 'Updating…' : 'Appoint Coordinator'}
+                <span>✓</span> Approve All Pending Allocations
               </button>
             </div>
-          </form>
-        </div>
-      </div>
-      )}
+          )}
 
-      {/* ─── SECTION 2: PENDING SEMINAR GUIDE APPROVALS ───────────────────── */}
-      {activeTab === 'approvals' && (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-bold text-navy">Guide Allocation Approvals</h2>
-            <p className="text-xs text-draft">Guide allocations submitted by the Seminar Coordinator for HOD sign-off.</p>
+          {/* Toolbar & Filter */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-paper p-4 rounded border border-rule">
+            <div className="flex flex-wrap items-center gap-2">
+              {pendingApprovalsCount > 0 && (
+                <button
+                  onClick={handleBulkApprove}
+                  disabled={submitting}
+                  className="btn-primary bg-emerald-700 hover:bg-emerald-800 text-white text-xs flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+                >
+                  <span>✓</span> Approve All Pending ({pendingApprovalsCount})
+                </button>
+              )}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-draft">Filter Status:</span>
+                <select
+                  value={groupStatusFilter}
+                  onChange={(e) => setGroupStatusFilter(e.target.value)}
+                  className="input-field py-1 px-2.5 text-xs bg-white border border-rule rounded shadow-xs font-medium"
+                >
+                  <option value="ALL">All Groups ({groups.length})</option>
+                  <option value="AWAITING">Awaiting Approval ({pendingApprovalsCount})</option>
+                  <option value="APPROVED">Approved ({approvedGroupsCount})</option>
+                  <option value="PENDING">Pending Guide ({unassignedGroupsCount})</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="w-full sm:w-72">
+              <input
+                type="text"
+                placeholder="Search group #, domain, student or guide…"
+                value={groupSearchQuery}
+                onChange={(e) => setGroupSearchQuery(e.target.value)}
+                className="input-field w-full py-1.5 px-3 text-xs bg-white border border-rule rounded shadow-xs"
+              />
+            </div>
+          </div>
+
+          {/* Groups Approvals Table */}
+          <div className="panel">
+            <div className="panel-header flex items-center justify-between">
+              <h2 className="font-serif text-xl font-semibold">Seminar Group Guide Allocations</h2>
+              <span className="text-xs font-mono text-draft">{filteredGroups.length} Groups Listed</span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="result-table w-full">
+                <thead>
+                  <tr>
+                    <th>Group #</th>
+                    <th>Domain / Topic</th>
+                    <th>Student Members</th>
+                    <th>Proposed Faculty Guide</th>
+                    <th className="text-center">Approval Status</th>
+                    <th className="text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredGroups.map((grp) => (
+                    <tr key={grp.id} className="hover:bg-paper/60 transition-colors">
+                      <td className="font-mono font-bold text-navy text-sm">
+                        Group #{grp.group_no}
+                      </td>
+
+                      <td>
+                        <span className="badge bg-paper border border-rule text-xs font-semibold text-ink">
+                          {grp.domain || 'Unassigned Topic'}
+                        </span>
+                      </td>
+
+                      <td>
+                        <div className="space-y-1">
+                          {grp.members?.map((m) => (
+                            <div key={m.id || m.prn} className="text-xs text-ink flex items-center gap-1.5">
+                              <span className="font-mono text-draft font-semibold text-[11px]">{m.prn}</span>
+                              <span className="font-medium">{m.student_name}</span>
+                              {m.is_leader && (
+                                <span className="badge bg-navy/10 text-navy text-[9px] py-0 px-1 font-bold">Leader</span>
+                              )}
+                            </div>
+                          ))}
+                          {(!grp.members || grp.members.length === 0) && (
+                            <span className="text-xs text-draft italic">No members listed</span>
+                          )}
+                        </div>
+                      </td>
+
+                      <td>
+                        <p className="font-bold text-ink text-xs">{grp.guide_name || 'Unassigned'}</p>
+                        <p className="text-[10px] text-draft">{grp.guide_designation || 'Faculty'}</p>
+                      </td>
+
+                      <td className="text-center">
+                        {grp.status === 'APPROVED' && (
+                          <span className="badge status-approved text-[10px] font-semibold">
+                            ✓ Approved
+                          </span>
+                        )}
+                        {grp.status === 'AWAITING_HOD_APPROVAL' && (
+                          <span className="badge bg-amber-100 text-amber-800 border border-amber-300 text-[10px] font-bold animate-pulse">
+                            ⏳ Awaiting HOD Approval
+                          </span>
+                        )}
+                        {grp.status !== 'APPROVED' && grp.status !== 'AWAITING_HOD_APPROVAL' && (
+                          <span className="badge status-draft text-[10px]">
+                            Pending Guide
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {grp.status === 'AWAITING_HOD_APPROVAL' && (
+                            <>
+                              <button
+                                onClick={() => handleApproveGuide(grp.id, grp.group_no)}
+                                disabled={submitting}
+                                className="btn-primary bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] py-1 px-2.5 shadow-xs disabled:opacity-50"
+                                title="Approve Guide Allocation"
+                              >
+                                ✓ Approve
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setRejectModalGroup(grp);
+                                  setRejectRemark('');
+                                }}
+                                disabled={submitting}
+                                className="btn-secondary text-fail border-fail/30 hover:bg-fail/10 text-[11px] py-1 px-2 disabled:opacity-50"
+                                title="Reject Guide Allocation"
+                              >
+                                ✕ Reject
+                              </button>
+                            </>
+                          )}
+                          <button
+                            onClick={() => {
+                              setGuideModalGroup(grp);
+                              setSelectedGuideId(grp.guide_id ? String(grp.guide_id) : '');
+                            }}
+                            className="btn-secondary text-[11px] py-1 px-2.5"
+                          >
+                            {grp.status === 'APPROVED' ? 'Reassign' : grp.status === 'AWAITING_HOD_APPROVAL' ? 'Change' : 'Assign Guide'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+
+                  {filteredGroups.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="text-center py-8 text-xs text-draft italic">
+                        {loading ? 'Loading seminar groups…' : 'No seminar groups found matching your filter.'}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
+      )}
 
-      <div className="bg-white border border-[var(--rule)] rounded-xl overflow-hidden shadow-xs">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-[#EEF0F7] border-b border-[var(--rule)] text-[var(--navy)]">
-            <tr>
-              <th className="p-4 font-semibold">Group</th>
-              <th className="p-4 font-semibold">Session</th>
-              <th className="p-4 font-semibold">Domain</th>
-              <th className="p-4 font-semibold">Proposed Guide</th>
-              <th className="p-4 font-semibold">Submitted By</th>
-              <th className="p-4 font-semibold text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--rule)]">
-            {pendingGroups.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="p-8 text-center text-[var(--ink)]/40">
-                  <div className="flex flex-col items-center gap-2">
-                    <svg className="w-8 h-8 text-[var(--ink)]/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span className="text-sm">No pending approvals at this time.</span>
-                  </div>
-                </td>
-              </tr>
-            ) : (
-              pendingGroups.map(g => (
-                <tr key={g.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="p-4">
-                    <div className="font-bold font-mono text-[var(--navy)]">#{g.group_no}</div>
-                    <div className="text-xs text-[var(--ink)]/60 mt-1">
-                      {g.members?.length || 0} Members
-                    </div>
-                  </td>
-                  <td className="p-4">
-                    <div className="text-xs font-medium text-[var(--ink)]">{g.session_name}</div>
-                    <div className="text-[11px] text-[var(--ink)]/50">{g.academic_year} · Batch {g.batch}</div>
-                  </td>
-                  <td className="p-4 text-[var(--ink)] font-medium max-w-[180px] truncate">{g.domain}</td>
-                  <td className="p-4">
-                    <div className="font-bold text-emerald-800">{g.guide_name || 'Assigned Guide'}</div>
-                  </td>
-                  <td className="p-4">
-                    <div className="text-[var(--ink)] font-medium">{g.assigned_by_name}</div>
-                    <div className="text-xs text-[var(--ink)]/50">{g.assigned_at ? new Date(g.assigned_at).toLocaleDateString() : '—'}</div>
-                  </td>
-                  <td className="p-4 text-right space-x-2">
-                    <button
-                      disabled={submitting}
-                      onClick={() => handleApprove(g.id)}
-                      className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded hover:bg-emerald-700 disabled:opacity-50"
-                    >
-                      Approve
-                    </button>
-                    <button
-                      disabled={submitting}
-                      onClick={() => setRejectModal(g)}
-                      className="px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 text-xs font-semibold rounded hover:bg-red-100 disabled:opacity-50"
-                    >
-                      Reject
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {rejectModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden">
-            <div className="px-6 py-4 border-b border-[var(--rule)] bg-red-50">
-              <h3 className="font-bold text-red-800">Reject Assignment - Group #{rejectModal.group_no}</h3>
+      {/* ════════════════════════════════════════════════════════════════ */}
+      {/* TAB 2: FACULTY MARKS & EVALUATIONS (STRICTLY READ-ONLY)        */}
+      {/* ════════════════════════════════════════════════════════════════ */}
+      {activeTab === 'marks' && (
+        <div className="space-y-6">
+          {/* KPI Stat Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <div className="panel p-5">
+              <span className="text-xs font-mono font-bold text-draft uppercase tracking-wider">Total Enrolled Students</span>
+              <p className="font-serif text-3xl font-bold text-navy mt-1">{marksData.length}</p>
+              <p className="text-xs text-draft mt-1">Across all seminar groups</p>
             </div>
-            <form onSubmit={handleReject} className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-[var(--navy)] mb-1">Rejection Remark / Reason</label>
-                <textarea
-                  required
-                  rows={3}
-                  className="w-full border border-[var(--rule)] rounded-md p-2 text-sm focus:outline-none focus:border-red-500"
-                  placeholder="Explain why this assignment is rejected..."
-                  value={rejectRemark}
-                  onChange={e => setRejectRemark(e.target.value)}
-                />
+
+            <div className="panel p-5">
+              <span className="text-xs font-mono font-bold text-draft uppercase tracking-wider">Evaluations Submitted</span>
+              <p className="font-serif text-3xl font-bold text-emerald-700 mt-1">{submittedMarksCount}</p>
+              <p className="text-xs text-draft mt-1">Finalized by faculty</p>
+            </div>
+
+            <div className="panel p-5">
+              <span className="text-xs font-mono font-bold text-draft uppercase tracking-wider">In Draft Status</span>
+              <p className="font-serif text-3xl font-bold text-amber-600 mt-1">{draftMarksCount}</p>
+              <p className="text-xs text-draft mt-1">Pending submission</p>
+            </div>
+
+            <div className="panel p-5">
+              <span className="text-xs font-mono font-bold text-draft uppercase tracking-wider">Not Started</span>
+              <p className="font-serif text-3xl font-bold text-draft mt-1">
+                {marksData.length - submittedMarksCount - draftMarksCount}
+              </p>
+              <p className="text-xs text-draft mt-1">Awaiting evaluation entry</p>
+            </div>
+          </div>
+
+          {/* Toolbar with Marksheet Download */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-paper p-4 rounded border border-rule">
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={handleDownloadMarksheet}
+                disabled={downloading}
+                className="btn-primary text-xs flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+              >
+                <span>⬇</span> {downloading ? 'Downloading…' : 'Download Official Excel Marksheet'}
+              </button>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-draft">Status:</span>
+                <select
+                  value={marksStatusFilter}
+                  onChange={(e) => setMarksStatusFilter(e.target.value)}
+                  className="input-field py-1 px-2.5 text-xs bg-white border border-rule rounded shadow-xs font-medium"
+                >
+                  <option value="ALL">All Records ({marksData.length})</option>
+                  <option value="SUBMITTED">Submitted ({submittedMarksCount})</option>
+                  <option value="DRAFT">Draft ({draftMarksCount})</option>
+                  <option value="NOT_STARTED">Not Started ({marksData.length - submittedMarksCount - draftMarksCount})</option>
+                </select>
               </div>
-              <div className="flex justify-end gap-3 pt-2">
+            </div>
+
+            <div className="w-full sm:w-72">
+              <input
+                type="text"
+                placeholder="Search PRN, student name, group #, or guide…"
+                value={marksSearchQuery}
+                onChange={(e) => setMarksSearchQuery(e.target.value)}
+                className="input-field w-full py-1.5 px-3 text-xs bg-white border border-rule rounded shadow-xs"
+              />
+            </div>
+          </div>
+
+          {/* Read-Only Marks Table */}
+          <div className="panel">
+            <div className="panel-header flex items-center justify-between">
+              <div>
+                <h2 className="font-serif text-xl font-semibold">Faculty Evaluation &amp; Marks Register</h2>
+                <p className="text-xs text-draft">Strictly Read-Only view of marks entered by seminar faculty</p>
+              </div>
+              <span className="text-xs font-mono text-draft">{filteredMarks.length} Students Listed</span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="result-table w-full">
+                <thead>
+                  <tr>
+                    <th>Group</th>
+                    <th>Student (PRN &amp; Name)</th>
+                    <th>Guide / Evaluator</th>
+                    <th className="numeric">Attendance (10)</th>
+                    <th className="numeric">Presentation (10)</th>
+                    <th className="numeric">Subject Und. (10)</th>
+                    <th className="numeric">Publication (10)</th>
+                    <th className="numeric">Viva (10)</th>
+                    <th className="numeric font-bold">Total (50)</th>
+                    <th className="text-center">Status</th>
+                    <th className="text-right">Details</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredMarks.map((m) => (
+                    <tr key={`${m.group_id}-${m.prn}`} className="hover:bg-paper/60 transition-colors">
+                      <td className="font-mono font-bold text-navy text-xs">
+                        Group #{m.group_no}
+                      </td>
+
+                      <td>
+                        <p className="font-bold text-ink text-xs">{m.student_name}</p>
+                        <p className="font-mono text-draft text-[11px]">{m.prn} · {m.division || 'TE'}</p>
+                      </td>
+
+                      <td>
+                        <p className="font-bold text-ink text-xs">{m.guide_name}</p>
+                        <p className="text-[10px] text-draft">{m.guide_designation || 'Faculty'}</p>
+                      </td>
+
+                      <td className="numeric font-mono text-xs">{Number(m.attendance_marks || 0).toFixed(1)}</td>
+                      <td className="numeric font-mono text-xs">{Number(m.presentation_marks || 0).toFixed(1)}</td>
+                      <td className="numeric font-mono text-xs">{Number(m.subject_understanding_marks || 0).toFixed(1)}</td>
+                      <td className="numeric font-mono text-xs">{Number(m.publication_marks || 0).toFixed(1)}</td>
+                      <td className="numeric font-mono text-xs">{Number(m.viva_marks || 0).toFixed(1)}</td>
+
+                      <td className="numeric font-mono font-bold text-navy text-sm">
+                        {Number(m.total_marks || 0).toFixed(2)}
+                      </td>
+
+                      <td className="text-center">
+                        {m.marks_status === 'SUBMITTED' || m.marks_status === 'FINALIZED' ? (
+                          <span className="badge status-approved text-[10px] font-semibold">
+                            Submitted
+                          </span>
+                        ) : m.marks_status === 'DRAFT' ? (
+                          <span className="badge bg-amber-100 text-amber-800 border border-amber-300 text-[10px] font-bold">
+                            Draft
+                          </span>
+                        ) : (
+                          <span className="badge status-draft text-[10px]">
+                            Not Started
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="text-right">
+                        <button
+                          onClick={() => setDetailModalItem(m)}
+                          className="btn-secondary text-[11px] py-1 px-2.5"
+                          title="View Evaluation Details"
+                        >
+                          View Rubric
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+
+                  {filteredMarks.length === 0 && (
+                    <tr>
+                      <td colSpan={11} className="text-center py-8 text-xs text-draft italic">
+                        {loading ? 'Loading marks records…' : 'No evaluation records found matching your filter.'}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODALS ─────────────────────────────────────────────────── */}
+
+      {/* Assign / Reassign Guide Modal */}
+      {guideModalGroup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="panel bg-white w-full max-w-md shadow-2xl rounded border border-rule overflow-hidden">
+            <div className="panel-header p-5 bg-paper border-b border-rule flex items-center justify-between">
+              <h3 className="font-serif text-lg font-bold text-ink">
+                Assign Guide for Group #{guideModalGroup.group_no}
+              </h3>
+              <button
+                onClick={() => setGuideModalGroup(null)}
+                className="text-draft hover:text-ink font-bold text-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveGuideAssignment} className="p-6 space-y-4">
+              <div>
+                <p className="text-xs text-draft mb-2">
+                  Domain: <span className="font-semibold text-ink">{guideModalGroup.domain || 'Unassigned'}</span>
+                </p>
+                <label className="input-label block text-xs font-bold uppercase tracking-wider text-draft mb-1.5">
+                  Select Faculty Guide
+                </label>
+                <select
+                  value={selectedGuideId}
+                  onChange={(e) => setSelectedGuideId(e.target.value)}
+                  className="input-field w-full p-2.5 text-sm bg-white border border-rule rounded font-medium"
+                >
+                  <option value="">-- Unassign Guide --</option>
+                  {facultyList.map((fac) => (
+                    <option key={fac.id} value={fac.id}>
+                      {fac.name} ({fac.designation || 'Faculty'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-rule">
                 <button
                   type="button"
-                  onClick={() => setRejectModal(null)}
-                  className="px-4 py-2 border border-[var(--rule)] text-[var(--ink)]/70 text-sm font-semibold rounded hover:bg-slate-50"
+                  onClick={() => setGuideModalGroup(null)}
+                  className="btn-secondary text-xs"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-4 py-2 bg-red-600 text-white text-sm font-bold rounded hover:bg-red-700 disabled:opacity-50"
+                  className="btn-primary text-xs disabled:opacity-50"
                 >
-                  Confirm Rejection
+                  {submitting ? 'Saving…' : 'Confirm Assignment & Approve'}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-      </div>
+
+      {/* Reject Guide Allocation Modal */}
+      {rejectModalGroup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="panel bg-white w-full max-w-md shadow-2xl rounded border border-rule overflow-hidden">
+            <div className="panel-header p-5 bg-paper border-b border-rule flex items-center justify-between">
+              <h3 className="font-serif text-lg font-bold text-fail">
+                Reject Guide Allocation: Group #{rejectModalGroup.group_no}
+              </h3>
+              <button
+                onClick={() => setRejectModalGroup(null)}
+                className="text-draft hover:text-ink font-bold text-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmReject} className="p-6 space-y-4">
+              <div>
+                <p className="text-xs text-draft mb-2">
+                  Proposed Guide: <span className="font-bold text-ink">{rejectModalGroup.guide_name}</span>
+                </p>
+                <label className="input-label block text-xs font-bold uppercase tracking-wider text-draft mb-1.5">
+                  Rejection Reason / Guidance for Coordinator *
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={rejectRemark}
+                  onChange={(e) => setRejectRemark(e.target.value)}
+                  placeholder="e.g. Faculty guide capacity exceeded; please reallocate to Prof. Sharma."
+                  className="input-field w-full p-2.5 text-sm bg-white border border-rule rounded"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-rule">
+                <button
+                  type="button"
+                  onClick={() => setRejectModalGroup(null)}
+                  className="btn-secondary text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting || !rejectRemark.trim()}
+                  className="btn-primary bg-fail hover:bg-fail/90 text-white text-xs disabled:opacity-50"
+                >
+                  {submitting ? 'Rejecting…' : 'Confirm Rejection'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
-      {/* ─── SECTION 3: COORDINATOR APPOINTMENT HISTORY ───────────────────── */}
-      {activeTab === 'history' && (
-      <div className="space-y-4">
-        <div>
-          <h2 className="text-lg font-bold text-navy">Coordinator Appointment History</h2>
-          <p className="text-xs text-draft">Immutable record of all coordinator appointments and revocations.</p>
-        </div>
+      {/* Read-Only Rubric Detail Modal */}
+      {detailModalItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="panel bg-white w-full max-w-lg shadow-2xl rounded border border-rule overflow-hidden">
+            <div className="panel-header p-5 bg-paper border-b border-rule flex items-center justify-between">
+              <div>
+                <h3 className="font-serif text-lg font-bold text-ink">
+                  Evaluation Details: {detailModalItem.student_name}
+                </h3>
+                <p className="text-xs font-mono text-draft mt-0.5">
+                  PRN: {detailModalItem.prn} · Group #{detailModalItem.group_no}
+                </p>
+              </div>
+              <button
+                onClick={() => setDetailModalItem(null)}
+                className="text-draft hover:text-ink font-bold text-lg"
+              >
+                ✕
+              </button>
+            </div>
 
-        <div className="bg-white border border-[var(--rule)] rounded-xl overflow-hidden shadow-xs">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-[#EEF0F7] border-b border-[var(--rule)] text-[var(--navy)]">
-              <tr>
-                <th className="p-4 font-semibold">Action</th>
-                <th className="p-4 font-semibold">Faculty Member</th>
-                <th className="p-4 font-semibold">Performed By</th>
-                <th className="p-4 font-semibold">Notes</th>
-                <th className="p-4 font-semibold">Date & Time</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--rule)]">
-              {coordinatorHistory.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="p-8 text-center text-[var(--ink)]/40">No coordinator appointment history recorded.</td>
-                </tr>
-              ) : (
-                coordinatorHistory.map(h => (
-                  <tr key={h.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-4">
-                      <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full ${
-                        h.action === 'APPOINTED'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-red-100 text-red-700'
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${h.action === 'APPOINTED' ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                        {h.action === 'APPOINTED' ? 'Appointed' : 'Revoked'}
-                      </span>
-                    </td>
-                    <td className="p-4">
-                      <div className="font-semibold text-[var(--ink)]">{h.faculty_name}</div>
-                    </td>
-                    <td className="p-4 text-[var(--ink)]/70 text-xs">{h.performed_by_name || 'HOD'}</td>
-                    <td className="p-4 text-[var(--ink)]/60 text-xs max-w-[200px] truncate">{h.notes || '—'}</td>
-                    <td className="p-4 text-[var(--ink)]/60 text-xs font-mono">
-                      {new Date(h.created_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
-                    </td>
-                  </tr>
-                ))
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-3 text-xs bg-paper p-3 rounded border border-rule">
+                <div>
+                  <span className="text-draft block">Domain / Topic:</span>
+                  <span className="font-semibold text-ink">{detailModalItem.domain}</span>
+                </div>
+                <div>
+                  <span className="text-draft block">Guide / Evaluator:</span>
+                  <span className="font-semibold text-ink">{detailModalItem.guide_name}</span>
+                </div>
+                <div>
+                  <span className="text-draft block">Status:</span>
+                  <span className="font-bold text-ink">{detailModalItem.marks_status}</span>
+                </div>
+                <div>
+                  <span className="text-draft block">Evaluation Date:</span>
+                  <span className="font-semibold text-ink">
+                    {detailModalItem.evaluation_date ? new Date(detailModalItem.evaluation_date).toLocaleDateString() : 'N/A'}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-draft mb-2">Rubric Criteria Marks</h4>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs p-2 bg-paper/50 rounded border border-rule/50">
+                    <span>1. Attendance &amp; Regularity</span>
+                    <span className="font-mono font-bold text-navy">{Number(detailModalItem.attendance_marks || 0).toFixed(1)} / 10</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs p-2 bg-paper/50 rounded border border-rule/50">
+                    <span>2. Presentation &amp; Slides</span>
+                    <span className="font-mono font-bold text-navy">{Number(detailModalItem.presentation_marks || 0).toFixed(1)} / 10</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs p-2 bg-paper/50 rounded border border-rule/50">
+                    <span>3. Subject Understanding &amp; Technical Depth</span>
+                    <span className="font-mono font-bold text-navy">{Number(detailModalItem.subject_understanding_marks || 0).toFixed(1)} / 10</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs p-2 bg-paper/50 rounded border border-rule/50">
+                    <span>4. Publication / Manuscript Quality</span>
+                    <span className="font-mono font-bold text-navy">{Number(detailModalItem.publication_marks || 0).toFixed(1)} / 10</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs p-2 bg-paper/50 rounded border border-rule/50">
+                    <span>5. Viva Voce &amp; Technical Defense</span>
+                    <span className="font-mono font-bold text-navy">{Number(detailModalItem.viva_marks || 0).toFixed(1)} / 10</span>
+                  </div>
+                </div>
+
+                <div className="mt-3 pt-3 border-t border-rule flex items-center justify-between">
+                  <span className="font-bold text-xs uppercase tracking-wider text-ink">Total Aggregate Score</span>
+                  <span className="font-serif font-bold text-xl text-navy">
+                    {Number(detailModalItem.total_marks || 0).toFixed(2)} / 50.00
+                  </span>
+                </div>
+              </div>
+
+              {detailModalItem.remarks && (
+                <div className="bg-paper p-3 rounded border border-rule text-xs">
+                  <span className="font-bold text-ink block mb-1">Faculty Remarks:</span>
+                  <p className="text-draft italic">"{detailModalItem.remarks}"</p>
+                </div>
               )}
-            </tbody>
-          </table>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDetailModalItem(null)}
+                  className="btn-secondary text-xs"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
       )}
     </div>
   );
 }
-

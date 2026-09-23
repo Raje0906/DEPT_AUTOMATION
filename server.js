@@ -10,8 +10,9 @@ const authRoutes    = require('./routes/auth');
 const studentRoutes = require('./routes/student');
 const facultyRoutes = require('./routes/faculty');
 const hodRoutes     = require('./routes/hod');
-const projectRoutes = require('./routes/projects');
-const seminarRoutes = require('./routes/seminar');
+const projectRoutes     = require('./routes/projects');
+const seminarRoutes     = require('./routes/seminar');
+const coordinatorRoutes = require('./routes/coordinators');
 
 const app = express();
 
@@ -33,12 +34,13 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
-app.use('/api/auth',     authRoutes);
-app.use('/api/student',  studentRoutes);
-app.use('/api/faculty',  facultyRoutes);
-app.use('/api/hod',      hodRoutes);
-app.use('/api/projects', projectRoutes);
-app.use('/api/seminar',  seminarRoutes);
+app.use('/api/auth',         authRoutes);
+app.use('/api/student',      studentRoutes);
+app.use('/api/faculty',      facultyRoutes);
+app.use('/api/hod',          hodRoutes);
+app.use('/api/projects',     projectRoutes);
+app.use('/api/seminar',      seminarRoutes);
+app.use('/api/coordinators', coordinatorRoutes);
 
 // ─── Health check ────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
