@@ -1897,4 +1897,995 @@ router.get('/student/marks', verifyToken, requireRole('student'), async (req, re
   }
 });
 
+// ─── Seminar Governance & Multi-Stage Evaluation Endpoints (HOD & Coordinator) ──
+
+async function ensureSeminarGovernanceSchema() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS seminar_evaluation_stages (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        academic_year VARCHAR(20) NOT NULL DEFAULT '2025-26',
+        sequence_order INT NOT NULL DEFAULT 1,
+        scheduled_date_from DATE,
+        scheduled_date_to DATE,
+        max_marks_total NUMERIC(6,2) NOT NULL DEFAULT 50,
+        aggregation_rule VARCHAR(50) NOT NULL DEFAULT 'AVERAGE',
+        status VARCHAR(50) NOT NULL DEFAULT 'ACTIVE',
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      ALTER TABLE seminar_evaluation_stages ADD COLUMN IF NOT EXISTS name VARCHAR(255);
+      ALTER TABLE seminar_evaluation_stages ADD COLUMN IF NOT EXISTS academic_year VARCHAR(20) DEFAULT '2025-26';
+      ALTER TABLE seminar_evaluation_stages ADD COLUMN IF NOT EXISTS sequence_order INT DEFAULT 1;
+      ALTER TABLE seminar_evaluation_stages ADD COLUMN IF NOT EXISTS scheduled_date_from DATE;
+      ALTER TABLE seminar_evaluation_stages ADD COLUMN IF NOT EXISTS scheduled_date_to DATE;
+      ALTER TABLE seminar_evaluation_stages ADD COLUMN IF NOT EXISTS max_marks_total NUMERIC(6,2) DEFAULT 50;
+      ALTER TABLE seminar_evaluation_stages ADD COLUMN IF NOT EXISTS aggregation_rule VARCHAR(50) DEFAULT 'AVERAGE';
+      ALTER TABLE seminar_evaluation_stages ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'ACTIVE';
+      ALTER TABLE seminar_evaluation_stages ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
+      ALTER TABLE seminar_evaluation_stages ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+      ALTER TABLE seminar_evaluation_stages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+      CREATE TABLE IF NOT EXISTS seminar_stage_criteria (
+        id SERIAL PRIMARY KEY,
+        stage_id INT NOT NULL REFERENCES seminar_evaluation_stages(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        max_marks NUMERIC(6,2) NOT NULL DEFAULT 10,
+        weight NUMERIC(6,2) DEFAULT 1,
+        display_order INT DEFAULT 1,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      ALTER TABLE seminar_stage_criteria ADD COLUMN IF NOT EXISTS stage_id INT;
+      ALTER TABLE seminar_stage_criteria ADD COLUMN IF NOT EXISTS name VARCHAR(255);
+      ALTER TABLE seminar_stage_criteria ADD COLUMN IF NOT EXISTS max_marks NUMERIC(6,2) DEFAULT 10;
+      ALTER TABLE seminar_stage_criteria ADD COLUMN IF NOT EXISTS weight NUMERIC(6,2) DEFAULT 1;
+      ALTER TABLE seminar_stage_criteria ADD COLUMN IF NOT EXISTS display_order INT DEFAULT 1;
+      ALTER TABLE seminar_stage_criteria ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+
+      CREATE TABLE IF NOT EXISTS seminar_panel_assignments (
+        id SERIAL PRIMARY KEY,
+        stage_id INT NOT NULL REFERENCES seminar_evaluation_stages(id) ON DELETE CASCADE,
+        group_id INT NOT NULL REFERENCES seminar_groups(id) ON DELETE CASCADE,
+        panel_member_id INT NOT NULL REFERENCES faculty(id) ON DELETE CASCADE,
+        assigned_by INT REFERENCES users(id),
+        status VARCHAR(50) NOT NULL DEFAULT 'ASSIGNED',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      ALTER TABLE seminar_panel_assignments ADD COLUMN IF NOT EXISTS stage_id INT;
+      ALTER TABLE seminar_panel_assignments ADD COLUMN IF NOT EXISTS group_id INT;
+      ALTER TABLE seminar_panel_assignments ADD COLUMN IF NOT EXISTS panel_member_id INT;
+      ALTER TABLE seminar_panel_assignments ADD COLUMN IF NOT EXISTS assigned_by INT;
+      ALTER TABLE seminar_panel_assignments ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'ASSIGNED';
+      ALTER TABLE seminar_panel_assignments ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+      ALTER TABLE seminar_panel_assignments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+      CREATE TABLE IF NOT EXISTS seminar_panel_evaluations (
+        id SERIAL PRIMARY KEY,
+        assignment_id INT REFERENCES seminar_panel_assignments(id) ON DELETE CASCADE,
+        stage_id INT NOT NULL REFERENCES seminar_evaluation_stages(id) ON DELETE CASCADE,
+        group_id INT NOT NULL REFERENCES seminar_groups(id) ON DELETE CASCADE,
+        evaluator_faculty_id INT NOT NULL REFERENCES faculty(id) ON DELETE CASCADE,
+        student_prn VARCHAR(50),
+        status VARCHAR(50) NOT NULL DEFAULT 'DRAFT',
+        remarks TEXT,
+        total_score NUMERIC(6,2) DEFAULT 0,
+        evaluated_at TIMESTAMPTZ,
+        unlocked_at TIMESTAMPTZ,
+        unlocked_by INT REFERENCES users(id),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      ALTER TABLE seminar_panel_evaluations ADD COLUMN IF NOT EXISTS assignment_id INT;
+      ALTER TABLE seminar_panel_evaluations ADD COLUMN IF NOT EXISTS stage_id INT;
+      ALTER TABLE seminar_panel_evaluations ADD COLUMN IF NOT EXISTS group_id INT;
+      ALTER TABLE seminar_panel_evaluations ADD COLUMN IF NOT EXISTS evaluator_faculty_id INT;
+      ALTER TABLE seminar_panel_evaluations ADD COLUMN IF NOT EXISTS student_prn VARCHAR(50);
+      ALTER TABLE seminar_panel_evaluations ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'DRAFT';
+      ALTER TABLE seminar_panel_evaluations ADD COLUMN IF NOT EXISTS remarks TEXT;
+      ALTER TABLE seminar_panel_evaluations ADD COLUMN IF NOT EXISTS total_score NUMERIC(6,2) DEFAULT 0;
+      ALTER TABLE seminar_panel_evaluations ADD COLUMN IF NOT EXISTS evaluated_at TIMESTAMPTZ;
+      ALTER TABLE seminar_panel_evaluations ADD COLUMN IF NOT EXISTS unlocked_at TIMESTAMPTZ;
+      ALTER TABLE seminar_panel_evaluations ADD COLUMN IF NOT EXISTS unlocked_by INT;
+      ALTER TABLE seminar_panel_evaluations ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+      ALTER TABLE seminar_panel_evaluations ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+      CREATE TABLE IF NOT EXISTS seminar_panel_evaluation_scores (
+        id SERIAL PRIMARY KEY,
+        evaluation_id INT NOT NULL REFERENCES seminar_panel_evaluations(id) ON DELETE CASCADE,
+        criteria_id INT NOT NULL REFERENCES seminar_stage_criteria(id) ON DELETE CASCADE,
+        score NUMERIC(6,2) NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      ALTER TABLE seminar_panel_evaluation_scores ADD COLUMN IF NOT EXISTS evaluation_id INT;
+      ALTER TABLE seminar_panel_evaluation_scores ADD COLUMN IF NOT EXISTS criteria_id INT;
+      ALTER TABLE seminar_panel_evaluation_scores ADD COLUMN IF NOT EXISTS score NUMERIC(6,2) DEFAULT 0;
+      ALTER TABLE seminar_panel_evaluation_scores ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+
+      CREATE TABLE IF NOT EXISTS seminar_score_releases (
+        id SERIAL PRIMARY KEY,
+        stage_id INT NOT NULL REFERENCES seminar_evaluation_stages(id) ON DELETE CASCADE,
+        released_by INT NOT NULL REFERENCES users(id),
+        released_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        notes TEXT
+      );
+    `);
+  } catch (err) {
+    console.error('[Seminar Governance] Schema init error:', err.message);
+  }
+}
+ensureSeminarGovernanceSchema();
+
+/**
+ * GET /api/seminar/hod/dashboard
+ * Governance analytics and workload metrics.
+ */
+router.get('/hod/dashboard', verifyToken, requireRole('hod', 'faculty'), async (req, res) => {
+  try {
+    const acadYear = req.query.academic_year || '2025-26';
+
+    const groupsRes = await pool.query(
+      `SELECT sg.id, sg.group_no, sg.domain, sg.status, sg.guide_id, sg.seminar_guide_id,
+              COALESCE(sg.guide_name, sem_g.guide_name, u.name, 'Unassigned') as guide_name
+       FROM seminar_groups sg
+       JOIN seminar_sessions ss ON sg.session_id = ss.id
+       LEFT JOIN seminar_guides sem_g ON sg.seminar_guide_id = sem_g.id
+       LEFT JOIN faculty f ON (sg.guide_id = f.id OR sem_g.faculty_id = f.id)
+       LEFT JOIN users u ON f.user_id = u.id
+       WHERE ss.academic_year = $1`,
+      [acadYear]
+    );
+
+    const stagesRes = await pool.query(
+      `SELECT * FROM seminar_evaluation_stages WHERE academic_year = $1 ORDER BY sequence_order ASC`,
+      [acadYear]
+    );
+
+    const facultyLoadRes = await pool.query(
+      `SELECT f.id as faculty_id, u.name, f.designation,
+              COUNT(DISTINCT sg.id) as guided_groups,
+              COUNT(DISTINCT pa.id) as panel_assignments
+       FROM faculty f
+       JOIN users u ON f.user_id = u.id
+       LEFT JOIN seminar_groups sg ON (sg.guide_id = f.id)
+       LEFT JOIN seminar_panel_assignments pa ON pa.panel_member_id = f.id
+       GROUP BY f.id, u.name, f.designation
+       ORDER BY u.name ASC`
+    );
+
+    const domainCount = {};
+    groupsRes.rows.forEach(g => {
+      const d = g.domain || 'Unspecified';
+      domainCount[d] = (domainCount[d] || 0) + 1;
+    });
+
+    const domainBreakdown = Object.entries(domainCount).map(([domain, count]) => ({ domain, count }));
+
+    res.json({
+      academic_year: acadYear,
+      total_groups: groupsRes.rows.length,
+      groups: groupsRes.rows,
+      stages: stagesRes.rows,
+      faculty_load: facultyLoadRes.rows,
+      domain_breakdown: domainBreakdown,
+    });
+  } catch (err) {
+    console.error('[Seminar HOD Dashboard Error]', err.message);
+    res.status(500).json({ error: 'Failed to load seminar dashboard data' });
+  }
+});
+
+/**
+ * GET /api/seminar/hod/groups
+ * List all seminar groups with members, guide info, and stage statuses.
+ */
+router.get('/hod/groups', verifyToken, requireRole('hod', 'faculty'), async (req, res) => {
+  try {
+    const acadYear = req.query.academic_year || '2025-26';
+
+    const groupsRes = await pool.query(
+      `SELECT sg.*, ss.name as session_name, ss.academic_year, ss.batch,
+              f.id as guide_faculty_id, COALESCE(sg.guide_name, sem_g.guide_name, u.name, 'Unassigned') as guide_name,
+              f.designation as guide_designation, u.email as guide_email
+       FROM seminar_groups sg
+       JOIN seminar_sessions ss ON sg.session_id = ss.id
+       LEFT JOIN seminar_guides sem_g ON sg.seminar_guide_id = sem_g.id
+       LEFT JOIN faculty f ON (sg.guide_id = f.id OR sem_g.faculty_id = f.id)
+       LEFT JOIN users u ON f.user_id = u.id
+       WHERE ss.academic_year = $1
+       ORDER BY sg.group_no ASC`,
+      [acadYear]
+    );
+
+    for (const g of groupsRes.rows) {
+      const membersRes = await pool.query(
+        `SELECT gm.* FROM seminar_group_members gm WHERE gm.group_id = $1 ORDER BY gm.member_index ASC`,
+        [g.id]
+      );
+      g.members = membersRes.rows;
+    }
+
+    res.json(groupsRes.rows);
+  } catch (err) {
+    console.error('[Seminar HOD Groups Error]', err.message);
+    res.status(500).json({ error: 'Failed to fetch seminar groups' });
+  }
+});
+
+/**
+ * PATCH /api/seminar/hod/groups/:id/guide
+ * Direct HOD guide assignment.
+ */
+router.patch('/hod/groups/:id/guide', verifyToken, requireRole('hod'), async (req, res) => {
+  try {
+    const groupId = parseInt(req.params.id, 10);
+    const { guide_id } = req.body;
+
+    let guideName = 'Unassigned';
+    if (guide_id) {
+      const facRes = await pool.query(
+        `SELECT f.id, u.name FROM faculty f JOIN users u ON f.user_id = u.id WHERE f.id = $1`,
+        [guide_id]
+      );
+      if (facRes.rows.length === 0) return res.status(404).json({ error: 'Faculty member not found' });
+      guideName = facRes.rows[0].name;
+    }
+
+    await pool.query(
+      `UPDATE seminar_groups SET guide_id = $1, guide_name = $2, status = 'APPROVED' WHERE id = $3`,
+      [guide_id || null, guideName, groupId]
+    );
+
+    await auditRecord({
+      tableName: 'seminar_groups',
+      recordId: groupId,
+      changedBy: req.user.id,
+      action: 'ASSIGN_SEMINAR_GUIDE',
+      oldValue: null,
+      newValue: { guide_id, guideName },
+      reason: `Guide assigned to Group #${groupId} by HOD`,
+    });
+
+    res.json({ message: `Guide ${guideName} assigned successfully` });
+  } catch (err) {
+    console.error('[Seminar Assign Guide Error]', err.message);
+    res.status(500).json({ error: 'Failed to assign seminar guide' });
+  }
+});
+
+/**
+ * POST /api/seminar/hod/groups/bulk-approve
+ * Bulk approve all awaiting guide allocations for a session or academic year.
+ */
+router.post('/hod/groups/bulk-approve', verifyToken, requireRole('hod'), async (req, res) => {
+  try {
+    const { academic_year = '2025-26', session_id } = req.body;
+    let query = `
+      UPDATE seminar_groups sg
+      SET status = 'APPROVED', approved_by = $1, approved_at = NOW()
+      FROM seminar_sessions ss
+      WHERE sg.session_id = ss.id
+        AND (sg.guide_id IS NOT NULL OR sg.seminar_guide_id IS NOT NULL)
+        AND sg.status = 'AWAITING_HOD_APPROVAL'
+    `;
+    const params = [req.user.id];
+    if (session_id) {
+      query += ` AND sg.session_id = $2`;
+      params.push(session_id);
+    } else {
+      query += ` AND ss.academic_year = $2`;
+      params.push(academic_year);
+    }
+    query += ` RETURNING sg.id`;
+
+    const result = await pool.query(query, params);
+    
+    await auditRecord({
+      tableName: 'seminar_groups',
+      recordId: 0,
+      changedBy: req.user.id,
+      action: 'BULK_APPROVE_SEMINAR_GUIDES',
+      oldValue: null,
+      newValue: { count: result.rows.length, ids: result.rows.map(r => r.id) },
+      reason: `HOD bulk approved ${result.rows.length} seminar guide allocations`,
+    });
+
+    res.json({ message: `Successfully approved ${result.rows.length} seminar guide allocation(s)`, count: result.rows.length });
+  } catch (err) {
+    console.error('[Seminar Bulk Approve Error]', err.message);
+    res.status(500).json({ error: 'Failed to bulk approve seminar groups' });
+  }
+});
+
+/**
+ * GET /api/seminar/hod/marks
+ * Read-only list of all student marks entered by faculty for the academic year.
+ */
+router.get('/hod/marks', verifyToken, requireRole('hod', 'faculty'), async (req, res) => {
+  try {
+    const acadYear = req.query.academic_year || '2025-26';
+
+    const r = await pool.query(
+      `SELECT sg.id as group_id, sg.group_no, sg.domain, sg.status as approval_status,
+              m.id as member_id, m.prn, m.student_name, m.division, m.topic1,
+              COALESCE(sg.guide_name, sem_g.guide_name, u.name, 'Unassigned') as guide_name,
+              f.designation as guide_designation,
+              sm.id as marks_id,
+              COALESCE(sm.attendance_marks, 0) as attendance_marks,
+              COALESCE(sm.presentation_marks, 0) as presentation_marks,
+              COALESCE(sm.subject_understanding_marks, 0) as subject_understanding_marks,
+              COALESCE(sm.publication_marks, 0) as publication_marks,
+              COALESCE(sm.viva_marks, 0) as viva_marks,
+              COALESCE(sm.total_marks, 0) as total_marks,
+              COALESCE(sm.status, 'NOT_STARTED') as marks_status,
+              sm.evaluation_date,
+              sm.submitted_at,
+              sm.remarks,
+              u2.name as evaluated_by_name
+       FROM seminar_groups sg
+       JOIN seminar_sessions ss ON sg.session_id = ss.id
+       JOIN seminar_group_members m ON m.group_id = sg.id
+       LEFT JOIN seminar_guides sem_g ON sg.seminar_guide_id = sem_g.id
+       LEFT JOIN faculty f ON (sg.guide_id = f.id OR sem_g.faculty_id = f.id)
+       LEFT JOIN users u ON f.user_id = u.id
+       LEFT JOIN seminar_marks sm ON (sm.group_id = sg.id AND sm.prn = m.prn)
+       LEFT JOIN users u2 ON sm.submitted_by = u2.id
+       WHERE ss.academic_year = $1
+       ORDER BY sg.group_no ASC, m.member_index ASC`,
+      [acadYear]
+    );
+
+    res.json(r.rows);
+  } catch (err) {
+    console.error('[Seminar HOD Marks Error]', err.message);
+    res.status(500).json({ error: 'Failed to fetch seminar marks' });
+  }
+});
+
+/**
+ * GET /api/seminar/hod/stages
+ * Evaluation stages and criteria.
+ */
+router.get('/hod/stages', verifyToken, requireRole('hod', 'faculty'), async (req, res) => {
+  try {
+    const acadYear = req.query.academic_year || '2025-26';
+
+    const stagesRes = await pool.query(
+      `SELECT * FROM seminar_evaluation_stages WHERE academic_year = $1 ORDER BY sequence_order ASC`,
+      [acadYear]
+    );
+
+    for (const st of stagesRes.rows) {
+      const critRes = await pool.query(
+        `SELECT * FROM seminar_stage_criteria WHERE stage_id = $1 ORDER BY id ASC`,
+        [st.id]
+      );
+      st.criteria = critRes.rows;
+
+      const relRes = await pool.query(
+        `SELECT * FROM seminar_score_releases WHERE stage_id = $1`,
+        [st.id]
+      );
+      st.is_released = relRes.rows.length > 0;
+    }
+
+    res.json(stagesRes.rows);
+  } catch (err) {
+    console.error('[Seminar Stages Error]', err.message);
+    res.status(500).json({ error: 'Failed to fetch stages' });
+  }
+});
+
+/**
+ * POST /api/seminar/hod/stages
+ * Create or update evaluation stage with criteria.
+ */
+router.post('/hod/stages', verifyToken, requireRole('hod'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { id, name, sequence_order, scheduled_date_from, scheduled_date_to, max_marks_total, aggregation_rule, academic_year = '2025-26', criteria = [] } = req.body;
+
+    if (!name) return res.status(400).json({ error: 'Stage name is required' });
+
+    await client.query('BEGIN');
+
+    let stageId = id;
+    if (id) {
+      await client.query(
+        `UPDATE seminar_evaluation_stages
+         SET name = $1, sequence_order = $2, scheduled_date_from = $3, scheduled_date_to = $4,
+             max_marks_total = $5, aggregation_rule = $6, updated_at = NOW()
+         WHERE id = $7`,
+        [name, sequence_order || 1, scheduled_date_from || null, scheduled_date_to || null, max_marks_total || 50, aggregation_rule || 'AVERAGE', id]
+      );
+      await client.query(`DELETE FROM seminar_stage_criteria WHERE stage_id = $1`, [id]);
+    } else {
+      const insRes = await client.query(
+        `INSERT INTO seminar_evaluation_stages (name, academic_year, sequence_order, scheduled_date_from, scheduled_date_to, max_marks_total, aggregation_rule)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+        [name, academic_year, sequence_order || 1, scheduled_date_from || null, scheduled_date_to || null, max_marks_total || 50, aggregation_rule || 'AVERAGE']
+      );
+      stageId = insRes.rows[0].id;
+    }
+
+    for (const c of criteria) {
+      if (c.name && c.max_marks > 0) {
+        await client.query(
+          `INSERT INTO seminar_stage_criteria (stage_id, name, max_marks) VALUES ($1, $2, $3)`,
+          [stageId, c.name, c.max_marks]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    res.json({ message: 'Stage saved successfully', stage_id: stageId });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[Seminar Stage Save Error]', err.message);
+    res.status(500).json({ error: 'Failed to save stage' });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * DELETE /api/seminar/hod/stages/:id
+ */
+router.delete('/hod/stages/:id', verifyToken, requireRole('hod'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    await pool.query('DELETE FROM seminar_evaluation_stages WHERE id = $1', [id]);
+    res.json({ message: 'Stage deleted successfully' });
+  } catch (err) {
+    console.error('[Seminar Stage Delete Error]', err.message);
+    res.status(500).json({ error: 'Failed to delete stage' });
+  }
+});
+
+/**
+ * GET /api/seminar/hod/panel-matrix
+ * Panel examiner assignments matrix.
+ */
+router.get('/hod/panel-matrix', verifyToken, requireRole('hod', 'faculty'), async (req, res) => {
+  try {
+    const { stage_id, academic_year = '2025-26' } = req.query;
+    if (!stage_id) return res.status(400).json({ error: 'stage_id is required' });
+
+    const groupsRes = await pool.query(
+      `SELECT sg.id as group_id, sg.group_no, sg.domain,
+              COALESCE(sg.guide_name, sem_g.guide_name, u.name, 'Unassigned') as guide_name,
+              f.id as guide_faculty_id
+       FROM seminar_groups sg
+       JOIN seminar_sessions ss ON sg.session_id = ss.id
+       LEFT JOIN seminar_guides sem_g ON sg.seminar_guide_id = sem_g.id
+       LEFT JOIN faculty f ON (sg.guide_id = f.id OR sem_g.faculty_id = f.id)
+       LEFT JOIN users u ON f.user_id = u.id
+       WHERE ss.academic_year = $1
+       ORDER BY sg.group_no ASC`,
+      [academic_year]
+    );
+
+    const matrix = [];
+    for (const grp of groupsRes.rows) {
+      const panelRes = await pool.query(
+        `SELECT pa.id as assignment_id, pa.panel_member_id, u.name as panel_member_name, f.designation,
+                COALESCE(pe.status, 'PENDING') as eval_status,
+                COALESCE((SELECT SUM(marks_awarded) FROM seminar_panel_evaluation_scores WHERE evaluation_id = pe.id), 0) as total_score,
+                pe.id as evaluation_id
+         FROM seminar_panel_assignments pa
+         JOIN faculty f ON pa.panel_member_id = f.id
+         JOIN users u ON f.user_id = u.id
+         LEFT JOIN seminar_panel_evaluations pe ON pe.panel_assignment_id = pa.id
+         WHERE pa.stage_id = $1 AND pa.group_id = $2`,
+        [stage_id, grp.group_id]
+      );
+
+      matrix.push({
+        group_id: grp.group_id,
+        group_no: grp.group_no,
+        domain: grp.domain,
+        guide_name: grp.guide_name,
+        guide_faculty_id: grp.guide_faculty_id,
+        panel_members: panelRes.rows.map(p => ({
+          faculty_id: p.panel_member_id,
+          faculty_name: p.panel_member_name,
+          designation: p.designation,
+          status: p.eval_status,
+          total_score: p.total_score,
+          assignment_id: p.assignment_id,
+        })),
+        panelists: panelRes.rows,
+      });
+    }
+
+    res.json(matrix);
+  } catch (err) {
+    console.error('[Seminar Panel Matrix Error]', err.message);
+    res.status(500).json({ error: 'Failed to fetch panel matrix' });
+  }
+});
+
+/**
+ * POST /api/seminar/hod/panel-matrix
+ * Manual assignment of panel members for a group.
+ */
+router.post('/hod/panel-matrix', verifyToken, requireRole('hod'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { stage_id, group_id, panel_member_ids = [] } = req.body;
+    if (!stage_id || !group_id) {
+      return res.status(400).json({ error: 'stage_id and group_id are required' });
+    }
+
+    await client.query('BEGIN');
+    await client.query(
+      `DELETE FROM seminar_panel_assignments WHERE stage_id = $1 AND group_id = $2`,
+      [stage_id, group_id]
+    );
+
+    for (const pid of panel_member_ids) {
+      await client.query(
+        `INSERT INTO seminar_panel_assignments (stage_id, group_id, panel_member_id, assigned_by)
+         VALUES ($1, $2, $3, $4)`,
+        [stage_id, group_id, pid, req.user.id]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json({ message: 'Panel assignments updated successfully' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[Seminar Panel Save Error]', err.message);
+    res.status(500).json({ error: 'Failed to save panel assignments' });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * Handler: Auto-assign panel examiners with automatic guide COI exclusion.
+ */
+async function handleAutoAssignPanels(req, res) {
+  const client = await pool.connect();
+  try {
+    const { stage_id, academic_year = '2025-26', panel_size = 2 } = req.body;
+    if (!stage_id) return res.status(400).json({ error: 'stage_id is required' });
+
+    const groupsRes = await pool.query(
+      `SELECT sg.id, sg.guide_id, sem_g.faculty_id as seminar_guide_faculty_id
+       FROM seminar_groups sg
+       JOIN seminar_sessions ss ON sg.session_id = ss.id
+       LEFT JOIN seminar_guides sem_g ON sg.seminar_guide_id = sem_g.id
+       WHERE ss.academic_year = $1`,
+      [academic_year]
+    );
+
+    const facultyRes = await pool.query(`SELECT id FROM faculty ORDER BY id ASC`);
+    const allFaculty = facultyRes.rows;
+
+    if (allFaculty.length < panel_size) {
+      return res.status(400).json({ error: `At least ${panel_size} faculty members are required` });
+    }
+
+    const workload = {};
+    allFaculty.forEach(f => { workload[f.id] = 0; });
+
+    await client.query('BEGIN');
+    await client.query(`DELETE FROM seminar_panel_assignments WHERE stage_id = $1`, [stage_id]);
+
+    let assignedCount = 0;
+    for (const grp of groupsRes.rows) {
+      const guideId = grp.guide_id || grp.seminar_guide_faculty_id;
+      // Exclude guide to prevent conflict of interest
+      const eligible = allFaculty.filter(f => f.id !== guideId);
+      eligible.sort((a, b) => (workload[a.id] || 0) - (workload[b.id] || 0));
+
+      const selected = eligible.slice(0, panel_size);
+      for (const p of selected) {
+        await client.query(
+          `INSERT INTO seminar_panel_assignments (stage_id, group_id, panel_member_id, assigned_by)
+           VALUES ($1, $2, $3, $4)`,
+          [stage_id, grp.id, p.id, req.user.id]
+        );
+        workload[p.id] = (workload[p.id] || 0) + 1;
+      }
+      assignedCount++;
+    }
+
+    await client.query('COMMIT');
+    res.json({ message: `Successfully auto-assigned panels for ${assignedCount} seminar groups!` });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[Seminar Auto Assign Error]', err.message);
+    res.status(500).json({ error: 'Failed to auto-assign panels' });
+  } finally {
+    client.release();
+  }
+}
+
+router.post('/hod/panel-matrix/auto-assign', verifyToken, requireRole('hod'), handleAutoAssignPanels);
+router.post('/hod/panel-auto-assign', verifyToken, requireRole('hod'), handleAutoAssignPanels);
+
+/**
+ * Handler: Copy panel assignments from source stage to target stage.
+ */
+async function handleCopyStagePanels(req, res) {
+  const client = await pool.connect();
+  try {
+    const { source_stage_id, target_stage_id } = req.body;
+    if (!source_stage_id || !target_stage_id) {
+      return res.status(400).json({ error: 'source_stage_id and target_stage_id are required' });
+    }
+
+    await client.query('BEGIN');
+    const sourceRes = await client.query(
+      `SELECT group_id, panel_member_id FROM seminar_panel_assignments WHERE stage_id = $1`,
+      [source_stage_id]
+    );
+
+    if (sourceRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'No panel assignments found in source stage' });
+    }
+
+    await client.query(`DELETE FROM seminar_panel_assignments WHERE stage_id = $1`, [target_stage_id]);
+
+    for (const r of sourceRes.rows) {
+      await client.query(
+        `INSERT INTO seminar_panel_assignments (stage_id, group_id, panel_member_id, assigned_by)
+         VALUES ($1, $2, $3, $4)`,
+        [target_stage_id, r.group_id, r.panel_member_id, req.user.id]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json({ message: `Successfully copied ${sourceRes.rows.length} panel assignments!` });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[Seminar Copy Panel Error]', err.message);
+    res.status(500).json({ error: 'Failed to copy panel assignments' });
+  } finally {
+    client.release();
+  }
+}
+
+router.post('/hod/panel-matrix/copy', verifyToken, requireRole('hod'), handleCopyStagePanels);
+router.post('/hod/panel-copy-stage', verifyToken, requireRole('hod'), handleCopyStagePanels);
+
+/**
+ * GET /api/seminar/evaluator/assignments
+ * Get assigned seminar groups for the logged in faculty examiner.
+ */
+router.get('/evaluator/assignments', verifyToken, requireRole('faculty', 'hod'), async (req, res) => {
+  try {
+    const facRes = await pool.query('SELECT id FROM faculty WHERE user_id = $1', [req.user.id]);
+    if (facRes.rows.length === 0) return res.status(404).json({ error: 'Faculty record not found' });
+    const facultyId = facRes.rows[0].id;
+
+    const assignRes = await pool.query(
+      `SELECT pa.id as assignment_id, pa.status as assignment_status, pa.assigned_at,
+              st.id as stage_id, st.name as stage_name, st.sequence_order, st.max_marks_total,
+              sg.id as group_id, sg.group_no, sg.domain,
+              COALESCE(sg.guide_name, sem_g.guide_name, u.name, 'Unassigned') as guide_name,
+              pe.id as evaluation_id, COALESCE(pe.status, 'PENDING') as evaluation_status,
+              COALESCE((SELECT SUM(marks_awarded) FROM seminar_panel_evaluation_scores WHERE evaluation_id = pe.id), 0) as total_score
+       FROM seminar_panel_assignments pa
+       JOIN seminar_evaluation_stages st ON pa.stage_id = st.id
+       JOIN seminar_groups sg ON pa.group_id = sg.id
+       LEFT JOIN seminar_guides sem_g ON sg.seminar_guide_id = sem_g.id
+       LEFT JOIN faculty f ON (sg.guide_id = f.id OR sem_g.faculty_id = f.id)
+       LEFT JOIN users u ON f.user_id = u.id
+       LEFT JOIN seminar_panel_evaluations pe ON pe.panel_assignment_id = pa.id
+       WHERE pa.panel_member_id = $1
+       ORDER BY st.sequence_order ASC, sg.group_no ASC`,
+      [facultyId]
+    );
+
+    for (const row of assignRes.rows) {
+      const memRes = await pool.query(
+        `SELECT student_name, prn, division FROM seminar_group_members WHERE group_id = $1 ORDER BY member_index ASC`,
+        [row.group_id]
+      );
+      row.members = memRes.rows;
+    }
+
+    res.json(assignRes.rows);
+  } catch (err) {
+    console.error('[Seminar Evaluator Assignments Error]', err.message);
+    res.status(500).json({ error: 'Failed to fetch examiner assignments' });
+  }
+});
+
+/**
+ * GET /api/seminar/evaluations/:assignmentId
+ * Evaluation rubric form details for a seminar panel assignment.
+ */
+router.get('/evaluations/:assignmentId', verifyToken, requireRole('faculty', 'hod'), async (req, res) => {
+  try {
+    const assignmentId = parseInt(req.params.assignmentId, 10);
+    const assignRes = await pool.query(
+      `SELECT pa.*, st.name as stage_name, st.max_marks_total,
+              sg.group_no, sg.domain,
+              COALESCE(sg.guide_name, sem_g.guide_name, u.name, 'Unassigned') as guide_name
+       FROM seminar_panel_assignments pa
+       JOIN seminar_evaluation_stages st ON pa.stage_id = st.id
+       JOIN seminar_groups sg ON pa.group_id = sg.id
+       LEFT JOIN seminar_guides sem_g ON sg.seminar_guide_id = sem_g.id
+       LEFT JOIN faculty f ON (sg.guide_id = f.id OR sem_g.faculty_id = f.id)
+       LEFT JOIN users u ON f.user_id = u.id
+       WHERE pa.id = $1`,
+      [assignmentId]
+    );
+
+    if (assignRes.rows.length === 0) return res.status(404).json({ error: 'Assignment not found' });
+    const assign = assignRes.rows[0];
+
+    const criteriaRes = await pool.query(
+      `SELECT * FROM seminar_stage_criteria WHERE stage_id = $1 ORDER BY id ASC`,
+      [assign.stage_id]
+    );
+
+    const memRes = await pool.query(
+      `SELECT student_name, prn, division FROM seminar_group_members WHERE group_id = $1 ORDER BY member_index ASC`,
+      [assign.group_id]
+    );
+
+    const evalRes = await pool.query(
+      `SELECT * FROM seminar_panel_evaluations WHERE panel_assignment_id = $1`,
+      [assignmentId]
+    );
+
+    res.json({
+      assignment: assign,
+      criteria: criteriaRes.rows,
+      members: memRes.rows,
+      evaluation: evalRes.rows[0] || null,
+    });
+  } catch (err) {
+    console.error('[Seminar Evaluation Form Error]', err.message);
+    res.status(500).json({ error: 'Failed to fetch evaluation form' });
+  }
+});
+
+/**
+ * POST /api/seminar/evaluations and POST /api/seminar/evaluations/:assignmentId
+ * Submit scores for a seminar panel assignment.
+ */
+async function handleEvaluationSubmit(req, res) {
+  const client = await pool.connect();
+  try {
+    const assignmentId = parseInt(req.params.assignmentId || req.body.panel_assignment_id || req.body.assignment_id, 10);
+    const { scores = [], remarks, status = 'SUBMITTED' } = req.body;
+
+    if (!assignmentId) return res.status(400).json({ error: 'panel_assignment_id is required' });
+
+    const assignRes = await client.query(
+      `SELECT * FROM seminar_panel_assignments WHERE id = $1`,
+      [assignmentId]
+    );
+    if (assignRes.rows.length === 0) return res.status(404).json({ error: 'Assignment not found' });
+
+    let totalScore = 0;
+    scores.forEach(s => {
+      totalScore += parseFloat(s.marks_awarded || s.score || 0);
+    });
+
+    await client.query('BEGIN');
+
+    let evalId;
+    const prevEval = await client.query(
+      `SELECT id FROM seminar_panel_evaluations WHERE panel_assignment_id = $1`,
+      [assignmentId]
+    );
+
+    if (prevEval.rows.length > 0) {
+      evalId = prevEval.rows[0].id;
+      await client.query(
+        `UPDATE seminar_panel_evaluations
+         SET status = $1, overall_remarks = $2, submitted_at = NOW()
+         WHERE id = $3`,
+        [status, remarks || '', evalId]
+      );
+      await client.query(`DELETE FROM seminar_panel_evaluation_scores WHERE evaluation_id = $1`, [evalId]);
+    } else {
+      const insEval = await client.query(
+        `INSERT INTO seminar_panel_evaluations (panel_assignment_id, status, overall_remarks, submitted_at)
+         VALUES ($1, $2, $3, NOW()) RETURNING id`,
+        [assignmentId, status, remarks || '']
+      );
+      evalId = insEval.rows[0].id;
+    }
+
+    for (const sc of scores) {
+      const cId = sc.criterion_id || sc.criteria_id;
+      const scoreVal = parseFloat(sc.marks_awarded || sc.score || 0);
+      if (cId) {
+        await client.query(
+          `INSERT INTO seminar_panel_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark)
+           VALUES ($1, $2, $3, $4)`,
+          [evalId, cId, scoreVal, sc.remark || '']
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    res.json({ message: 'Evaluation submitted successfully', totalScore });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[Seminar Evaluation Submit Error]', err.message);
+    res.status(500).json({ error: 'Failed to submit evaluation' });
+  } finally {
+    client.release();
+  }
+}
+
+router.post('/evaluations/:assignmentId', verifyToken, requireRole('faculty', 'hod'), handleEvaluationSubmit);
+router.post('/evaluations', verifyToken, requireRole('faculty', 'hod'), handleEvaluationSubmit);
+
+/**
+ * GET /api/seminar/hod/evaluations/progress
+ */
+router.get('/hod/evaluations/progress', verifyToken, requireRole('hod', 'faculty'), async (req, res) => {
+  try {
+    const acadYear = req.query.academic_year || '2025-26';
+
+    const evalsRes = await pool.query(
+      `SELECT pe.id as eval_id, pa.stage_id, pa.group_id, pa.panel_member_id as evaluator_faculty_id, pe.status,
+              COALESCE((SELECT SUM(marks_awarded) FROM seminar_panel_evaluation_scores WHERE evaluation_id = pe.id), 0) as total_score,
+              pe.submitted_at as evaluated_at, pe.unlocked_at,
+              st.name as stage_name, sg.group_no, sg.domain,
+              u.name as evaluator_name, f.designation as evaluator_designation
+       FROM seminar_panel_evaluations pe
+       JOIN seminar_panel_assignments pa ON pe.panel_assignment_id = pa.id
+       JOIN seminar_evaluation_stages st ON pa.stage_id = st.id
+       JOIN seminar_groups sg ON pa.group_id = sg.id
+       JOIN faculty f ON pa.panel_member_id = f.id
+       JOIN users u ON f.user_id = u.id
+       WHERE st.academic_year = $1
+       ORDER BY st.sequence_order ASC, sg.group_no ASC`,
+      [acadYear]
+    );
+
+    res.json(evalsRes.rows);
+  } catch (err) {
+    console.error('[Seminar Progress Error]', err.message);
+    res.status(500).json({ error: 'Failed to fetch evaluation progress' });
+  }
+});
+
+/**
+ * POST /api/seminar/hod/evaluations/:id/unlock
+ */
+router.post('/hod/evaluations/:id/unlock', verifyToken, requireRole('hod'), async (req, res) => {
+  try {
+    const evalId = parseInt(req.params.id, 10);
+    const { reason = 'Unlocked for corrections' } = req.body;
+
+    await pool.query(
+      `UPDATE seminar_panel_evaluations SET status = 'DRAFT', is_unlocked = TRUE, unlocked_at = NOW(), unlocked_by = $1, unlock_reason = $2 WHERE id = $3`,
+      [req.user.id, reason, evalId]
+    );
+
+    await auditRecord({
+      tableName: 'seminar_panel_evaluations',
+      recordId: evalId,
+      changedBy: req.user.id,
+      action: 'UNLOCK_SEMINAR_EVALUATION',
+      oldValue: { status: 'SUBMITTED' },
+      newValue: { status: 'DRAFT', unlocked_by: req.user.id },
+      reason,
+    });
+
+    res.json({ message: 'Evaluation successfully unlocked for corrections' });
+  } catch (err) {
+    console.error('[Seminar Unlock Error]', err.message);
+    res.status(500).json({ error: 'Failed to unlock evaluation' });
+  }
+});
+
+/**
+ * POST /api/seminar/hod/stages/:id/release
+ */
+router.post('/hod/stages/:id/release', verifyToken, requireRole('hod'), async (req, res) => {
+  try {
+    const stageId = parseInt(req.params.id, 10);
+    const { notes } = req.body;
+
+    await pool.query(
+      `INSERT INTO seminar_score_releases (stage_id, released_by, released_at) VALUES ($1, $2, NOW())`,
+      [stageId, req.user.id]
+    );
+
+    await auditRecord({
+      tableName: 'seminar_score_releases',
+      recordId: stageId,
+      changedBy: req.user.id,
+      action: 'RELEASE_SEMINAR_STAGE_SCORES',
+      oldValue: null,
+      newValue: { stageId, notes },
+      reason: 'Stage scores released to students',
+    });
+
+    res.json({ message: 'Stage scores have been published and released to students!' });
+  } catch (err) {
+    console.error('[Seminar Release Error]', err.message);
+    res.status(500).json({ error: 'Failed to release scores' });
+  }
+});
+
+/**
+ * GET /api/seminar/hod/reports/export
+ */
+router.get('/hod/reports/export', verifyToken, requireRole('hod', 'faculty'), async (req, res) => {
+  try {
+    const acadYear = req.query.academic_year || '2025-26';
+
+    const stagesRes = await pool.query(
+      `SELECT id, name, sequence_order FROM seminar_evaluation_stages WHERE academic_year = $1 ORDER BY sequence_order ASC`,
+      [acadYear]
+    );
+
+    const groupsRes = await pool.query(
+      `SELECT sg.id, sg.group_no, sg.domain,
+              COALESCE(sg.guide_name, sem_g.guide_name, u.name, 'Unassigned') as guide_name
+       FROM seminar_groups sg
+       JOIN seminar_sessions ss ON sg.session_id = ss.id
+       LEFT JOIN seminar_guides sem_g ON sg.seminar_guide_id = sem_g.id
+       LEFT JOIN faculty f ON (sg.guide_id = f.id OR sem_g.faculty_id = f.id)
+       LEFT JOIN users u ON f.user_id = u.id
+       WHERE ss.academic_year = $1
+       ORDER BY sg.group_no ASC`,
+      [acadYear]
+    );
+
+    const data = [];
+    for (const grp of groupsRes.rows) {
+      const stageScores = {};
+      let totalAll = 0;
+
+      for (const st of stagesRes.rows) {
+        const evalsRes = await pool.query(
+          `SELECT AVG(sub.score_sum) as avg_score FROM (
+             SELECT pe.id, SUM(sc.marks_awarded) as score_sum
+             FROM seminar_panel_evaluations pe
+             JOIN seminar_panel_assignments pa ON pe.panel_assignment_id = pa.id
+             JOIN seminar_panel_evaluation_scores sc ON sc.evaluation_id = pe.id
+             WHERE pa.stage_id = $1 AND pa.group_id = $2 AND pe.status = 'SUBMITTED'
+             GROUP BY pe.id
+           ) sub`,
+          [st.id, grp.id]
+        );
+        const avg = evalsRes.rows[0]?.avg_score ? Number(evalsRes.rows[0].avg_score).toFixed(2) : 'N/A';
+        stageScores[st.name] = avg;
+        if (avg !== 'N/A') totalAll += Number(avg);
+      }
+
+      data.push({
+        group_no: grp.group_no,
+        domain: grp.domain,
+        guide_name: grp.guide_name,
+        ...stageScores,
+        total_aggregate: totalAll.toFixed(2),
+      });
+    }
+
+    res.json({
+      stages: stagesRes.rows.map(s => s.name),
+      data,
+    });
+  } catch (err) {
+    console.error('[Seminar Reports Error]', err.message);
+    res.status(500).json({ error: 'Failed to fetch seminar report data' });
+  }
+});
+
 module.exports = router;
+
+
