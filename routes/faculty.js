@@ -230,11 +230,20 @@ router.get('/marks/:subjectId', async (req, res) => {
       [subjectId, examTypeId, semester, academicYear, division]
     );
 
+    // Fetch all divisions/classes this faculty teaches for this subject & semester
+    const availableDivisionsRes = await pool.query(
+      `SELECT DISTINCT division FROM faculty_subject_map
+       WHERE faculty_id = $1 AND subject_id = $2 AND semester = $3 AND academic_year = $4
+       ORDER BY division`,
+      [faculty.id, subjectId, semester, academicYear]
+    );
+
     res.json({
       subject,
       examTypes,
       currentExamType,
       selectedExamTypeId: examTypeId,
+      availableDivisions: availableDivisionsRes.rows.map(r => r.division),
       students: studentsResult.rows
     });
   } catch (err) {
@@ -405,9 +414,11 @@ router.post('/term-work', async (req, res) => {
       const tim = Number(timelySubmission) || 0;
       const totalTW = Math.round((att + a1 + a2 + tim) * 100) / 100;
 
-      if (att > 5) throw new Error(`Attendance marks (${att}) exceed maximum of 5`);
-      if (tim > 5) throw new Error(`Timely submission marks (${tim}) exceed maximum of 5`);
-      if (totalTW > 25) throw new Error(`Total Term Work (${totalTW}) exceeds maximum of 25`);
+      if (att < 0 || att > 5) throw new Error(`Attendance marks (${att}) must be between 0 and 5`);
+      if (a1 < 0 || a1 > 7) throw new Error(`Assignment 1 marks (${a1}) must be between 0 and 7`);
+      if (a2 < 0 || a2 > 7) throw new Error(`Assignment 2 marks (${a2}) must be between 0 and 7`);
+      if (tim < 0 || tim > 6) throw new Error(`Timely submission marks (${tim}) must be between 0 and 6`);
+      if (totalTW < 0 || totalTW > 25) throw new Error(`Total Term Work (${totalTW}) must be between 0 and 25`);
 
       const existingTW = await client.query(
         `SELECT * FROM student_term_work_details 
