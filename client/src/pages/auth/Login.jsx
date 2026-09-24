@@ -161,7 +161,7 @@ export default function Login() {
                       autoComplete="username"
                       value={identifier}
                       onChange={(e) => setIdentifier(e.target.value)}
-                      placeholder="e.g. 72312799K, F23112151, CE6A001, or email"
+                      placeholder="e.g. F23112050, 72312799K, CE6A001, or email"
                       className="input-field"
                       required
                       disabled={loading}
@@ -260,8 +260,8 @@ export default function Login() {
                       className="w-full text-left px-3 py-2 rounded border border-rule hover:border-navy hover:bg-blue-50/60 transition-colors flex items-center justify-between group"
                     >
                       <div className="flex flex-col">
-                        <span className="text-xs font-semibold text-ink">Student (PRN: 72312799K)</span>
-                        <span className="text-[11px] font-mono text-draft group-hover:text-navy">ce6a001@meswadiacoe.edu</span>
+                        <span className="text-xs font-semibold text-ink">Student (PRN: F23112050)</span>
+                        <span className="text-[11px] font-mono text-draft group-hover:text-navy">F23112050 · pw: student@123</span>
                       </div>
                       <span className="text-[11px] text-navy font-semibold uppercase group-hover:translate-x-0.5 transition-transform">Sign in →</span>
                     </button>
