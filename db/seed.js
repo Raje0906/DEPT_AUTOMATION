@@ -30,26 +30,50 @@ async function seed() {
       `INSERT INTO users (name, role, email, password_hash, department)
        VALUES ($1,$2,$3,$4,$5) ON CONFLICT (email) DO UPDATE SET name=EXCLUDED.name
        RETURNING id`,
-      ['Dr. Meera Krishnan', 'hod', 'hod@meswadiacoe.edu', hash('hod@123'), 'Computer Engineering']
+      ['Dr.(Mrs.) N. F. Shaikh', 'hod', 'nfs@meswadiacoe.edu', hash('hod@123'), 'Computer Engineering']
     );
     await client.query(
       `INSERT INTO faculty (user_id, department, designation, employee_id)
-       VALUES ($1,$2,$3,$4) ON CONFLICT (user_id) DO NOTHING`,
-      [hodUser.rows[0].id, 'Computer Engineering', 'Head of Department', 'FAC001']
+       VALUES ($1,$2,$3,$4) ON CONFLICT (user_id) DO UPDATE SET designation=EXCLUDED.designation, employee_id=EXCLUDED.employee_id`,
+      [hodUser.rows[0].id, 'Computer Engineering', 'Head of Department / Professor', 'NFS']
     );
 
-    // ─── FACULTY (10 Default Teachers) ─────────────────────────────────────────
+    // ─── FACULTY (34 Department Teachers) ──────────────────────────────────────
     const facultyData = [
-      { name: 'Prof. Rajan Mehta',      email: 'rajan@meswadiacoe.edu',            emp: 'FAC002', desig: 'Associate Professor' },
-      { name: 'Prof. Sunita Patil',     email: 'sunita@meswadiacoe.edu',           emp: 'FAC003', desig: 'Associate Professor' },
-      { name: 'Prof. Arjun Sharma',     email: 'arjun@meswadiacoe.edu',            emp: 'FAC004', desig: 'Assistant Professor' },
-      { name: 'Prof. Priya Kulkarni',   email: 'priya.kulkarni@meswadiacoe.edu',   emp: 'FAC005', desig: 'Assistant Professor' },
-      { name: 'Prof. Rajesh Deshpande', email: 'rajesh.deshpande@meswadiacoe.edu', emp: 'FAC006', desig: 'Associate Professor' },
-      { name: 'Prof. Neha Joshi',       email: 'neha.joshi@meswadiacoe.edu',       emp: 'FAC007', desig: 'Assistant Professor' },
-      { name: 'Prof. Vikram Shinde',    email: 'vikram.shinde@meswadiacoe.edu',    emp: 'FAC008', desig: 'Assistant Professor' },
-      { name: 'Prof. Anjali Gokhale',   email: 'anjali.gokhale@meswadiacoe.edu',   emp: 'FAC009', desig: 'Assistant Professor' },
-      { name: 'Prof. Sachin Kadam',     email: 'sachin.kadam@meswadiacoe.edu',     emp: 'FAC010', desig: 'Assistant Professor' },
-      { name: 'Prof. Pooja More',       email: 'pooja.more@meswadiacoe.edu',       emp: 'FAC011', desig: 'Assistant Professor' },
+      { name: 'Dr. (Mrs.) S. K. Wagh',   email: 'skw@meswadiacoe.edu', emp: 'SKW', desig: 'Associate Professor', is_coord: false },
+      { name: 'Dr. (Mrs.) J. R. Pansare',email: 'jrp@meswadiacoe.edu', emp: 'JRP', desig: 'Associate Professor', is_coord: false },
+      { name: 'Dr. (Miss.) R. M. Wahul', email: 'rmw@meswadiacoe.edu', emp: 'RMW', desig: 'Associate Professor', is_coord: false },
+      { name: 'Dr. (Mrs.) S. R. Khonde', email: 'srk@meswadiacoe.edu', emp: 'SRK', desig: 'Associate Professor', is_coord: false },
+      { name: 'Dr. (Mrs.) S. P. Khedkar',email: 'spk@meswadiacoe.edu', emp: 'SPK', desig: 'Associate Professor', is_coord: false },
+      { name: 'Dr. (Mr.) B. K. Bodkhe',  email: 'bkb@meswadiacoe.edu', emp: 'BKB', desig: 'Associate Professor', is_coord: false },
+      { name: 'Dr. (Mrs.) S. P. Deore',  email: 'spd@meswadiacoe.edu', emp: 'SPD', desig: 'Associate Professor', is_coord: false },
+      { name: 'Dr. (Mrs.) A. P. Kale',   email: 'apk@meswadiacoe.edu', emp: 'APK', desig: 'Associate Professor', is_coord: false },
+      { name: 'Dr. (Mrs.) S. S. Raskar', email: 'ssr@meswadiacoe.edu', emp: 'SSR', desig: 'Associate Professor', is_coord: true  },
+      { name: 'Dr. (Mr.) G. S. Pole',    email: 'gsp@meswadiacoe.edu', emp: 'GSP', desig: 'Associate Professor', is_coord: false },
+      { name: 'Mr. S. B. Shinde',        email: 'sbs@meswadiacoe.edu', emp: 'SBS', desig: 'Assistant Professor', is_coord: false },
+      { name: 'Mr. G. B. Aochar',        email: 'gba@meswadiacoe.edu', emp: 'GBA', desig: 'Assistant Professor', is_coord: false },
+      { name: 'Ms. B. F. More',          email: 'bfm@meswadiacoe.edu', emp: 'BFM', desig: 'Assistant Professor', is_coord: false },
+      { name: 'Ms. S. A. Sapkal',        email: 'sas@meswadiacoe.edu', emp: 'SAS', desig: 'Assistant Professor', is_coord: false },
+      { name: 'Ms. C. Y. Vakte',         email: 'cyv@meswadiacoe.edu', emp: 'CYV', desig: 'Assistant Professor', is_coord: false },
+      { name: 'Ms. S. T. Chavan',        email: 'stc@meswadiacoe.edu', emp: 'STC', desig: 'Assistant Professor', is_coord: false },
+      { name: 'Mrs. V. D. Gaikwad',      email: 'vdg@meswadiacoe.edu', emp: 'VDG', desig: 'Assistant Professor', is_coord: false },
+      { name: 'Ms. A. K. Sandbhor',      email: 'aks@meswadiacoe.edu', emp: 'AKS', desig: 'Assistant Professor', is_coord: false },
+      { name: 'Mrs. S. D. Bhadane',      email: 'sdb@meswadiacoe.edu', emp: 'SDB', desig: 'Assistant Professor', is_coord: false },
+      { name: 'Mrs. J. A. Kalbhor',      email: 'jak@meswadiacoe.edu', emp: 'JAK', desig: 'Assistant Professor', is_coord: false },
+      { name: 'Mrs. A. D. Jadhav',       email: 'adj@meswadiacoe.edu', emp: 'ADJ', desig: 'Assistant Professor', is_coord: false },
+      { name: 'Mr. A. M. Chaudhari',     email: 'amc@meswadiacoe.edu', emp: 'AMC', desig: 'Assistant Professor', is_coord: false },
+      { name: 'Mrs. B. C. Mahajan',      email: 'bcm@meswadiacoe.edu', emp: 'BCM', desig: 'Assistant Professor', is_coord: false },
+      { name: 'Ms. S. S. Chavan',        email: 'ssc@meswadiacoe.edu', emp: 'SSC', desig: 'Assistant Professor', is_coord: false },
+      { name: 'Ms. K. K. Sukhadan',      email: 'kks@meswadiacoe.edu', emp: 'KKS', desig: 'Assistant Professor', is_coord: false },
+      { name: 'Ms. R. H. Shende',        email: 'rhs@meswadiacoe.edu', emp: 'RHS', desig: 'Assistant Professor', is_coord: false },
+      { name: 'Ms. A. P. Rajebhosale',   email: 'apr@meswadiacoe.edu', emp: 'APR', desig: 'Assistant Professor', is_coord: false },
+      { name: 'Mrs. P. P. Chandane',     email: 'ppc@meswadiacoe.edu', emp: 'PPC', desig: 'Assistant Professor', is_coord: false },
+      { name: 'Ms. N. P. Nandankar',     email: 'npn@meswadiacoe.edu', emp: 'NPN', desig: 'Assistant Professor', is_coord: false },
+      { name: 'Ms. M. P. Sapkal',        email: 'mps@meswadiacoe.edu', emp: 'MPS', desig: 'Assistant Professor', is_coord: false },
+      { name: 'Mr. A. R. Gadge',         email: 'arg@meswadiacoe.edu', emp: 'ARG', desig: 'Assistant Professor', is_coord: false },
+      { name: 'Mrs. V. G. Sonawane',     email: 'vgs@meswadiacoe.edu', emp: 'VGS', desig: 'Assistant Professor', is_coord: false },
+      { name: 'Mrs. S. B. Burghate',     email: 'sbb@meswadiacoe.edu', emp: 'SBB', desig: 'Assistant Professor', is_coord: false },
+      { name: 'Mrs. S. G. Gunjal',       email: 'sgg@meswadiacoe.edu', emp: 'SGG', desig: 'Assistant Professor', is_coord: false },
     ];
     const facultyIds = [];
     for (const f of facultyData) {
@@ -60,10 +84,10 @@ async function seed() {
         [f.name, f.email, hash('faculty@123')]
       );
       const fac = await client.query(
-        `INSERT INTO faculty (user_id, department, designation, employee_id)
-         VALUES ($1,'Computer Engineering',$2,$3)
-         ON CONFLICT (user_id) DO UPDATE SET designation=EXCLUDED.designation RETURNING id`,
-        [u.rows[0].id, f.desig, f.emp]
+        `INSERT INTO faculty (user_id, department, designation, employee_id, is_seminar_coordinator)
+         VALUES ($1,'Computer Engineering',$2,$3,$4)
+         ON CONFLICT (user_id) DO UPDATE SET designation=EXCLUDED.designation, employee_id=EXCLUDED.employee_id, is_seminar_coordinator=EXCLUDED.is_seminar_coordinator RETURNING id`,
+        [u.rows[0].id, f.desig, f.emp, f.is_coord]
       );
       facultyIds.push(fac.rows[0].id);
     }
@@ -428,11 +452,11 @@ async function seed() {
       RESTART IDENTITY CASCADE;
     `);
 
-    // 1. Appoint Prof. Sunita Patil (facultyIds[1]) as Seminar Coordinator
-    await client.query('UPDATE faculty SET is_seminar_coordinator = (id = $1)', [facultyIds[1]]);
+    // 1. Appoint Dr. (Mrs.) S. S. Raskar (facultyIds[8]) as Seminar Coordinator
+    await client.query('UPDATE faculty SET is_seminar_coordinator = (id = $1)', [facultyIds[8]]);
     
     // Fetch faculty user_ids for audit history
-    const coordUserRes = await client.query('SELECT user_id, name FROM faculty f JOIN users u ON f.user_id = u.id WHERE f.id = $1', [facultyIds[1]]);
+    const coordUserRes = await client.query('SELECT user_id, name FROM faculty f JOIN users u ON f.user_id = u.id WHERE f.id = $1', [facultyIds[8]]);
     const coordUserId = coordUserRes.rows[0].user_id;
 
     // Seed appointment history

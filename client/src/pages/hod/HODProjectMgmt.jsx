@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 export default function HODProjectMgmt() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'groups' | 'stages' | 'panels' | 'governance' | 'reports'
-  const [academicYear, setAcademicYear] = useState('2025-26');
+  const [academicYear, setAcademicYear] = useState('2026-27');
 
   // Backend state
   const [dashboardData, setDashboardData] = useState(null);
@@ -318,6 +318,7 @@ export default function HODProjectMgmt() {
             onChange={(e) => setAcademicYear(e.target.value)}
             className="input-field py-1 text-xs font-mono font-bold"
           >
+            <option value="2026-27">2026-27 (Current)</option>
             <option value="2025-26">2025-26</option>
             <option value="2024-25">2024-25</option>
           </select>

@@ -1905,7 +1905,7 @@ async function ensureSeminarGovernanceSchema() {
       CREATE TABLE IF NOT EXISTS seminar_evaluation_stages (
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
-        academic_year VARCHAR(20) NOT NULL DEFAULT '2025-26',
+        academic_year VARCHAR(20) NOT NULL DEFAULT '2026-27',
         sequence_order INT NOT NULL DEFAULT 1,
         scheduled_date_from DATE,
         scheduled_date_to DATE,
@@ -1918,7 +1918,7 @@ async function ensureSeminarGovernanceSchema() {
       );
 
       ALTER TABLE seminar_evaluation_stages ADD COLUMN IF NOT EXISTS name VARCHAR(255);
-      ALTER TABLE seminar_evaluation_stages ADD COLUMN IF NOT EXISTS academic_year VARCHAR(20) DEFAULT '2025-26';
+      ALTER TABLE seminar_evaluation_stages ADD COLUMN IF NOT EXISTS academic_year VARCHAR(20) DEFAULT '2026-27';
       ALTER TABLE seminar_evaluation_stages ADD COLUMN IF NOT EXISTS sequence_order INT DEFAULT 1;
       ALTER TABLE seminar_evaluation_stages ADD COLUMN IF NOT EXISTS scheduled_date_from DATE;
       ALTER TABLE seminar_evaluation_stages ADD COLUMN IF NOT EXISTS scheduled_date_to DATE;
@@ -2029,7 +2029,7 @@ ensureSeminarGovernanceSchema();
  */
 router.get('/hod/dashboard', verifyToken, requireRole('hod', 'faculty'), async (req, res) => {
   try {
-    const acadYear = req.query.academic_year || '2025-26';
+    const acadYear = req.query.academic_year || '2026-27';
 
     const groupsRes = await pool.query(
       `SELECT sg.id, sg.group_no, sg.domain, sg.status, sg.guide_id, sg.seminar_guide_id,
@@ -2088,7 +2088,7 @@ router.get('/hod/dashboard', verifyToken, requireRole('hod', 'faculty'), async (
  */
 router.get('/hod/groups', verifyToken, requireRole('hod', 'faculty'), async (req, res) => {
   try {
-    const acadYear = req.query.academic_year || '2025-26';
+    const acadYear = req.query.academic_year || '2026-27';
 
     const groupsRes = await pool.query(
       `SELECT sg.*, ss.name as session_name, ss.academic_year, ss.batch,
@@ -2166,7 +2166,7 @@ router.patch('/hod/groups/:id/guide', verifyToken, requireRole('hod'), async (re
  */
 router.post('/hod/groups/bulk-approve', verifyToken, requireRole('hod'), async (req, res) => {
   try {
-    const { academic_year = '2025-26', session_id } = req.body;
+    const { academic_year = '2026-27', session_id } = req.body;
     let query = `
       UPDATE seminar_groups sg
       SET status = 'APPROVED', approved_by = $1, approved_at = NOW()
@@ -2210,7 +2210,7 @@ router.post('/hod/groups/bulk-approve', verifyToken, requireRole('hod'), async (
  */
 router.get('/hod/marks', verifyToken, requireRole('hod', 'faculty'), async (req, res) => {
   try {
-    const acadYear = req.query.academic_year || '2025-26';
+    const acadYear = req.query.academic_year || '2026-27';
 
     const r = await pool.query(
       `SELECT sg.id as group_id, sg.group_no, sg.domain, sg.status as approval_status,
@@ -2255,7 +2255,7 @@ router.get('/hod/marks', verifyToken, requireRole('hod', 'faculty'), async (req,
  */
 router.get('/hod/stages', verifyToken, requireRole('hod', 'faculty'), async (req, res) => {
   try {
-    const acadYear = req.query.academic_year || '2025-26';
+    const acadYear = req.query.academic_year || '2026-27';
 
     const stagesRes = await pool.query(
       `SELECT * FROM seminar_evaluation_stages WHERE academic_year = $1 ORDER BY sequence_order ASC`,
@@ -2290,7 +2290,7 @@ router.get('/hod/stages', verifyToken, requireRole('hod', 'faculty'), async (req
 router.post('/hod/stages', verifyToken, requireRole('hod'), async (req, res) => {
   const client = await pool.connect();
   try {
-    const { id, name, sequence_order, scheduled_date_from, scheduled_date_to, max_marks_total, aggregation_rule, academic_year = '2025-26', criteria = [] } = req.body;
+    const { id, name, sequence_order, scheduled_date_from, scheduled_date_to, max_marks_total, aggregation_rule, academic_year = '2026-27', criteria = [] } = req.body;
 
     if (!name) return res.status(400).json({ error: 'Stage name is required' });
 
@@ -2355,7 +2355,7 @@ router.delete('/hod/stages/:id', verifyToken, requireRole('hod'), async (req, re
  */
 router.get('/hod/panel-matrix', verifyToken, requireRole('hod', 'faculty'), async (req, res) => {
   try {
-    const { stage_id, academic_year = '2025-26' } = req.query;
+    const { stage_id, academic_year = '2026-27' } = req.query;
     if (!stage_id) return res.status(400).json({ error: 'stage_id is required' });
 
     const groupsRes = await pool.query(
@@ -2455,7 +2455,7 @@ router.post('/hod/panel-matrix', verifyToken, requireRole('hod'), async (req, re
 async function handleAutoAssignPanels(req, res) {
   const client = await pool.connect();
   try {
-    const { stage_id, academic_year = '2025-26', panel_size = 2 } = req.body;
+    const { stage_id, academic_year = '2026-27', panel_size = 2 } = req.body;
     if (!stage_id) return res.status(400).json({ error: 'stage_id is required' });
 
     const groupsRes = await pool.query(
@@ -2734,7 +2734,7 @@ router.post('/evaluations', verifyToken, requireRole('faculty', 'hod'), handleEv
  */
 router.get('/hod/evaluations/progress', verifyToken, requireRole('hod', 'faculty'), async (req, res) => {
   try {
-    const acadYear = req.query.academic_year || '2025-26';
+    const acadYear = req.query.academic_year || '2026-27';
 
     const evalsRes = await pool.query(
       `SELECT pe.id as eval_id, pa.stage_id, pa.group_id, pa.panel_member_id as evaluator_faculty_id, pe.status,
@@ -2825,7 +2825,7 @@ router.post('/hod/stages/:id/release', verifyToken, requireRole('hod'), async (r
  */
 router.get('/hod/reports/export', verifyToken, requireRole('hod', 'faculty'), async (req, res) => {
   try {
-    const acadYear = req.query.academic_year || '2025-26';
+    const acadYear = req.query.academic_year || '2026-27';
 
     const stagesRes = await pool.query(
       `SELECT id, name, sequence_order FROM seminar_evaluation_stages WHERE academic_year = $1 ORDER BY sequence_order ASC`,

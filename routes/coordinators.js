@@ -14,7 +14,7 @@ async function ensureCoordinatorSchema() {
         id SERIAL PRIMARY KEY,
         faculty_id INT NOT NULL REFERENCES faculty(id) ON DELETE CASCADE,
         role_type VARCHAR(50) NOT NULL, -- 'BE_PROJECT_COORDINATOR' | 'TE_SEMINAR_COORDINATOR'
-        academic_year VARCHAR(20) NOT NULL DEFAULT '2025-26',
+        academic_year VARCHAR(20) NOT NULL DEFAULT '2026-27',
         is_active BOOLEAN NOT NULL DEFAULT TRUE,
         appointed_by INT REFERENCES users(id),
         appointed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -28,7 +28,7 @@ async function ensureCoordinatorSchema() {
       ALTER TABLE coordinator_assignments ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ;
       ALTER TABLE coordinator_assignments ADD COLUMN IF NOT EXISTS notes TEXT;
       ALTER TABLE coordinator_assignments ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
-      ALTER TABLE coordinator_assignments ADD COLUMN IF NOT EXISTS academic_year VARCHAR(20) NOT NULL DEFAULT '2025-26';
+      ALTER TABLE coordinator_assignments ADD COLUMN IF NOT EXISTS academic_year VARCHAR(20) NOT NULL DEFAULT '2026-27';
       ALTER TABLE coordinator_assignments ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
       ALTER TABLE coordinator_assignments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
       CREATE INDEX IF NOT EXISTS idx_coord_assign ON coordinator_assignments (role_type, academic_year, is_active);

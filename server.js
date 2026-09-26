@@ -88,7 +88,7 @@ async function start() {
     });
   } catch (err) {
     if (err.code === 'ECONNREFUSED' || (err.errors && err.errors.some(e => e.code === 'ECONNREFUSED'))) {
-      console.error(`[Boot] Startup failed: Could not connect to PostgreSQL on ${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 5432}. Please ensure the PostgreSQL service is running.`);
+      console.error('[Boot] Startup failed: Could not connect to remote PostgreSQL database. Please ensure your cloud database is online and DATABASE_URL is valid.');
     } else {
       console.error('[Boot] Startup failed:', err.message || err);
     }

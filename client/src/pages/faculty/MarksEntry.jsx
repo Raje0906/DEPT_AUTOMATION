@@ -9,7 +9,7 @@ export default function MarksEntry() {
   const navigate = useNavigate();
 
   const semester     = searchParams.get('sem') || '5';
-  const academicYear = searchParams.get('ay')  || '2025-26';
+  const academicYear = searchParams.get('ay')  || '2026-27';
   const division     = searchParams.get('div') || 'TE 1';
   const sectionParam = searchParams.get('section') || 'assignments'; // 'assignments' | 'ut' | 'insem' | 'endsem'
 

@@ -8,7 +8,7 @@ export default function MarksApproval() {
   const [searchParams] = useSearchParams();
   const subjectId    = searchParams.get('subjectId');
   const semester     = searchParams.get('sem') || '5';
-  const academicYear = searchParams.get('ay')  || '2025-26';
+  const academicYear = searchParams.get('ay')  || '2026-27';
   const division     = searchParams.get('div') || 'TE 1';
 
   const [data, setData]             = useState(null);

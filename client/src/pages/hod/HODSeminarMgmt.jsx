@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 export default function HODSeminarMgmt() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('approvals'); // 'approvals' | 'marks'
-  const [academicYear, setAcademicYear] = useState('2025-26');
+  const [academicYear, setAcademicYear] = useState('2026-27');
 
   // Backend state
   const [groups, setGroups] = useState([]);
@@ -224,9 +224,9 @@ export default function HODSeminarMgmt() {
             onChange={(e) => setAcademicYear(e.target.value)}
             className="input-field py-1.5 px-3 text-xs font-mono font-bold bg-white border border-rule rounded shadow-xs"
           >
+            <option value="2026-27">2026-27 (Current)</option>
             <option value="2025-26">2025-26</option>
             <option value="2024-25">2024-25</option>
-            <option value="2026-27">2026-27</option>
           </select>
         </div>
       </div>

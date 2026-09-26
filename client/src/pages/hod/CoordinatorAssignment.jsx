@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 
 export default function CoordinatorAssignment() {
   const [loading, setLoading] = useState(true);
-  const [academicYear, setAcademicYear] = useState('2025-26');
+  const [academicYear, setAcademicYear] = useState('2026-27');
   const [data, setData] = useState({
     beCoordinator: null,
     teCoordinator: null,
@@ -127,9 +127,9 @@ export default function CoordinatorAssignment() {
             onChange={(e) => setAcademicYear(e.target.value)}
             className="input-field py-1.5 px-3 text-sm font-semibold bg-white border border-rule rounded shadow-sm"
           >
+            <option value="2026-27">2026-27 (Current)</option>
             <option value="2025-26">2025-26</option>
             <option value="2024-25">2024-25</option>
-            <option value="2026-27">2026-27</option>
           </select>
         </div>
       </div>

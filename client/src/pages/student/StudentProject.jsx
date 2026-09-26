@@ -119,7 +119,7 @@ export default function StudentProject() {
               </p>
             </div>
             <div className="text-right hidden md:block">
-              <span className="text-xs text-draft font-mono block">Academic Year 2025-26</span>
+              <span className="text-xs text-draft font-mono block">Academic Year 2026-27</span>
               <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded inline-block mt-1">
                 Portal Open for Registration
               </span>

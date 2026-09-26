@@ -45,7 +45,7 @@ router.get('/dashboard', async (req, res) => {
       [faculty.id]
     );
     const academicYears = yearsRes.rows.map(r => r.academic_year);
-    const selectedYear = req.query.academic_year || academicYears[0] || '2025-26';
+    const selectedYear = req.query.academic_year || academicYears[0] || '2026-27';
 
     // Assigned subjects for selected year with student_exam_marks stats
     const subjectsRes = await pool.query(
@@ -141,7 +141,7 @@ router.get('/subjects', async (req, res) => {
       [faculty.id]
     );
     const academicYears = yearsRes.rows.map(r => r.academic_year);
-    const selectedYear = req.query.academic_year || academicYears[0] || '2025-26';
+    const selectedYear = req.query.academic_year || academicYears[0] || '2026-27';
 
     const result = await pool.query(
       `SELECT fsm.id AS map_id, s.id, s.name, s.code, s.semester, s.credits,
@@ -180,7 +180,7 @@ router.get('/marks/:subjectId', async (req, res) => {
 
     const { subjectId } = req.params;
     const semester = parseInt(req.query.semester, 10) || 5;
-    const academicYear = req.query.academic_year || '2025-26';
+    const academicYear = req.query.academic_year || '2026-27';
     const division = req.query.division || 'TE 1';
     let examTypeId = req.query.exam_type_id ? parseInt(req.query.exam_type_id, 10) : null;
 

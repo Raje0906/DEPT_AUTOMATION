@@ -224,9 +224,9 @@ export default function Login() {
                     >
                       <div className="flex flex-col">
                         <span className="text-xs font-semibold text-ink flex items-center gap-1.5">
-                          HOD <span className="text-[10px] bg-purple-100 text-purple-800 font-bold px-1.5 py-0.2 rounded">Authority</span>
+                          Dr. N. F. Shaikh <span className="text-[10px] bg-purple-100 text-purple-800 font-bold px-1.5 py-0.2 rounded">HOD</span>
                         </span>
-                        <span className="text-[11px] font-mono text-draft group-hover:text-navy">hod@meswadiacoe.edu</span>
+                        <span className="text-[11px] font-mono text-draft group-hover:text-navy">nfs (Dr. N. F. Shaikh)</span>
                       </div>
                       <span className="text-[11px] text-navy font-semibold uppercase group-hover:translate-x-0.5 transition-transform">Sign in →</span>
                     </button>
@@ -237,9 +237,9 @@ export default function Login() {
                     >
                       <div className="flex flex-col">
                         <span className="text-xs font-semibold text-amber-900 flex items-center gap-1.5">
-                          Seminar Coordinator <span className="text-[10px] bg-amber-200 text-amber-900 font-bold px-1.5 py-0.2 rounded">Coordinator</span>
+                          Dr. S. S. Raskar <span className="text-[10px] bg-amber-200 text-amber-900 font-bold px-1.5 py-0.2 rounded">Coordinator</span>
                         </span>
-                        <span className="text-[11px] font-mono text-draft group-hover:text-amber-900">shobha.raskar@meswadiacoe.edu</span>
+                        <span className="text-[11px] font-mono text-draft group-hover:text-amber-900">ssr (Dr. S. S. Raskar)</span>
                       </div>
                       <span className="text-[11px] text-amber-800 font-semibold uppercase group-hover:translate-x-0.5 transition-transform">Sign in →</span>
                     </button>
@@ -249,8 +249,8 @@ export default function Login() {
                       className="w-full text-left px-3 py-2 rounded border border-rule hover:border-navy hover:bg-blue-50/60 transition-colors flex items-center justify-between group"
                     >
                       <div className="flex flex-col">
-                        <span className="text-xs font-semibold text-ink">Faculty / Guide</span>
-                        <span className="text-[11px] font-mono text-draft group-hover:text-navy">rajan@meswadiacoe.edu</span>
+                        <span className="text-xs font-semibold text-ink">Dr. S. K. Wagh (Faculty / Guide)</span>
+                        <span className="text-[11px] font-mono text-draft group-hover:text-navy">skw (Dr. S. K. Wagh)</span>
                       </div>
                       <span className="text-[11px] text-navy font-semibold uppercase group-hover:translate-x-0.5 transition-transform">Sign in →</span>
                     </button>

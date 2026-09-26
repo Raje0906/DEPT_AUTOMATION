@@ -14,7 +14,7 @@ const SPPU_CODE_MAP = {
   'CE509_SEM': '310249',
 };
 
-export default function SppuMarksheet({ student, subjects = [], semester = 5, academicYear = '2025-26', sgpa, published = true }) {
+export default function SppuMarksheet({ student, subjects = [], semester = 5, academicYear = '2026-27', sgpa, published = true }) {
   const currentDate = new Date().toLocaleDateString('en-GB');
 
   // Format seat number: e.g. T400320531 or derived from roll_no

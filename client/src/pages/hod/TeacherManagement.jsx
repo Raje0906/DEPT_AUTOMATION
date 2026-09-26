@@ -15,7 +15,7 @@ export default function TeacherManagement() {
   // Multi-Subject Assignment Form State
   const [form, setForm] = useState({
     facultyId: '',
-    academicYear: '2025-26',
+    academicYear: '2026-27',
     isClassTeacher: false,
     classTeacherFor: 'SE Comp 1',
     items: [
@@ -27,7 +27,7 @@ export default function TeacherManagement() {
   const [ctForm, setCtForm] = useState({
     facultyId: '',
     className: 'SE Comp 1',
-    academicYear: '2025-26',
+    academicYear: '2026-27',
   });
 
   const fetchData = async () => {
@@ -58,7 +58,7 @@ export default function TeacherManagement() {
 
     setForm({
       facultyId: defaultFaculty,
-      academicYear: '2025-26',
+      academicYear: '2026-27',
       isClassTeacher: false,
       classTeacherFor: defaultClass,
       items: [
@@ -465,9 +465,9 @@ export default function TeacherManagement() {
                     onChange={(e) => setForm({ ...form, academicYear: e.target.value })}
                     className="input-field text-sm font-semibold"
                   >
-                    <option value="2025-26">2025-26 (Current)</option>
+                    <option value="2026-27">2026-27 (Current)</option>
+                    <option value="2025-26">2025-26</option>
                     <option value="2024-25">2024-25</option>
-                    <option value="2023-24">2023-24</option>
                   </select>
                 </div>
               </div>
@@ -749,7 +749,8 @@ export default function TeacherManagement() {
                   onChange={(e) => setCtForm({ ...ctForm, academicYear: e.target.value })}
                   className="input-field text-sm font-semibold"
                 >
-                  <option value="2025-26">2025-26 (Current)</option>
+                  <option value="2026-27">2026-27 (Current)</option>
+                  <option value="2025-26">2025-26</option>
                   <option value="2024-25">2024-25</option>
                 </select>
               </div>

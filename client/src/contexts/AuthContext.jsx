@@ -4,19 +4,27 @@ import api from '../api/axios';
 const AuthContext = createContext(null);
 
 const DEMO_USERS = {
-  'hod@meswadiacoe.edu': {
+  'nfs@meswadiacoe.edu': {
     id: 1,
-    name: 'Dr. A. B. Patil',
-    email: 'hod@meswadiacoe.edu',
+    name: 'Dr.(Mrs.) N. F. Shaikh',
+    email: 'nfs@meswadiacoe.edu',
     role: 'hod',
-    employee_id: 'HOD001',
+    employee_id: 'NFS',
   },
-  'rajan@meswadiacoe.edu': {
+  'skw@meswadiacoe.edu': {
     id: 2,
-    name: 'Prof. Rajan Sharma',
-    email: 'rajan@meswadiacoe.edu',
+    name: 'Dr. (Mrs.) S. K. Wagh',
+    email: 'skw@meswadiacoe.edu',
     role: 'faculty',
-    employee_id: 'FAC001',
+    employee_id: 'SKW',
+  },
+  'ssr@meswadiacoe.edu': {
+    id: 10,
+    name: 'Dr. (Mrs.) S. S. Raskar',
+    email: 'ssr@meswadiacoe.edu',
+    role: 'faculty',
+    employee_id: 'SSR',
+    is_seminar_coordinator: true,
   },
   'ce6a001@meswadiacoe.edu': {
     id: 3,
@@ -74,10 +82,10 @@ export function AuthProvider({ children }) {
 
   const loginDemo = async (role = 'student') => {
     const credsMap = {
-      hod: { id: 'hod@meswadiacoe.edu', pw: 'hod@123' },
-      faculty: { id: 'rajan@meswadiacoe.edu', pw: 'faculty@123' },
-      coordinator: { id: 'shobha.raskar@meswadiacoe.edu', pw: 'faculty@123' },
-      student: { id: 'F23112050', pw: 'student@123' },
+      hod: { id: 'nfs', pw: 'faculty@123' },
+      faculty: { id: 'skw', pw: 'faculty@123' },
+      coordinator: { id: 'ssr', pw: 'faculty@123' },
+      student: { id: 'ce6a001@meswadiacoe.edu', pw: 'student@123' },
     };
     const target = credsMap[role] || credsMap.student;
     return await login(target.id, target.pw);

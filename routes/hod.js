@@ -10,7 +10,7 @@ router.use(verifyToken, requireRole('hod'));
 // ─── GET /api/hod/dashboard ───────────────────────────────────────────────────
 router.get('/dashboard', async (req, res) => {
   try {
-    const selectedYear = req.query.academic_year || '2025-26';
+    const selectedYear = req.query.academic_year || '2026-27';
     const selectedSem = req.query.semester ? parseInt(req.query.semester, 10) : 5;
 
     // Dept-wide subject submission status table
@@ -62,7 +62,7 @@ router.get('/dashboard', async (req, res) => {
 router.get('/exam-completion-status', async (req, res) => {
   try {
     const semester = req.query.semester ? parseInt(req.query.semester, 10) : 5;
-    const academicYear = req.query.academic_year || '2025-26';
+    const academicYear = req.query.academic_year || '2026-27';
 
     const examTypesRes = await pool.query(`SELECT * FROM exam_types ORDER BY display_order`);
     const examTypes = examTypesRes.rows;
@@ -110,7 +110,7 @@ router.get('/marks/:subjectId', async (req, res) => {
   try {
     const { subjectId } = req.params;
     const semester = parseInt(req.query.semester, 10) || 5;
-    const academicYear = req.query.academic_year || '2025-26';
+    const academicYear = req.query.academic_year || '2026-27';
     const division = req.query.division || 'TE 1';
 
     const subjectResult = await pool.query(`SELECT * FROM subjects WHERE id = $1`, [subjectId]);
@@ -180,7 +180,7 @@ router.get('/marks/:subjectId', async (req, res) => {
 router.post('/approve/:subjectId', async (req, res) => {
   try {
     const { subjectId } = req.params;
-    const { semester = 5, academicYear = '2025-26', division = 'TE 1' } = req.body;
+    const { semester = 5, academicYear = '2026-27', division = 'TE 1' } = req.body;
 
     const updateResult = await pool.query(
       `UPDATE student_exam_marks sem
@@ -217,7 +217,7 @@ router.post('/approve/:subjectId', async (req, res) => {
 router.post('/sendback/:subjectId', async (req, res) => {
   try {
     const { subjectId } = req.params;
-    const { semester = 5, academicYear = '2025-26', division = 'TE 1', comment } = req.body;
+    const { semester = 5, academicYear = '2026-27', division = 'TE 1', comment } = req.body;
 
     if (!comment || comment.trim().length < 5) {
       return res.status(400).json({ error: 'A remark is required when sending marks back for correction' });
@@ -253,7 +253,7 @@ router.post('/sendback/:subjectId', async (req, res) => {
 // ─── POST /api/hod/publish ────────────────────────────────────────────────────
 router.post('/publish', async (req, res) => {
   try {
-    const { semester = 5, academicYear = '2025-26', division = 'TE 1', confirmPublish } = req.body;
+    const { semester = 5, academicYear = '2026-27', division = 'TE 1', confirmPublish } = req.body;
 
     if (!confirmPublish) {
       return res.status(400).json({ error: 'Publish confirmation is required' });
@@ -557,7 +557,7 @@ router.post('/teachers/assign', async (req, res) => {
       return res.status(400).json({ error: 'Faculty is required' });
     }
 
-    const year = academicYear || '2025-26';
+    const year = academicYear || '2026-27';
 
     // Support both batch assignment (assignments: [...]) and single assignment
     const itemsToAssign = Array.isArray(assignments) && assignments.length > 0
@@ -661,7 +661,7 @@ router.post('/teachers/set-class-teacher', async (req, res) => {
     if (!facultyId || !className) {
       return res.status(400).json({ error: 'Faculty and class name are required' });
     }
-    const year = academicYear || '2025-26';
+    const year = academicYear || '2026-27';
 
     await pool.query(
       `INSERT INTO class_teachers (faculty_id, class_name, academic_year)

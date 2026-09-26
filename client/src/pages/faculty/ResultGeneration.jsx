@@ -6,13 +6,13 @@ import { StatusBadge } from '../../components/ResultTable';
 export default function ResultGeneration() {
   const [data, setData]                 = useState(null);
   const [loading, setLoading]           = useState(true);
-  const [academicYear, setAcademicYear] = useState('2025-26');
+  const [academicYear, setAcademicYear] = useState('2026-27');
   const [selectedClass, setSelectedClass] = useState(''); // Selected division/class
   const [selectedSemFilter, setSelectedSemFilter] = useState('ALL');
 
   const fetchSubjects = (year) => {
     setLoading(true);
-    const url = `/faculty/subjects?academic_year=${encodeURIComponent(year || '2025-26')}`;
+    const url = `/faculty/subjects?academic_year=${encodeURIComponent(year || '2026-27')}`;
     api.get(url)
       .then(res => {
         setData(res.data);
@@ -29,7 +29,7 @@ export default function ResultGeneration() {
   }, [academicYear]);
 
   const allSubjects   = data?.subjects || [];
-  const academicYears = data?.academicYears?.length > 0 ? data.academicYears : ['2025-26', '2024-25'];
+  const academicYears = data?.academicYears?.length > 0 ? data.academicYears : ['2026-27', '2025-26', '2024-25'];
 
   // Dynamically extract unique classes/divisions assigned to this faculty
   const availableClasses = useMemo(() => {
