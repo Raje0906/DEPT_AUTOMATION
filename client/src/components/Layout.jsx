@@ -59,6 +59,11 @@ const Icons = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
     </svg>
   ),
+  rollover: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+    </svg>
+  ),
   audit: (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -141,6 +146,7 @@ const roleNav = {
         { to: '/hod/approval',        label: 'Mark Approvals',          icon: Icons.approval },
         { to: '/hod/magazine-approvals', label: 'Magazine Approvals',   icon: Icons.magazines },
         { to: '/hod/publish',         label: 'Publish Results',         icon: Icons.publish },
+        { to: '/hod/rollover',        label: 'Term Rollover',           icon: Icons.rollover },
         { to: '/hod/analytics',       label: 'Academic Analytics',      icon: Icons.analytics },
       ],
     },
@@ -193,30 +199,40 @@ export default function Layout({ children }) {
       <aside
         className={`
           fixed inset-y-0 left-0 z-30 w-64 bg-[#141C38] flex flex-col border-r border-[#222E54]
-          transform transition-transform duration-200 print:hidden
+          transform transition-transform duration-200 print:hidden h-screen
           ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
-          lg:relative lg:translate-x-0 lg:flex
+          lg:sticky lg:top-0 lg:translate-x-0 lg:flex
         `}
       >
         {/* Institutional header */}
-        <div className="px-5 py-5 border-b border-white/10 flex items-center gap-3 bg-[#0F162E]">
-          <div className="w-9 h-9 rounded bg-white/10 border border-white/15 flex items-center justify-center flex-shrink-0">
-            <svg viewBox="0 0 24 24" className="w-5 h-5 text-blue-200" fill="none" stroke="currentColor" strokeWidth={1.75}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
-            </svg>
+        <div className="px-4 py-4 border-b border-white/10 flex items-center justify-between gap-2 bg-[#0F162E] flex-shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded bg-white/10 border border-white/15 flex items-center justify-center flex-shrink-0">
+              <svg viewBox="0 0 24 24" className="w-5 h-5 text-blue-200" fill="none" stroke="currentColor" strokeWidth={1.75}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <p className="text-white text-sm font-bold tracking-tight font-serif uppercase leading-snug">
+                MES Wadia COE
+              </p>
+              <p className="text-blue-300 text-[10px] font-semibold tracking-wider uppercase truncate">
+                Computer Engineering
+              </p>
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="text-white text-sm font-bold tracking-tight font-serif uppercase leading-snug">
-              MES Wadia COE
-            </p>
-            <p className="text-blue-300 text-[10px] font-semibold tracking-wider uppercase truncate">
-              Computer Engineering
-            </p>
-          </div>
+          <button
+            onClick={handleLogout}
+            title="Sign out"
+            className="p-1.5 text-blue-300 hover:text-red-400 hover:bg-white/10 rounded transition-colors flex-shrink-0"
+            aria-label="Sign out"
+          >
+            {Icons.logout}
+          </button>
         </div>
 
         {/* Navigation Sections */}
-        <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto">
+        <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto min-h-0">
           {navGroups.map((group, gIdx) => (
             <div key={gIdx} className="space-y-1">
               {group.group && (
@@ -317,8 +333,8 @@ export default function Layout({ children }) {
           </div>
         </nav>
 
-        {/* User Card */}
-        <div className="p-3.5 border-t border-white/10 bg-[#0F162E]">
+        {/* User Card (Pinned at bottom of sidebar) */}
+        <div className="p-3.5 border-t border-white/10 bg-[#0F162E] flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded bg-white/10 border border-white/15 flex items-center justify-center text-xs font-semibold text-white uppercase flex-shrink-0">
               {user?.name?.charAt(0) || 'U'}
@@ -338,7 +354,7 @@ export default function Layout({ children }) {
             <button
               onClick={handleLogout}
               title="Sign out"
-              className="p-1.5 text-blue-300 hover:text-white hover:bg-white/10 rounded transition-colors"
+              className="p-1.5 text-blue-300 hover:text-red-400 hover:bg-white/10 rounded transition-colors"
             >
               {Icons.logout}
             </button>
@@ -357,17 +373,27 @@ export default function Layout({ children }) {
       {/* Main content */}
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Top bar (mobile) */}
-        <header className="lg:hidden flex items-center gap-4 px-4 py-3 bg-white border-b border-rule">
+        <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-rule">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setMobileOpen(true)}
+              className="p-1.5 rounded-sm hover:bg-paper transition-colors"
+              aria-label="Open navigation"
+            >
+              <svg className="w-5 h-5 text-navy" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <span className="font-serif text-navy font-semibold text-sm">MES Wadia COE</span>
+          </div>
           <button
-            onClick={() => setMobileOpen(true)}
-            className="p-1.5 rounded-sm hover:bg-paper transition-colors"
-            aria-label="Open navigation"
+            onClick={handleLogout}
+            title="Sign out"
+            className="flex items-center gap-1.5 text-xs text-red-600 hover:text-red-700 font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors"
           >
-            <svg className="w-5 h-5 text-navy" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
+            <span>Sign out</span>
+            {Icons.logout}
           </button>
-          <span className="font-serif text-navy font-semibold text-sm">MES Wadia COE</span>
         </header>
 
         <main className="flex-1 overflow-auto">

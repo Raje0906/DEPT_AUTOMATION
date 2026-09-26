@@ -85,7 +85,7 @@ export function AuthProvider({ children }) {
       hod: { id: 'nfs', pw: 'faculty@123' },
       faculty: { id: 'skw', pw: 'faculty@123' },
       coordinator: { id: 'ssr', pw: 'faculty@123' },
-      student: { id: 'ce6a001@meswadiacoe.edu', pw: 'student@123' },
+      student: { id: 'F23112050', pw: 'student@123' },
     };
     const target = credsMap[role] || credsMap.student;
     return await login(target.id, target.pw);
