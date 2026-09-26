@@ -8,7 +8,9 @@
     "client": "npm --prefix client run dev",
     "migrate": "node db/run-migrate.js",
     "test": "node --test services/*.test.js",
-    "seed": "node db/seed.js"
+    "seed": "node db/seed.js",
+    "sync:students": "node scripts/sync_excel_students.js",
+    "map:results": "node scripts/map_excel_results.js"
   },
   "keywords": [],
   "author": "",
