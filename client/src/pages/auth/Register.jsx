@@ -502,7 +502,7 @@ export default function Register() {
                     required
                     value={facultyForm.name}
                     onChange={handleFacultyChange}
-                    placeholder="e.g. Prof. Rajan Sharma"
+                    placeholder="e.g. Dr. (Mrs.) S. K. Wagh"
                     className="input-field"
                     disabled={loading}
                   />
@@ -520,7 +520,7 @@ export default function Register() {
                     required
                     value={facultyForm.email}
                     onChange={handleFacultyChange}
-                    placeholder="e.g. rajan@meswadiacoe.edu"
+                    placeholder="e.g. skw@meswadiacoe.edu"
                     className="input-field"
                     disabled={loading}
                   />

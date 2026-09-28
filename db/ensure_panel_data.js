@@ -35,13 +35,9 @@ async function ensurePanelData() {
 
     // 2. Fetch faculty IDs
     const facRes = await client.query(`SELECT id, user_id FROM faculty ORDER BY id ASC`);
-    const facultyMap = {};
-    for (const f of facRes.rows) {
-      facultyMap[f.id] = f;
-    }
-    const rajanFacId = 2;
-    const sunitaFacId = 3;
-    const arjunFacId = 4;
+    const fac1Id = facRes.rows[0]?.id || 2;
+    const fac2Id = facRes.rows[1]?.id || 3;
+    const fac3Id = facRes.rows[2]?.id || 4;
 
     // 3. Ensure Group 2 exists
     let g2Res = await client.query(`SELECT id FROM project_groups WHERE group_code = 'GRP-2025-02'`);
@@ -63,7 +59,7 @@ async function ensurePanelData() {
           $1,
           $2
         ) RETURNING id
-      `, [sunitaFacId, creatorUserId]);
+      `, [fac2Id, creatorUserId]);
       g2Id = insG2.rows[0].id;
 
       // Add group members
@@ -86,49 +82,49 @@ async function ensurePanelData() {
       g2Id = g2Res.rows[0].id;
     }
 
-    // 4. Ensure panel assignments for Group 2 (Prof. Rajan Mehta as Panelist)
-    const paRajan = await client.query(
+    // 4. Ensure panel assignments for Group 2
+    const paFac1 = await client.query(
       `SELECT id FROM project_panel_assignments WHERE stage_id = $1 AND group_id = $2 AND panel_member_id = $3`,
-      [stage1Id, g2Id, rajanFacId]
+      [stage1Id, g2Id, fac1Id]
     );
-    if (paRajan.rows.length === 0) {
+    if (paFac1.rows.length === 0) {
       await client.query(
         `INSERT INTO project_panel_assignments (stage_id, group_id, panel_member_id, assigned_by, status)
          VALUES ($1, $2, $3, $4, 'ASSIGNED')`,
-        [stage1Id, g2Id, rajanFacId, 1]
+        [stage1Id, g2Id, fac1Id, 1]
       );
-      console.log('[Panel Data] Assigned Prof. Rajan Mehta to Group 2 for Stage 1');
+      console.log('[Panel Data] Assigned panelist 1 to Group 2 for Stage 1');
     }
 
-    // Also assign Prof. Arjun Sharma to Group 2
-    const paArjun = await client.query(
+    // Also assign panelist 3 to Group 2
+    const paFac3 = await client.query(
       `SELECT id FROM project_panel_assignments WHERE stage_id = $1 AND group_id = $2 AND panel_member_id = $3`,
-      [stage1Id, g2Id, arjunFacId]
+      [stage1Id, g2Id, fac3Id]
     );
-    if (paArjun.rows.length === 0) {
+    if (paFac3.rows.length === 0) {
       await client.query(
         `INSERT INTO project_panel_assignments (stage_id, group_id, panel_member_id, assigned_by, status)
          VALUES ($1, $2, $3, $4, 'ASSIGNED')`,
-        [stage1Id, g2Id, arjunFacId, 1]
+        [stage1Id, g2Id, fac3Id, 1]
       );
-      console.log('[Panel Data] Assigned Prof. Arjun Sharma to Group 2 for Stage 1');
+      console.log('[Panel Data] Assigned panelist 3 to Group 2 for Stage 1');
     }
 
-    // Also assign Prof. Sunita Patil to Group 1 (since Rajan is guide for Group 1)
+    // Also assign panelist 2 to Group 1
     const g1Res = await client.query(`SELECT id FROM project_groups WHERE group_code = 'GRP-2025-01'`);
     if (g1Res.rows.length > 0) {
       const g1Id = g1Res.rows[0].id;
-      const paSunita = await client.query(
+      const paFac2 = await client.query(
         `SELECT id FROM project_panel_assignments WHERE stage_id = $1 AND group_id = $2 AND panel_member_id = $3`,
-        [stage1Id, g1Id, sunitaFacId]
+        [stage1Id, g1Id, fac2Id]
       );
-      if (paSunita.rows.length === 0) {
+      if (paFac2.rows.length === 0) {
         await client.query(
           `INSERT INTO project_panel_assignments (stage_id, group_id, panel_member_id, assigned_by, status)
            VALUES ($1, $2, $3, $4, 'ASSIGNED')`,
-          [stage1Id, g1Id, sunitaFacId, 1]
+          [stage1Id, g1Id, fac2Id, 1]
         );
-        console.log('[Panel Data] Assigned Prof. Sunita Patil to Group 1 for Stage 1');
+        console.log('[Panel Data] Assigned panelist 2 to Group 1 for Stage 1');
       }
     }
 
