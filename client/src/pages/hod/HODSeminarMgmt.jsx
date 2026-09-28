@@ -742,7 +742,7 @@ export default function HODSeminarMgmt() {
                   rows={3}
                   value={rejectRemark}
                   onChange={(e) => setRejectRemark(e.target.value)}
-                  placeholder="e.g. Faculty guide capacity exceeded; please reallocate to Prof. Sharma."
+                  placeholder="e.g. Faculty guide capacity reached for this domain; please reallocate guide."
                   className="input-field w-full p-2.5 text-sm bg-white border border-rule rounded"
                 />
               </div>

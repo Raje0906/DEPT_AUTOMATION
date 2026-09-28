@@ -284,7 +284,7 @@ async function seed() {
     const [s3c1, s3c2, s3c3, s3c4, s3c5] = await seedCriteriaForStage(stage3Id);
 
     // 3. Project Groups
-    // Group 1: Autonomous Drone Navigation (Guide: Rajan Mehta - facultyIds[0])
+    // Group 1: Autonomous Drone Navigation (Guide: facultyIds[0])
     const grp1User = await client.query(`SELECT user_id FROM students WHERE id=$1`, [studentIds[0]]);
     const g1 = await client.query(`
       INSERT INTO project_groups (group_code, academic_year, batch, title, domain, abstract, status, guide_id, created_by)
@@ -302,7 +302,7 @@ async function seed() {
       VALUES ($1, $2, 'APPROVED', NOW(), $3, 'Approved. Strong technical proposal.')
     `, [g1Id, facultyIds[0], facultyIds[0]]);
 
-    // Group 2: ZK Proof Identity (Guide: Sunita Patil - facultyIds[1])
+    // Group 2: ZK Proof Identity (Guide: facultyIds[1])
     const grp2User = await client.query(`SELECT user_id FROM students WHERE id=$1`, [studentIds[3]]);
     const g2 = await client.query(`
       INSERT INTO project_groups (group_code, academic_year, batch, title, domain, abstract, status, guide_id, created_by)
@@ -319,7 +319,7 @@ async function seed() {
       VALUES ($1, $2, 'APPROVED', NOW(), $3, 'Approved guide request.')
     `, [g2Id, facultyIds[1], facultyIds[1]]);
 
-    // Group 3: K8s Autoscaling (Guide: Arjun Sharma - facultyIds[2])
+    // Group 3: K8s Autoscaling (Guide: facultyIds[2])
     const grp3User = await client.query(`SELECT user_id FROM students WHERE id=$1`, [studentIds[6]]);
     const g3 = await client.query(`
       INSERT INTO project_groups (group_code, academic_year, batch, title, domain, abstract, status, guide_id, created_by)
@@ -343,7 +343,7 @@ async function seed() {
     await client.query(`INSERT INTO project_group_members (group_id, student_id, roll_no, is_leader) VALUES ($1, $2, 'CE6A011', false)`, [g4Id, studentIds[10]]);
 
     // 4. Panel Assignments (Respecting Conflict of Interest: Guide cannot evaluate own group!)
-    // For G1 (Guide = Rajan Mehta/facultyIds[0]), Panelists = Sunita Patil (facultyIds[1]) & Arjun Sharma (facultyIds[2])
+    // For G1 (Guide = facultyIds[0]), Panelists = facultyIds[1] & facultyIds[2]
     const paG1S1_P1 = await client.query(`
       INSERT INTO project_panel_assignments (stage_id, group_id, panel_member_id, assigned_by, status)
       VALUES ($1, $2, $3, $4, 'COMPLETED') RETURNING id
@@ -358,13 +358,13 @@ async function seed() {
       VALUES ($1, $2, $3, $4, 'ASSIGNED') RETURNING id
     `, [stage2Id, g1Id, facultyIds[1], hodUser.rows[0].id]);
 
-    // For G2 (Guide = Sunita Patil/facultyIds[1]), Panelists = Rajan Mehta & Arjun Sharma
+    // For G2 (Guide = facultyIds[1]), Panelists = facultyIds[0] & facultyIds[2]
     const paG2S1_P1 = await client.query(`
       INSERT INTO project_panel_assignments (stage_id, group_id, panel_member_id, assigned_by, status)
       VALUES ($1, $2, $3, $4, 'COMPLETED') RETURNING id
     `, [stage1Id, g2Id, facultyIds[0], hodUser.rows[0].id]);
 
-    // For G3 (Guide = Arjun Sharma/facultyIds[2]), Panelists = Rajan Mehta & Sunita Patil
+    // For G3 (Guide = facultyIds[2]), Panelists = facultyIds[0] & facultyIds[1]
     const paG3S1_P1 = await client.query(`
       INSERT INTO project_panel_assignments (stage_id, group_id, panel_member_id, assigned_by, status)
       VALUES ($1, $2, $3, $4, 'COMPLETED') RETURNING id
@@ -410,7 +410,7 @@ async function seed() {
     await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 7, '')`, [eval3Id, s2c4]);
     await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 8, '')`, [eval3Id, s2c5]);
 
-    // G2 Stage 1 - Evaluator Rajan Mehta
+    // G2 Stage 1 - Evaluator facultyIds[0]
     const eval4 = await client.query(`
       INSERT INTO project_evaluations (panel_assignment_id, status, submitted_at, overall_remarks)
       VALUES ($1, 'SUBMITTED', NOW(), 'Sound cryptographic foundation, good understanding of zk-SNARK constraints.')
@@ -423,7 +423,7 @@ async function seed() {
     await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 8, '')`, [eval4Id, s1c4]);
     await client.query(`INSERT INTO project_evaluation_scores (evaluation_id, criterion_id, marks_awarded, remark) VALUES ($1, $2, 8, '')`, [eval4Id, s1c5]);
 
-    // G3 Stage 1 - Evaluator Rajan Mehta
+    // G3 Stage 1 - Evaluator facultyIds[0]
     const eval5 = await client.query(`
       INSERT INTO project_evaluations (panel_assignment_id, status, submitted_at, overall_remarks)
       VALUES ($1, 'SUBMITTED', NOW(), 'Outstanding architecture proposal and clear benchmark plan.')
@@ -462,18 +462,18 @@ async function seed() {
     // Seed appointment history
     await client.query(`
       INSERT INTO seminar_coordinator_history (faculty_id, faculty_name, action, performed_by, notes, created_at)
-      VALUES ($1, 'Prof. Rajan Mehta', 'APPOINTED', $2, 'Appointed for AY 2024-25 term', NOW() - INTERVAL '6 months')
-    `, [facultyIds[0], hodUser.rows[0].id]);
+      VALUES ($1, $2, 'APPOINTED', $3, 'Appointed for AY 2024-25 term', NOW() - INTERVAL '6 months')
+    `, [facultyIds[0], facultyData[0].name, hodUser.rows[0].id]);
 
     await client.query(`
       INSERT INTO seminar_coordinator_history (faculty_id, faculty_name, action, performed_by, notes, created_at)
-      VALUES ($1, 'Prof. Rajan Mehta', 'REVOKED', $2, 'Term concluded; designated Prof. Sunita Patil for AY 2025-26', NOW() - INTERVAL '1 month')
-    `, [facultyIds[0], hodUser.rows[0].id]);
+      VALUES ($1, $2, 'REVOKED', $3, 'Term concluded; designated successor for AY 2025-26', NOW() - INTERVAL '1 month')
+    `, [facultyIds[0], facultyData[0].name, hodUser.rows[0].id]);
 
     await client.query(`
       INSERT INTO seminar_coordinator_history (faculty_id, faculty_name, action, performed_by, notes, created_at)
-      VALUES ($1, 'Prof. Sunita Patil', 'APPOINTED', $2, 'Appointed as Seminar Coordinator for AY 2025-26', NOW() - INTERVAL '1 month')
-    `, [facultyIds[1], hodUser.rows[0].id]);
+      VALUES ($1, $2, 'APPOINTED', $3, 'Appointed as Seminar Coordinator for AY 2025-26', NOW() - INTERVAL '1 month')
+    `, [facultyIds[8], facultyData[8].name, hodUser.rows[0].id]);
 
     // 2. Seminar Session
     const sessRes = await client.query(`
@@ -484,10 +484,10 @@ async function seed() {
     const sessionId = sessRes.rows[0].id;
 
     // 3. Seminar Guides Roster
-    const sg1 = await client.query(`INSERT INTO seminar_guides (session_id, faculty_id, guide_name, designation, quota, display_order) VALUES ($1, $2, 'Prof. Rajan Mehta', 'Associate Professor', 4, 1) RETURNING id`, [sessionId, facultyIds[0]]);
-    const sg2 = await client.query(`INSERT INTO seminar_guides (session_id, faculty_id, guide_name, designation, quota, display_order) VALUES ($1, $2, 'Prof. Sunita Patil', 'Associate Professor', 4, 2) RETURNING id`, [sessionId, facultyIds[1]]);
-    const sg3 = await client.query(`INSERT INTO seminar_guides (session_id, faculty_id, guide_name, designation, quota, display_order) VALUES ($1, $2, 'Prof. Arjun Sharma', 'Assistant Professor', 4, 3) RETURNING id`, [sessionId, facultyIds[2]]);
-    const sg4 = await client.query(`INSERT INTO seminar_guides (session_id, faculty_id, guide_name, designation, quota, display_order) VALUES ($1, $2, 'Prof. Priya Kulkarni', 'Assistant Professor', 4, 4) RETURNING id`, [sessionId, facultyIds[3]]);
+    const sg1 = await client.query(`INSERT INTO seminar_guides (session_id, faculty_id, guide_name, designation, quota, display_order) VALUES ($1, $2, $3, $4, 4, 1) RETURNING id`, [sessionId, facultyIds[0], facultyData[0].name, facultyData[0].desig]);
+    const sg2 = await client.query(`INSERT INTO seminar_guides (session_id, faculty_id, guide_name, designation, quota, display_order) VALUES ($1, $2, $3, $4, 4, 2) RETURNING id`, [sessionId, facultyIds[1], facultyData[1].name, facultyData[1].desig]);
+    const sg3 = await client.query(`INSERT INTO seminar_guides (session_id, faculty_id, guide_name, designation, quota, display_order) VALUES ($1, $2, $3, $4, 4, 3) RETURNING id`, [sessionId, facultyIds[2], facultyData[2].name, facultyData[2].desig]);
+    const sg4 = await client.query(`INSERT INTO seminar_guides (session_id, faculty_id, guide_name, designation, quota, display_order) VALUES ($1, $2, $3, $4, 4, 4) RETURNING id`, [sessionId, facultyIds[3], facultyData[3].name, facultyData[3].desig]);
 
     // Helper: get student user_id and PRN
     const studentUsers = [];
@@ -498,12 +498,12 @@ async function seed() {
 
     // 4. Sample Seminar Groups (covering all lifecycle states)
 
-    // ─── Group 1: Approved & Evaluated (Guide: Prof. Rajan Mehta) ─────────────
+    // ─── Group 1: Approved & Evaluated ─────────────
     const g1Res = await client.query(`
       INSERT INTO seminar_groups (session_id, group_no, domain, guide_id, seminar_guide_id, guide_name, leader_user_id, status, assigned_by, assigned_at, approved_by, approved_at, submitted_at)
-      VALUES ($1, 1, 'Artificial Intelligence & Machine Learning', $2, $3, 'Prof. Rajan Mehta', $4, 'APPROVED', $5, NOW() - INTERVAL '10 days', $6, NOW() - INTERVAL '9 days', NOW() - INTERVAL '15 days')
+      VALUES ($1, 1, 'Artificial Intelligence & Machine Learning', $2, $3, $4, $5, 'APPROVED', $6, NOW() - INTERVAL '10 days', $7, NOW() - INTERVAL '9 days', NOW() - INTERVAL '15 days')
       RETURNING id
-    `, [sessionId, facultyIds[0], sg1.rows[0].id, studentUsers[0].user_id, coordUserId, hodUser.rows[0].id]);
+    `, [sessionId, facultyIds[0], sg1.rows[0].id, facultyData[0].name, studentUsers[0].user_id, coordUserId, hodUser.rows[0].id]);
     const semG1Id = g1Res.rows[0].id;
 
     await client.query(`INSERT INTO seminar_group_members (group_id, member_index, student_name, prn, division, mobile, email, topic1, topic2, topic3, is_leader) VALUES ($1, 1, $2, $3, 'A', '9822012345', $4, 'Deep Learning for Autonomous Drone Obstacle Detection', 'Transformer-based Vision Systems', 'Real-time Object Detection', true)`, [semG1Id, studentUsers[0].name, studentUsers[0].enrollment_no, studentUsers[0].email]);

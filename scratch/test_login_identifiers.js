@@ -60,10 +60,10 @@ async function run() {
     '001',
     'ce6a001@meswadiacoe.edu',
     'hod@meswadiacoe.edu',
-    'rajan@meswadiacoe.edu',
-    'FAC001',
-    'fac001',
-    'FAC-SR01'
+    'skw@meswadiacoe.edu',
+    'SKW',
+    'skw',
+    'JRP'
   ];
 
   for (const t of tests) {

@@ -54,35 +54,9 @@ async function seedTEResults() {
       examTypeMap[row.code] = row.id;
     }
 
-    // ─── 3. ENSURE FACULTY MEMBERS EXIST ───────────────────────────────────────
-    const facultyData = [
-      { name: 'Prof. Rajan Mehta',      email: 'rajan@meswadiacoe.edu',            emp: 'FAC002', desig: 'Associate Professor' },
-      { name: 'Prof. Sunita Patil',     email: 'sunita@meswadiacoe.edu',           emp: 'FAC003', desig: 'Associate Professor' },
-      { name: 'Prof. Arjun Sharma',     email: 'arjun@meswadiacoe.edu',            emp: 'FAC004', desig: 'Assistant Professor' },
-      { name: 'Prof. Priya Kulkarni',   email: 'priya.kulkarni@meswadiacoe.edu',   emp: 'FAC005', desig: 'Assistant Professor' },
-      { name: 'Prof. Rajesh Deshpande', email: 'rajesh.deshpande@meswadiacoe.edu', emp: 'FAC006', desig: 'Associate Professor' },
-      { name: 'Prof. Neha Joshi',       email: 'neha.joshi@meswadiacoe.edu',       emp: 'FAC007', desig: 'Assistant Professor' },
-      { name: 'Prof. Vikram Shinde',    email: 'vikram.shinde@meswadiacoe.edu',    emp: 'FAC008', desig: 'Assistant Professor' },
-      { name: 'Prof. Anjali Gokhale',   email: 'anjali.gokhale@meswadiacoe.edu',   emp: 'FAC009', desig: 'Assistant Professor' },
-      { name: 'Prof. Sachin Kadam',     email: 'sachin.kadam@meswadiacoe.edu',     emp: 'FAC010', desig: 'Assistant Professor' },
-      { name: 'Prof. Pooja More',       email: 'pooja.more@meswadiacoe.edu',       emp: 'FAC011', desig: 'Assistant Professor' },
-    ];
-    const facultyIds = [];
-    for (const f of facultyData) {
-      const u = await client.query(
-        `INSERT INTO users (name, role, email, password_hash, department)
-         VALUES ($1, 'faculty', $2, $3, 'Computer Engineering')
-         ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name RETURNING id`,
-        [f.name, f.email, hash('faculty@123')]
-      );
-      const fac = await client.query(
-        `INSERT INTO faculty (user_id, department, designation, employee_id)
-         VALUES ($1, 'Computer Engineering', $2, $3)
-         ON CONFLICT (user_id) DO UPDATE SET designation = EXCLUDED.designation RETURNING id`,
-        [u.rows[0].id, f.desig, f.emp]
-      );
-      facultyIds.push(fac.rows[0].id);
-    }
+    // ─── 3. FETCH REAL FACULTY MEMBERS FROM DATABASE ───────────────────────────
+    const facultyDbRes = await client.query(`SELECT id FROM faculty ORDER BY id ASC`);
+    const facultyIds = facultyDbRes.rows.map(r => r.id);
 
     // ─── 4. MAP FACULTY TO TE SUBJECTS ACROSS DIVISIONS ────────────────────────
     const divisions = ['TE 1', 'TE 2', 'TE 3'];
@@ -96,17 +70,17 @@ async function seedTEResults() {
     );
 
     const assignmentList = [
-      { code: 'CE501',       fIndex: 0 }, // DBMS -> Prof. Rajan Mehta
-      { code: 'CE502',       fIndex: 1 }, // TOC -> Prof. Sunita Patil
-      { code: 'CE503',       fIndex: 2 }, // SPOS -> Prof. Arjun Sharma
-      { code: 'CE504',       fIndex: 3 }, // CNS -> Prof. Priya Kulkarni
-      { code: 'CE505_IOT',   fIndex: 4 }, // IOT -> Prof. Rajesh Deshpande
-      { code: 'CE505_HCI',   fIndex: 5 }, // HCI -> Prof. Neha Joshi
-      { code: 'CE505_DS',    fIndex: 6 }, // DS -> Prof. Vikram Shinde
-      { code: 'CE506_DBMSL', fIndex: 0 }, // DBMSL -> Prof. Rajan Mehta
-      { code: 'CE507_CNSL',  fIndex: 3 }, // CNSL -> Prof. Priya Kulkarni
-      { code: 'CE508_LP1',   fIndex: 7 }, // LP1 -> Prof. Anjali Gokhale
-      { code: 'CE509_SEM',   fIndex: 8 }, // Seminar -> Prof. Sachin Kadam
+      { code: 'CE501',       fIndex: 0 },
+      { code: 'CE502',       fIndex: 1 },
+      { code: 'CE503',       fIndex: 2 },
+      { code: 'CE504',       fIndex: 3 },
+      { code: 'CE505_IOT',   fIndex: 4 },
+      { code: 'CE505_HCI',   fIndex: 5 },
+      { code: 'CE505_DS',    fIndex: 6 },
+      { code: 'CE506_DBMSL', fIndex: 0 },
+      { code: 'CE507_CNSL',  fIndex: 3 },
+      { code: 'CE508_LP1',   fIndex: 7 },
+      { code: 'CE509_SEM',   fIndex: 8 },
     ];
 
     for (const div of divisions) {
