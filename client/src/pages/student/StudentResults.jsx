@@ -6,7 +6,7 @@ import SppuMarksheet from '../../components/SppuMarksheet';
 
 export default function StudentResults() {
   const { user } = useAuth();
-  // Default to Semester 5 (TE Semester 1 AY 2025-26)
+  // Default to Semester 5 (TE Semester 1 AY 2026-27)
   const [semester, setSemester] = useState(5);
   const [activeTab, setActiveTab] = useState('sppu'); // 'sppu' | 'final' | 'internal' | 'term_work' | 'university'
   const [data, setData] = useState(null);
@@ -34,7 +34,7 @@ export default function StudentResults() {
           student={data?.student || user}
           subjects={data?.subjects || []}
           semester={semester}
-          academicYear={data?.academicYear || '2025-26'}
+          academicYear={data?.academicYear || '2026-27'}
           sgpa={data?.sgpa}
           published={data?.published}
         />
@@ -69,7 +69,7 @@ export default function StudentResults() {
             >
               {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
                 <option key={s} value={s}>
-                  Semester {s} {s === 5 ? '(TE Sem 1 - 2025-26)' : ''}
+                  Semester {s} {s === 5 ? '(TE Sem 1 - 2026-27)' : ''}
                 </option>
               ))}
             </select>
@@ -111,7 +111,7 @@ export default function StudentResults() {
 
             <div className="bg-white border border-gray-200 rounded-lg p-12 text-center text-gray-400">
               <p className="text-base font-semibold text-gray-600">No evaluation data entered yet for Semester {semester}</p>
-              <p className="text-xs mt-1 text-gray-400">Please select Semester 5 (TE Sem 1 AY 2025-26) to view your imported results.</p>
+              <p className="text-xs mt-1 text-gray-400">Please select Semester 5 (TE Sem 1 AY 2026-27) to view your imported results.</p>
             </div>
           </div>
         ) : (
@@ -206,7 +206,7 @@ export default function StudentResults() {
                   student={data?.student || user}
                   subjects={data?.subjects || []}
                   semester={semester}
-                  academicYear={data?.academicYear || '2025-26'}
+                  academicYear={data?.academicYear || '2026-27'}
                   sgpa={data?.sgpa}
                   published={data?.published}
                 />

@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const xlsx = require('xlsx');
 const path = require('path');
 
-const EXCEL_PATH = 'C:\\Users\\Rajea\\Downloads\\T.E RESULT 25-26.xlsx';
+const EXCEL_PATH = path.join(__dirname, '..', 'T.E RESULT 25-26.xlsx');
 
 async function seedTEResults() {
   const client = await pool.connect();
@@ -123,9 +123,22 @@ async function seedTEResults() {
         }
       }
     }
-    console.log('[Seed TE] Faculty assignments configured.');
+    console.log('[Seed TE] Faculty assignments configured for TE 1, TE 2, and TE 3.');
 
-    // ─── 5. READ STUDENTS & MARKS FROM EXCEL ───────────────────────────────────
+    // ─── 5. CLEAN UP OLD DUMMY STUDENTS (TE Comp 1-4, Comp 1) ─────────────────
+    console.log('[Seed TE] Cleaning up obsolete dummy students...');
+    const oldStudents = await client.query(
+      `SELECT id, user_id FROM students WHERE division NOT IN ('TE 1', 'TE 2', 'TE 3')`
+    );
+    if (oldStudents.rows.length > 0) {
+      const studentIds = oldStudents.rows.map(r => r.id);
+      const userIds = oldStudents.rows.map(r => r.user_id).filter(Boolean);
+
+      await client.query(`DELETE FROM students WHERE id = ANY($1::int[])`, [studentIds]);
+      console.log(`[Seed TE] Removed ${studentIds.length} legacy dummy students.`);
+    }
+
+    // ─── 6. READ STUDENTS & MARKS FROM EXCEL ───────────────────────────────────
     let totalImportedStudents = 0;
     let totalImportedMarks = 0;
 
@@ -157,11 +170,8 @@ async function seedTEResults() {
       const data = xlsx.utils.sheet_to_json(ws, { header: 1, defval: null });
       console.log(`[Seed TE] Processing sheet "${divName}", total rows: ${data.length}`);
 
-      // In the Excel sheet:
-      // Row 4 (index 3): Headers (Sr. No., Roll No, Seat No, PRN, Name, DBMS, TOC, SPOS, CNS, IOT, HCI, DS, DBMSL, CNSL, LP 1, Seminar, SGPA)
-      // Row 5 (index 4): Max Marks (30, 70, 100, etc.)
-      // Data starts at Row 6 (index 5)
-      for (let r = 5; r < data.length; r++) {
+      // Data starts at row index 4 (5th row)
+      for (let r = 4; r < data.length; r++) {
         const row = data[r];
         if (!row) continue;
 
@@ -173,8 +183,10 @@ async function seedTEResults() {
         if (!prnRaw || !nameRaw) continue; // skip empty rows
 
         const prn = String(prnRaw).trim().toUpperCase();
+        if (prn.length < 4) continue;
+
         const rollNo = rollNoRaw ? String(Math.round(Number(rollNoRaw)) || rollNoRaw).trim() : prn;
-        const name = String(nameRaw).trim();
+        const name = String(nameRaw).trim() === '.' ? `Student ${prn}` : String(nameRaw).trim();
         const email = `${prn.toLowerCase()}@meswadiacoe.edu`;
 
         // 1. Insert or update User
@@ -203,12 +215,14 @@ async function seedTEResults() {
 
         // Helper to insert exam mark
         const insertExamMark = async (subjectCode, examTypeCode, markObj, facultyEmpIdx = 0) => {
-          if (!markObj) return;
           const subId = subjectMap[subjectCode];
           const examTypeId = examTypeMap[examTypeCode];
           const fId = facultyIds[facultyEmpIdx] || facultyIds[0];
 
           if (!subId || !examTypeId) return;
+
+          const isAbsent = markObj ? Boolean(markObj.isAbsent) : false;
+          const marksVal = markObj ? markObj.marks : 0;
 
           await client.query(
             `INSERT INTO student_exam_marks (student_id, subject_id, exam_type_id, semester, academic_year, marks_obtained, is_absent, status, entered_by, last_modified_at)
@@ -219,18 +233,17 @@ async function seedTEResults() {
                is_absent = EXCLUDED.is_absent,
                status = 'published',
                last_modified_at = NOW()`,
-            [studentId, subId, examTypeId, semester, academicYear, markObj.marks, markObj.isAbsent, fId]
+            [studentId, subId, examTypeId, semester, academicYear, marksVal, isAbsent, fId]
           );
           totalImportedMarks++;
         };
 
         // Helper to record Term Work details
         const insertTWDetails = async (subjectCode, totalTWVal) => {
-          if (!totalTWVal) return;
           const subId = subjectMap[subjectCode];
           if (!subId) return;
 
-          const tw = Math.max(0, totalTWVal.marks);
+          const tw = totalTWVal ? Math.max(0, totalTWVal.marks) : 0;
           // Standard decomposition for 25 max: Attendance (5), A1 (7), A2 (7), Timely (6)
           const ratio = tw / 25.0;
           const att = Math.round(5.0 * ratio * 10) / 10;
@@ -253,80 +266,88 @@ async function seedTEResults() {
           );
         };
 
-        // A. DBMS (Col 5: Insem [index 5], Col 6: Endsem [index 6])
+        // ─── 8 CORE SUBJECTS (Uniform for all students in class) ───────────────
+
+        // 1. DBMS (CE501)
         const dbmsInsem = parseCellMark(row[5]);
         const dbmsEndsem = parseCellMark(row[6]);
         await insertExamMark('CE501', 'insem', dbmsInsem, 0);
         await insertExamMark('CE501', 'endsem', dbmsEndsem, 0);
 
-        // B. TOC (Col 8: Insem [index 8], Col 9: Endsem [index 9])
+        // 2. TOC (CE502)
         const tocInsem = parseCellMark(row[8]);
         const tocEndsem = parseCellMark(row[9]);
         await insertExamMark('CE502', 'insem', tocInsem, 1);
         await insertExamMark('CE502', 'endsem', tocEndsem, 1);
 
-        // C. SPOS (Col 11: Insem [index 11], Col 12: Endsem [index 12])
+        // 3. SPOS (CE503)
         const sposInsem = parseCellMark(row[11]);
         const sposEndsem = parseCellMark(row[12]);
         await insertExamMark('CE503', 'insem', sposInsem, 2);
         await insertExamMark('CE503', 'endsem', sposEndsem, 2);
 
-        // D. CNS (Col 14: Insem [index 14], Col 15: Endsem [index 15])
+        // 4. CNS (CE504)
         const cnsInsem = parseCellMark(row[14]);
         const cnsEndsem = parseCellMark(row[15]);
         await insertExamMark('CE504', 'insem', cnsInsem, 3);
         await insertExamMark('CE504', 'endsem', cnsEndsem, 3);
 
-        // E. Elective 1: Check IOT (cols 17, 18), HCI (cols 20, 21), DS (cols 23, 24)
+        // 5. Elective I (Determined per student from sheet)
         const iotInsem = parseCellMark(row[17]);
         const iotEndsem = parseCellMark(row[18]);
-        if (iotInsem !== null || iotEndsem !== null) {
-          await insertExamMark('CE505_IOT', 'insem', iotInsem, 4);
-          await insertExamMark('CE505_IOT', 'endsem', iotEndsem, 4);
-        }
-
         const hciInsem = parseCellMark(row[20]);
         const hciEndsem = parseCellMark(row[21]);
-        if (hciInsem !== null || hciEndsem !== null) {
-          await insertExamMark('CE505_HCI', 'insem', hciInsem, 5);
-          await insertExamMark('CE505_HCI', 'endsem', hciEndsem, 5);
-        }
-
         const dsInsem = parseCellMark(row[23]);
         const dsEndsem = parseCellMark(row[24]);
-        if (dsInsem !== null || dsEndsem !== null) {
-          await insertExamMark('CE505_DS', 'insem', dsInsem, 6);
-          await insertExamMark('CE505_DS', 'endsem', dsEndsem, 6);
+
+        let electiveCode = 'CE505_IOT';
+        let elecInsem = iotInsem;
+        let elecEndsem = iotEndsem;
+        let elecFIdx = 4;
+
+        if (hciInsem !== null || hciEndsem !== null) {
+          electiveCode = 'CE505_HCI';
+          elecInsem = hciInsem;
+          elecEndsem = hciEndsem;
+          elecFIdx = 5;
+        } else if (dsInsem !== null || dsEndsem !== null) {
+          electiveCode = 'CE505_DS';
+          elecInsem = dsInsem;
+          elecEndsem = dsEndsem;
+          elecFIdx = 6;
         }
 
-        // F. DBMSL (Col 26: TW [index 26], Col 27: PR [index 27])
+        await insertExamMark(electiveCode, 'insem', elecInsem, elecFIdx);
+        await insertExamMark(electiveCode, 'endsem', elecEndsem, elecFIdx);
+
+        // 6. DBMSL (CE506_DBMSL)
         const dbmslTW = parseCellMark(row[26]);
         const dbmslPR = parseCellMark(row[27]);
         await insertExamMark('CE506_DBMSL', 'term_work', dbmslTW, 0);
         await insertExamMark('CE506_DBMSL', 'final_practical', dbmslPR, 0);
         await insertTWDetails('CE506_DBMSL', dbmslTW);
 
-        // G. CNSL (Col 29: TW [index 29], Col 30: OR [index 30])
+        // 7. CNSL (CE507_CNSL)
         const cnslTW = parseCellMark(row[29]);
         const cnslOR = parseCellMark(row[30]);
         await insertExamMark('CE507_CNSL', 'term_work', cnslTW, 3);
         await insertExamMark('CE507_CNSL', 'final_practical', cnslOR, 3);
         await insertTWDetails('CE507_CNSL', cnslTW);
 
-        // H. LP 1 (Col 32: TW [index 32], Col 33: PR [index 33])
+        // 8. LP 1 (CE508_LP1)
         const lp1TW = parseCellMark(row[32]);
         const lp1PR = parseCellMark(row[33]);
         await insertExamMark('CE508_LP1', 'term_work', lp1TW, 7);
         await insertExamMark('CE508_LP1', 'final_practical', lp1PR, 7);
         await insertTWDetails('CE508_LP1', lp1TW);
 
-        // I. Seminar (Col 35: TW/Oral [index 35])
+        // 9. Seminar (CE509_SEM)
         const semTW = parseCellMark(row[35]);
         await insertExamMark('CE509_SEM', 'term_work', semTW, 8);
       }
     }
 
-    // ─── 6. SET PUBLISHED STATUS FOR TE SEM 1 (2025-26) ───────────────────────
+    // ─── 7. SET PUBLISHED STATUS FOR TE SEM 1 (2025-26) ───────────────────────
     for (const div of divisions) {
       await client.query(
         `INSERT INTO result_publish_status (semester, academic_year, department, division, status, published_at)

@@ -45,7 +45,7 @@ router.get('/dashboard', async (req, res) => {
       [faculty.id]
     );
     const academicYears = yearsRes.rows.map(r => r.academic_year);
-    const selectedYear = req.query.academic_year || academicYears[0] || '2025-26';
+    const selectedYear = req.query.academic_year || academicYears[0] || '2026-27';
 
     // Assigned subjects for selected year with student_exam_marks stats
     const subjectsRes = await pool.query(
@@ -141,7 +141,7 @@ router.get('/subjects', async (req, res) => {
       [faculty.id]
     );
     const academicYears = yearsRes.rows.map(r => r.academic_year);
-    const selectedYear = req.query.academic_year || academicYears[0] || '2025-26';
+    const selectedYear = req.query.academic_year || academicYears[0] || '2026-27';
 
     const result = await pool.query(
       `SELECT fsm.id AS map_id, s.id, s.name, s.code, s.semester, s.credits,
@@ -180,7 +180,7 @@ router.get('/marks/:subjectId', async (req, res) => {
 
     const { subjectId } = req.params;
     const semester = parseInt(req.query.semester, 10) || 5;
-    const academicYear = req.query.academic_year || '2025-26';
+    const academicYear = req.query.academic_year || '2026-27';
     const division = req.query.division || 'TE 1';
     let examTypeId = req.query.exam_type_id ? parseInt(req.query.exam_type_id, 10) : null;
 
@@ -230,11 +230,20 @@ router.get('/marks/:subjectId', async (req, res) => {
       [subjectId, examTypeId, semester, academicYear, division]
     );
 
+    // Fetch all divisions/classes this faculty teaches for this subject & semester
+    const availableDivisionsRes = await pool.query(
+      `SELECT DISTINCT division FROM faculty_subject_map
+       WHERE faculty_id = $1 AND subject_id = $2 AND semester = $3 AND academic_year = $4
+       ORDER BY division`,
+      [faculty.id, subjectId, semester, academicYear]
+    );
+
     res.json({
       subject,
       examTypes,
       currentExamType,
       selectedExamTypeId: examTypeId,
+      availableDivisions: availableDivisionsRes.rows.map(r => r.division),
       students: studentsResult.rows
     });
   } catch (err) {
@@ -405,9 +414,11 @@ router.post('/term-work', async (req, res) => {
       const tim = Number(timelySubmission) || 0;
       const totalTW = Math.round((att + a1 + a2 + tim) * 100) / 100;
 
-      if (att > 5) throw new Error(`Attendance marks (${att}) exceed maximum of 5`);
-      if (tim > 5) throw new Error(`Timely submission marks (${tim}) exceed maximum of 5`);
-      if (totalTW > 25) throw new Error(`Total Term Work (${totalTW}) exceeds maximum of 25`);
+      if (att < 0 || att > 5) throw new Error(`Attendance marks (${att}) must be between 0 and 5`);
+      if (a1 < 0 || a1 > 7) throw new Error(`Assignment 1 marks (${a1}) must be between 0 and 7`);
+      if (a2 < 0 || a2 > 7) throw new Error(`Assignment 2 marks (${a2}) must be between 0 and 7`);
+      if (tim < 0 || tim > 6) throw new Error(`Timely submission marks (${tim}) must be between 0 and 6`);
+      if (totalTW < 0 || totalTW > 25) throw new Error(`Total Term Work (${totalTW}) must be between 0 and 25`);
 
       const existingTW = await client.query(
         `SELECT * FROM student_term_work_details 

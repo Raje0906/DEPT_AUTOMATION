@@ -13,7 +13,7 @@ async function ensurePanelData() {
     if (stageRes.rows.length === 0) {
       const insStage = await client.query(`
         INSERT INTO project_evaluation_stages (name, academic_year, sequence_order, max_marks_total, aggregation_rule, is_active)
-        VALUES ('Internal Presentation - 1', '2025-26', 1, 50, 'AVERAGE', true)
+        VALUES ('Internal Presentation - 1', '2026-27', 1, 50, 'AVERAGE', true)
         RETURNING id
       `);
       stage1Id = insStage.rows[0].id;
@@ -54,7 +54,7 @@ async function ensurePanelData() {
         INSERT INTO project_groups (group_code, academic_year, batch, title, domain, abstract, status, guide_id, created_by)
         VALUES (
           'GRP-2025-02',
-          '2025-26',
+          '2026-27',
           'BE-1',
           'Zero-Knowledge Proof Identity Verification on Decentralized Ledgers',
           'Blockchain & Cryptography',
