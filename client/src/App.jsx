@@ -16,6 +16,7 @@ import StudentResults    from './pages/student/StudentResults'
 import CGPAView          from './pages/student/CGPAView'
 import StudentProject    from './pages/student/StudentProject'
 import SeminarGroupRegistration from './pages/student/SeminarGroupRegistration'
+import StudentMagazine   from './pages/student/StudentMagazine'
 
 // Faculty
 import FacultyDashboard  from './pages/faculty/FacultyDashboard'
@@ -97,6 +98,8 @@ export default function App() {
           <Route path="/student/cgpa" element={<StudentLayout><CGPAView /></StudentLayout>} />
           <Route path="/student/project" element={<StudentLayout><StudentProject /></StudentLayout>} />
           <Route path="/student/seminar" element={<StudentLayout><SeminarGroupRegistration /></StudentLayout>} />
+          <Route path="/student/magazine" element={<StudentLayout><StudentMagazine /></StudentLayout>} />
+          <Route path="/student/magazine/view/:id" element={<ProtectedRoute role="student"><OnlineMagazineViewer /></ProtectedRoute>} />
 
           {/* Faculty */}
           <Route path="/faculty" element={<FacultyLayout><FacultyDashboard /></FacultyLayout>} />

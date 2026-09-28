@@ -106,6 +106,7 @@ const roleNav = {
         { to: '/student/cgpa',        label: 'CGPA Overview',         icon: Icons.cgpa },
         { to: '/student/project',     label: 'BE Project',            icon: Icons.project },
         { to: '/student/seminar',     label: 'TE Seminar Registration', icon: Icons.seminar },
+        { to: '/student/magazine',    label: 'Magazine',              icon: Icons.magazines },
       ],
     },
   ],
