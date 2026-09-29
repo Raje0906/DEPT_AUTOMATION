@@ -30,7 +30,7 @@ async function seed() {
       `INSERT INTO users (name, role, email, password_hash, department)
        VALUES ($1,$2,$3,$4,$5) ON CONFLICT (email) DO UPDATE SET name=EXCLUDED.name
        RETURNING id`,
-      ['Dr. Meera Krishnan', 'hod', 'hod@meswadiacoe.edu', hash('hod@123'), 'Computer Engineering']
+      ['Dr.(Mrs.) N. F. Shaikh', 'hod', 'hod@meswadiacoe.edu', hash('hod@123'), 'Computer Engineering']
     );
     await client.query(
       `INSERT INTO faculty (user_id, department, designation, employee_id)
@@ -38,18 +38,42 @@ async function seed() {
       [hodUser.rows[0].id, 'Computer Engineering', 'Head of Department', 'FAC001']
     );
 
-    // ─── FACULTY (10 Default Teachers) ─────────────────────────────────────────
+    // ─── FACULTY (35 Real Teachers) ─────────────────────────────────────────
     const facultyData = [
-      { name: 'Prof. Rajan Mehta',      email: 'rajan@meswadiacoe.edu',            emp: 'FAC002', desig: 'Associate Professor' },
-      { name: 'Prof. Sunita Patil',     email: 'sunita@meswadiacoe.edu',           emp: 'FAC003', desig: 'Associate Professor' },
-      { name: 'Prof. Arjun Sharma',     email: 'arjun@meswadiacoe.edu',            emp: 'FAC004', desig: 'Assistant Professor' },
-      { name: 'Prof. Priya Kulkarni',   email: 'priya.kulkarni@meswadiacoe.edu',   emp: 'FAC005', desig: 'Assistant Professor' },
-      { name: 'Prof. Rajesh Deshpande', email: 'rajesh.deshpande@meswadiacoe.edu', emp: 'FAC006', desig: 'Associate Professor' },
-      { name: 'Prof. Neha Joshi',       email: 'neha.joshi@meswadiacoe.edu',       emp: 'FAC007', desig: 'Assistant Professor' },
-      { name: 'Prof. Vikram Shinde',    email: 'vikram.shinde@meswadiacoe.edu',    emp: 'FAC008', desig: 'Assistant Professor' },
-      { name: 'Prof. Anjali Gokhale',   email: 'anjali.gokhale@meswadiacoe.edu',   emp: 'FAC009', desig: 'Assistant Professor' },
-      { name: 'Prof. Sachin Kadam',     email: 'sachin.kadam@meswadiacoe.edu',     emp: 'FAC010', desig: 'Assistant Professor' },
-      { name: 'Prof. Pooja More',       email: 'pooja.more@meswadiacoe.edu',       emp: 'FAC011', desig: 'Assistant Professor' },
+      { name: 'Dr. (Mrs.) S. K. Wagh',    email: 'skw@meswadiacoe.edu', emp: 'FAC002', desig: 'Associate Professor' },
+      { name: 'Dr. (Mrs.) J. R. Pansare', email: 'jrp@meswadiacoe.edu', emp: 'FAC003', desig: 'Associate Professor' },
+      { name: 'Dr. (Miss.) R. M. Wahul', email: 'rmw@meswadiacoe.edu', emp: 'FAC004', desig: 'Assistant Professor' },
+      { name: 'Dr. (Mrs.) S. R. Khonde', email: 'srk@meswadiacoe.edu', emp: 'FAC005', desig: 'Associate Professor' },
+      { name: 'Dr. (Mrs.) S. P. Khedkar',email: 'spk@meswadiacoe.edu', emp: 'FAC006', desig: 'Associate Professor' },
+      { name: 'Dr. (Mr). B. K. Bodkhe',   email: 'bkb@meswadiacoe.edu', emp: 'FAC007', desig: 'Associate Professor' },
+      { name: 'Dr. (Mrs.) S. P. Deore',  email: 'spd@meswadiacoe.edu', emp: 'FAC008', desig: 'Associate Professor' },
+      { name: 'Dr. (Mrs.) A. P. Kale',   email: 'apk@meswadiacoe.edu', emp: 'FAC009', desig: 'Associate Professor' },
+      { name: 'Dr. (Mrs.) S. S. Raskar', email: 'ssr@meswadiacoe.edu', emp: 'FAC010', desig: 'Associate Professor' },
+      { name: 'Dr. (Mr.) G. S. Pole',    email: 'gsp@meswadiacoe.edu', emp: 'FAC011', desig: 'Associate Professor' },
+      { name: 'Mr. S. B. Shinde',        email: 'sbs@meswadiacoe.edu', emp: 'FAC012', desig: 'Assistant Professor' },
+      { name: 'Mr. G. B. Aochar',        email: 'gba@meswadiacoe.edu', emp: 'FAC013', desig: 'Assistant Professor' },
+      { name: 'Ms. B. F. More',          email: 'bfm@meswadiacoe.edu', emp: 'FAC014', desig: 'Assistant Professor' },
+      { name: 'Ms. S. A. Sapkal',        email: 'sas@meswadiacoe.edu', emp: 'FAC015', desig: 'Assistant Professor' },
+      { name: 'Ms. C. Y. Vakte',         email: 'cyv@meswadiacoe.edu', emp: 'FAC016', desig: 'Assistant Professor' },
+      { name: 'Ms. S. T. Chavan',        email: 'stc@meswadiacoe.edu', emp: 'FAC017', desig: 'Assistant Professor' },
+      { name: 'Mrs. V. D. Gaikwad',      email: 'vdg@meswadiacoe.edu', emp: 'FAC018', desig: 'Assistant Professor' },
+      { name: 'Ms. A. K. Sandbhor',      email: 'aks@meswadiacoe.edu', emp: 'FAC019', desig: 'Assistant Professor' },
+      { name: 'Mrs. S. D. Bhadane',      email: 'sdb@meswadiacoe.edu', emp: 'FAC020', desig: 'Assistant Professor' },
+      { name: 'Mrs. J. A. Kalbhor',      email: 'jak@meswadiacoe.edu', emp: 'FAC021', desig: 'Assistant Professor' },
+      { name: 'Mrs. A. D. Jadhav',       email: 'adj@meswadiacoe.edu', emp: 'FAC022', desig: 'Assistant Professor' },
+      { name: 'Mr. A. M. Chaudhari',     email: 'amc@meswadiacoe.edu', emp: 'FAC023', desig: 'Assistant Professor' },
+      { name: 'Mrs. B. C. Mahajan',      email: 'bcm@meswadiacoe.edu', emp: 'FAC024', desig: 'Assistant Professor' },
+      { name: 'Ms. S. S. Chavan',        email: 'ssc@meswadiacoe.edu', emp: 'FAC025', desig: 'Assistant Professor' },
+      { name: 'Ms. K. K. Sukhadan',      email: 'kks@meswadiacoe.edu', emp: 'FAC026', desig: 'Assistant Professor' },
+      { name: 'Ms. R. H. Shende',        email: 'rhs@meswadiacoe.edu', emp: 'FAC027', desig: 'Assistant Professor' },
+      { name: 'Ms. A. P. Rajebhosale',   email: 'apr@meswadiacoe.edu', emp: 'FAC028', desig: 'Assistant Professor' },
+      { name: 'Mrs. P. P. Chandane',     email: 'ppc@meswadiacoe.edu', emp: 'FAC029', desig: 'Assistant Professor' },
+      { name: 'Ms. N. P. Nandankar',     email: 'npn@meswadiacoe.edu', emp: 'FAC030', desig: 'Assistant Professor' },
+      { name: 'Ms. M. P. Sapkal',        email: 'mps@meswadiacoe.edu', emp: 'FAC031', desig: 'Assistant Professor' },
+      { name: 'Mr. A. R. Gadge',         email: 'arg@meswadiacoe.edu', emp: 'FAC032', desig: 'Assistant Professor' },
+      { name: 'Mrs. V. G. Sonawane',     email: 'vgs@meswadiacoe.edu', emp: 'FAC033', desig: 'Assistant Professor' },
+      { name: 'Mrs. S. B. Burghate',     email: 'sbb@meswadiacoe.edu', emp: 'FAC034', desig: 'Assistant Professor' },
+      { name: 'Mrs. S. G. Gunjal',       email: 'sgg@meswadiacoe.edu', emp: 'FAC035', desig: 'Assistant Professor' },
     ];
     const facultyIds = [];
     for (const f of facultyData) {
@@ -428,28 +452,28 @@ async function seed() {
       RESTART IDENTITY CASCADE;
     `);
 
-    // 1. Appoint Prof. Sunita Patil (facultyIds[1]) as Seminar Coordinator
-    await client.query('UPDATE faculty SET is_seminar_coordinator = (id = $1)', [facultyIds[1]]);
+    // 1. Appoint Dr. (Mrs.) S. K. Wagh (facultyIds[0]) as Seminar Coordinator
+    await client.query('UPDATE faculty SET is_seminar_coordinator = (id = $1)', [facultyIds[0]]);
     
     // Fetch faculty user_ids for audit history
-    const coordUserRes = await client.query('SELECT user_id, name FROM faculty f JOIN users u ON f.user_id = u.id WHERE f.id = $1', [facultyIds[1]]);
+    const coordUserRes = await client.query('SELECT user_id, name FROM faculty f JOIN users u ON f.user_id = u.id WHERE f.id = $1', [facultyIds[0]]);
     const coordUserId = coordUserRes.rows[0].user_id;
 
     // Seed appointment history
     await client.query(`
       INSERT INTO seminar_coordinator_history (faculty_id, faculty_name, action, performed_by, notes, created_at)
-      VALUES ($1, 'Prof. Rajan Mehta', 'APPOINTED', $2, 'Appointed for AY 2024-25 term', NOW() - INTERVAL '6 months')
-    `, [facultyIds[0], hodUser.rows[0].id]);
-
-    await client.query(`
-      INSERT INTO seminar_coordinator_history (faculty_id, faculty_name, action, performed_by, notes, created_at)
-      VALUES ($1, 'Prof. Rajan Mehta', 'REVOKED', $2, 'Term concluded; designated Prof. Sunita Patil for AY 2025-26', NOW() - INTERVAL '1 month')
-    `, [facultyIds[0], hodUser.rows[0].id]);
-
-    await client.query(`
-      INSERT INTO seminar_coordinator_history (faculty_id, faculty_name, action, performed_by, notes, created_at)
-      VALUES ($1, 'Prof. Sunita Patil', 'APPOINTED', $2, 'Appointed as Seminar Coordinator for AY 2025-26', NOW() - INTERVAL '1 month')
+      VALUES ($1, 'Dr. (Mrs.) J. R. Pansare', 'APPOINTED', $2, 'Appointed for AY 2024-25 term', NOW() - INTERVAL '6 months')
     `, [facultyIds[1], hodUser.rows[0].id]);
+
+    await client.query(`
+      INSERT INTO seminar_coordinator_history (faculty_id, faculty_name, action, performed_by, notes, created_at)
+      VALUES ($1, 'Dr. (Mrs.) J. R. Pansare', 'REVOKED', $2, 'Term concluded; designated Dr. (Mrs.) S. K. Wagh for AY 2025-26', NOW() - INTERVAL '1 month')
+    `, [facultyIds[1], hodUser.rows[0].id]);
+
+    await client.query(`
+      INSERT INTO seminar_coordinator_history (faculty_id, faculty_name, action, performed_by, notes, created_at)
+      VALUES ($1, 'Dr. (Mrs.) S. K. Wagh', 'APPOINTED', $2, 'Appointed as Seminar Coordinator for AY 2025-26', NOW() - INTERVAL '1 month')
+    `, [facultyIds[0], hodUser.rows[0].id]);
 
     // 2. Seminar Session
     const sessRes = await client.query(`
@@ -460,10 +484,10 @@ async function seed() {
     const sessionId = sessRes.rows[0].id;
 
     // 3. Seminar Guides Roster
-    const sg1 = await client.query(`INSERT INTO seminar_guides (session_id, faculty_id, guide_name, designation, quota, display_order) VALUES ($1, $2, 'Prof. Rajan Mehta', 'Associate Professor', 4, 1) RETURNING id`, [sessionId, facultyIds[0]]);
-    const sg2 = await client.query(`INSERT INTO seminar_guides (session_id, faculty_id, guide_name, designation, quota, display_order) VALUES ($1, $2, 'Prof. Sunita Patil', 'Associate Professor', 4, 2) RETURNING id`, [sessionId, facultyIds[1]]);
-    const sg3 = await client.query(`INSERT INTO seminar_guides (session_id, faculty_id, guide_name, designation, quota, display_order) VALUES ($1, $2, 'Prof. Arjun Sharma', 'Assistant Professor', 4, 3) RETURNING id`, [sessionId, facultyIds[2]]);
-    const sg4 = await client.query(`INSERT INTO seminar_guides (session_id, faculty_id, guide_name, designation, quota, display_order) VALUES ($1, $2, 'Prof. Priya Kulkarni', 'Assistant Professor', 4, 4) RETURNING id`, [sessionId, facultyIds[3]]);
+    const sg1 = await client.query(`INSERT INTO seminar_guides (session_id, faculty_id, guide_name, designation, quota, display_order) VALUES ($1, $2, 'Dr. (Mrs.) S. K. Wagh', 'Associate Professor', 4, 1) RETURNING id`, [sessionId, facultyIds[0]]);
+    const sg2 = await client.query(`INSERT INTO seminar_guides (session_id, faculty_id, guide_name, designation, quota, display_order) VALUES ($1, $2, 'Dr. (Mrs.) J. R. Pansare', 'Associate Professor', 4, 2) RETURNING id`, [sessionId, facultyIds[1]]);
+    const sg3 = await client.query(`INSERT INTO seminar_guides (session_id, faculty_id, guide_name, designation, quota, display_order) VALUES ($1, $2, 'Dr. (Miss.) R. M. Wahul', 'Assistant Professor', 4, 3) RETURNING id`, [sessionId, facultyIds[2]]);
+    const sg4 = await client.query(`INSERT INTO seminar_guides (session_id, faculty_id, guide_name, designation, quota, display_order) VALUES ($1, $2, 'Dr. (Mrs.) S. R. Khonde', 'Associate Professor', 4, 4) RETURNING id`, [sessionId, facultyIds[3]]);
 
     // Helper: get student user_id and PRN
     const studentUsers = [];
@@ -474,10 +498,10 @@ async function seed() {
 
     // 4. Sample Seminar Groups (covering all lifecycle states)
 
-    // ─── Group 1: Approved & Evaluated (Guide: Prof. Rajan Mehta) ─────────────
+    // ─── Group 1: Approved & Evaluated (Guide: Dr. (Mrs.) S. K. Wagh) ─────────────
     const g1Res = await client.query(`
       INSERT INTO seminar_groups (session_id, group_no, domain, guide_id, seminar_guide_id, guide_name, leader_user_id, status, assigned_by, assigned_at, approved_by, approved_at, submitted_at)
-      VALUES ($1, 1, 'Artificial Intelligence & Machine Learning', $2, $3, 'Prof. Rajan Mehta', $4, 'APPROVED', $5, NOW() - INTERVAL '10 days', $6, NOW() - INTERVAL '9 days', NOW() - INTERVAL '15 days')
+      VALUES ($1, 1, 'Artificial Intelligence & Machine Learning', $2, $3, 'Dr. (Mrs.) S. K. Wagh', $4, 'APPROVED', $5, NOW() - INTERVAL '10 days', $6, NOW() - INTERVAL '9 days', NOW() - INTERVAL '15 days')
       RETURNING id
     `, [sessionId, facultyIds[0], sg1.rows[0].id, studentUsers[0].user_id, coordUserId, hodUser.rows[0].id]);
     const semG1Id = g1Res.rows[0].id;
@@ -502,10 +526,10 @@ async function seed() {
       VALUES ($1, $2, $3, $4, 10.0, 9.5, 9.0, 9.0, 9.5, 47.0, 50, 'SUBMITTED', $5, $5, NOW() - INTERVAL '3 days', 'Outstanding technical depth, flawless answers in Q&A session.')
     `, [sessionId, semG1Id, studentUsers[2].student_id, studentUsers[2].enrollment_no, facultyIds[0]]);
 
-    // ─── Group 2: Approved, Pending Evaluation (Guide: Prof. Sunita Patil) ─────
+    // ─── Group 2: Approved, Pending Evaluation (Guide: Dr. (Mrs.) J. R. Pansare) ─────
     const g2Res = await client.query(`
       INSERT INTO seminar_groups (session_id, group_no, domain, guide_id, seminar_guide_id, guide_name, leader_user_id, status, assigned_by, assigned_at, approved_by, approved_at, submitted_at)
-      VALUES ($1, 2, 'Blockchain & Decentralized Systems', $2, $3, 'Prof. Sunita Patil', $4, 'APPROVED', $5, NOW() - INTERVAL '8 days', $6, NOW() - INTERVAL '7 days', NOW() - INTERVAL '14 days')
+      VALUES ($1, 2, 'Blockchain & Decentralized Systems', $2, $3, 'Dr. (Mrs.) J. R. Pansare', $4, 'APPROVED', $5, NOW() - INTERVAL '8 days', $6, NOW() - INTERVAL '7 days', NOW() - INTERVAL '14 days')
       RETURNING id
     `, [sessionId, facultyIds[1], sg2.rows[0].id, studentUsers[3].user_id, coordUserId, hodUser.rows[0].id]);
     const semG2Id = g2Res.rows[0].id;

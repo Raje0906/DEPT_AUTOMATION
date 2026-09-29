@@ -352,8 +352,9 @@ export default function MarksEntry() {
                         step="0.5"
                         disabled={isLocked}
                         value={tw.attendance ?? ''}
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) => updateTWField(st.student_id, 'attendance', e.target.value)}
-                        className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm font-mono focus:ring-2 focus:ring-indigo-500"
+                        className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:bg-indigo-50 selection:bg-indigo-200"
                         placeholder="0"
                       />
                     </td>
@@ -365,8 +366,9 @@ export default function MarksEntry() {
                         step="0.5"
                         disabled={isLocked}
                         value={tw.assignment1 ?? ''}
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) => updateTWField(st.student_id, 'assignment1', e.target.value)}
-                        className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm font-mono focus:ring-2 focus:ring-indigo-500"
+                        className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:bg-indigo-50 selection:bg-indigo-200"
                         placeholder="0"
                       />
                     </td>
@@ -378,8 +380,9 @@ export default function MarksEntry() {
                         step="0.5"
                         disabled={isLocked}
                         value={tw.assignment2 ?? ''}
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) => updateTWField(st.student_id, 'assignment2', e.target.value)}
-                        className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm font-mono focus:ring-2 focus:ring-indigo-500"
+                        className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:bg-indigo-50 selection:bg-indigo-200"
                         placeholder="0"
                       />
                     </td>
@@ -391,8 +394,9 @@ export default function MarksEntry() {
                         step="0.5"
                         disabled={isLocked}
                         value={tw.timelySubmission ?? ''}
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) => updateTWField(st.student_id, 'timelySubmission', e.target.value)}
-                        className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm font-mono focus:ring-2 focus:ring-indigo-500"
+                        className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:bg-indigo-50 selection:bg-indigo-200"
                         placeholder="0"
                       />
                     </td>
@@ -441,8 +445,9 @@ export default function MarksEntry() {
                           step="0.5"
                           disabled={isLocked || entry.isAbsent}
                           value={entry.isAbsent ? '0' : val}
+                          onFocus={(e) => e.target.select()}
                           onChange={(e) => updateMark(st.student_id, e.target.value)}
-                          className={`w-24 px-3 py-1.5 border rounded text-center text-sm font-mono font-bold focus:ring-2 focus:ring-indigo-500 ${
+                          className={`w-24 px-3 py-1.5 border rounded text-center text-sm font-mono font-bold focus:ring-2 focus:ring-indigo-500 focus:bg-indigo-50 selection:bg-indigo-200 ${
                             isOver ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-300'
                           } ${entry.isAbsent ? 'bg-gray-100 text-gray-400' : ''}`}
                           placeholder="—"

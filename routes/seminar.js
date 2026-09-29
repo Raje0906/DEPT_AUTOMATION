@@ -1679,6 +1679,9 @@ router.post('/groups/:groupId/evaluation', verifyToken, requireRole('faculty', '
       );
       const studentId = stRes.rows[0]?.student_id || null;
 
+      const submittedAt = status === 'SUBMITTED' ? new Date() : null;
+      const submittedBy = status === 'SUBMITTED' ? req.user.id : null;
+
       await client.query(
         `INSERT INTO seminar_marks (
            session_id, group_id, student_id, prn,
@@ -1687,10 +1690,7 @@ router.post('/groups/:groupId/evaluation', verifyToken, requireRole('faculty', '
            status, entered_by, entered_at,
            submitted_at, submitted_by, remarks
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 50, $11, $12, NOW(),
-                 CASE WHEN $11 = 'SUBMITTED' THEN NOW() ELSE NULL END,
-                 CASE WHEN $11 = 'SUBMITTED' THEN $12 ELSE NULL END,
-                 $13)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 50, $11, $12, NOW(), $14, $15, $13)
          ON CONFLICT (group_id, prn)
          DO UPDATE SET
            attendance_marks = EXCLUDED.attendance_marks,
@@ -1718,7 +1718,9 @@ router.post('/groups/:groupId/evaluation', verifyToken, requireRole('faculty', '
           total,
           status,
           req.user.id,
-          m.remarks || overallRemarks || null
+          m.remarks || overallRemarks || null,
+          submittedAt,
+          submittedBy
         ]
       );
     }
