@@ -16,6 +16,7 @@ import StudentResults    from './pages/student/StudentResults'
 import CGPAView          from './pages/student/CGPAView'
 import StudentProject    from './pages/student/StudentProject'
 import SeminarGroupRegistration from './pages/student/SeminarGroupRegistration'
+import StudentMagazine   from './pages/student/StudentMagazine'
 
 // Faculty
 import FacultyDashboard  from './pages/faculty/FacultyDashboard'
@@ -33,12 +34,14 @@ import OnlineMagazineViewer from './pages/faculty/magazine/OnlineMagazineViewer'
 // HOD
 import HODDashboard   from './pages/hod/HODDashboard'
 import TeacherManagement from './pages/hod/TeacherManagement'
+import CoordinatorAssignment from './pages/hod/CoordinatorAssignment'
 import MarksApproval  from './pages/hod/MarksApproval'
 import PublishResults from './pages/hod/PublishResults'
 import HODAnalytics   from './pages/hod/HODAnalytics'
 import HODProjectMgmt from './pages/hod/HODProjectMgmt'
 import AuditLog       from './pages/hod/AuditLog'
 import HODMagazineApprovals from './pages/hod/HODMagazineApprovals'
+import TermRollover   from './pages/hod/TermRollover'
 
 // Seminar Tool
 import SeminarSessions      from './pages/seminar/SeminarSessions'
@@ -97,6 +100,8 @@ export default function App() {
           <Route path="/student/cgpa" element={<StudentLayout><CGPAView /></StudentLayout>} />
           <Route path="/student/project" element={<StudentLayout><StudentProject /></StudentLayout>} />
           <Route path="/student/seminar" element={<StudentLayout><SeminarGroupRegistration /></StudentLayout>} />
+          <Route path="/student/magazine" element={<StudentLayout><StudentMagazine /></StudentLayout>} />
+          <Route path="/student/magazine/view/:id" element={<ProtectedRoute role="student"><OnlineMagazineViewer /></ProtectedRoute>} />
 
           {/* Faculty */}
           <Route path="/faculty" element={<FacultyLayout><FacultyDashboard /></FacultyLayout>} />
@@ -129,10 +134,12 @@ export default function App() {
           {/* HOD */}
           <Route path="/hod" element={<HODLayout><HODDashboard /></HODLayout>} />
           <Route path="/hod/teachers" element={<HODLayout><TeacherManagement /></HODLayout>} />
+          <Route path="/hod/coordinators" element={<HODLayout><CoordinatorAssignment /></HODLayout>} />
           <Route path="/hod/approval" element={<HODLayout><MarksApproval /></HODLayout>} />
           <Route path="/hod/magazine-approvals" element={<HODLayout><HODMagazineApprovals /></HODLayout>} />
           <Route path="/hod/magazines/preview/:id" element={<HODLayout><MagazinePreview /></HODLayout>} />
           <Route path="/hod/publish" element={<HODLayout><PublishResults /></HODLayout>} />
+          <Route path="/hod/rollover" element={<HODLayout><TermRollover /></HODLayout>} />
           <Route path="/hod/analytics" element={<HODLayout><HODAnalytics /></HODLayout>} />
           <Route path="/hod/projects" element={<HODLayout><HODProjectMgmt /></HODLayout>} />
           <Route path="/hod/audit" element={<HODLayout><AuditLog /></HODLayout>} />

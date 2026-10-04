@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import facultyService from '../../services/facultyService';
 
-const initialLabs = [
+const baseLabTemplates = [
   {
     id: 'LAB-01',
     name: 'Advanced Computing & AI Lab',
@@ -10,8 +11,8 @@ const initialLabs = [
     os: 'Ubuntu 22.04 LTS / NVIDIA CUDA',
     inCharge: 'Dr. (Mrs.) S. K. Wagh',
     status: 'Operational',
-    lastServiced: '02 Mar 2025',
-    nextAudit: '15 Apr 2025',
+    lastServiced: '02 Mar 2026',
+    nextAudit: '15 Apr 2026',
   },
   {
     id: 'LAB-02',
@@ -21,8 +22,8 @@ const initialLabs = [
     os: 'Windows 11 Pro / VS Code Suite',
     inCharge: 'Dr. (Mrs.) J. R. Pansare',
     status: 'Operational',
-    lastServiced: '25 Feb 2025',
-    nextAudit: '20 Apr 2025',
+    lastServiced: '25 Feb 2026',
+    nextAudit: '20 Apr 2026',
   },
   {
     id: 'LAB-03',
@@ -33,8 +34,8 @@ const initialLabs = [
     inCharge: 'Dr. (Miss.) R. M. Wahul',
     status: 'Under Maintenance',
     issue: 'Server rack UPS replacement in progress',
-    lastServiced: '05 Mar 2025',
-    nextAudit: '10 Mar 2025',
+    lastServiced: '05 Mar 2026',
+    nextAudit: '10 Mar 2026',
   },
   {
     id: 'LAB-04',
@@ -44,8 +45,8 @@ const initialLabs = [
     os: 'Kali Linux & Cisco Packet Tracer',
     inCharge: 'Dr. (Mrs.) S. R. Khonde',
     status: 'Operational',
-    lastServiced: '18 Feb 2025',
-    nextAudit: '25 Apr 2025',
+    lastServiced: '18 Feb 2026',
+    nextAudit: '25 Apr 2026',
   },
   {
     id: 'LAB-05',
@@ -55,8 +56,8 @@ const initialLabs = [
     os: 'Raspberry Pi OS / Arduino IDE',
     inCharge: 'Dr. (Mrs.) S. P. Khedkar',
     status: 'Operational',
-    lastServiced: '10 Feb 2025',
-    nextAudit: '30 Apr 2025',
+    lastServiced: '10 Feb 2026',
+    nextAudit: '30 Apr 2026',
   },
   {
     id: 'LAB-06',
@@ -66,13 +67,41 @@ const initialLabs = [
     os: 'Dual Boot Linux/Windows 11',
     inCharge: 'Dr. (Mr). B. K. Bodkhe',
     status: 'Routine Inspection',
-    lastServiced: '01 Mar 2025',
-    nextAudit: '12 Mar 2025',
+    lastServiced: '01 Mar 2026',
+    nextAudit: '12 Mar 2026',
   },
 ];
 
 export default function LabMaintenance() {
-  const [labs, setLabs] = useState(initialLabs);
+  const [facultyList, setFacultyList] = useState([]);
+  const [labs, setLabs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadFacultyAndLabs() {
+      try {
+        const res = await facultyService.getAllFaculty();
+        const facs = res.faculty || [];
+        setFacultyList(facs);
+
+        // Assign real faculty members from database to the lab in-charge roles
+        const initializedLabs = baseLabTemplates.map((lab, index) => {
+          const assignedFac = facs[index % (facs.length || 1)];
+          return {
+            ...lab,
+            inCharge: assignedFac ? `${assignedFac.name} (${assignedFac.employee_id})` : 'Unassigned',
+            inChargeId: assignedFac ? assignedFac.id : null,
+          };
+        });
+        setLabs(initializedLabs);
+      } catch (err) {
+        console.error('Failed to load faculty for labs:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadFacultyAndLabs();
+  }, []);
   const [filter, setFilter] = useState('all');
   const [showModal, setShowModal] = useState(false);
   const [newLog, setNewLog] = useState({

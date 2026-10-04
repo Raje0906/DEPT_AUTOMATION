@@ -185,7 +185,7 @@ router.post('/student/groups', verifyToken, requireRole('student'), async (req, 
     const student = await getStudentId(req.user.id);
     if (!student) return res.status(404).json({ error: 'Student record not found' });
 
-    const acadYear = academic_year || '2025-26';
+    const acadYear = academic_year || '2026-27';
     const studentBatch = batch || members[0]?.division || student.batch || 'BE-CE-A';
 
     // Check if leader or any member in the list is already in an active group
@@ -688,7 +688,7 @@ router.post('/evaluations', verifyToken, requireRole('faculty','hod'), async (re
  */
 router.get('/hod/dashboard', verifyToken, requireRole('hod'), async (req, res) => {
   try {
-    const acadYear = req.query.academic_year || '2025-26';
+    const acadYear = req.query.academic_year || '2026-27';
 
     const groupsCount = await pool.query(
       `SELECT status, COUNT(*) FROM project_groups WHERE academic_year = $1 GROUP BY status`,
@@ -745,7 +745,7 @@ router.get('/hod/dashboard', verifyToken, requireRole('hod'), async (req, res) =
  */
 router.get('/hod/groups', verifyToken, requireRole('hod'), async (req, res) => {
   try {
-    const acadYear = req.query.academic_year || '2025-26';
+    const acadYear = req.query.academic_year || '2026-27';
 
     const groupsRes = await pool.query(
       `SELECT g.*, f.id as guide_faculty_id, u.name as guide_name, f.designation as guide_designation
@@ -846,7 +846,7 @@ router.delete('/hod/groups/all', verifyToken, requireRole('hod'), async (req, re
 router.post('/hod/groups/clear-guides', verifyToken, requireRole('hod'), async (req, res) => {
   try {
     const { academic_year } = req.body;
-    const acadYear = academic_year || '2025-26';
+    const acadYear = academic_year || '2026-27';
 
     const result = await pool.query(
       `UPDATE project_groups SET guide_id = NULL, status = 'DRAFT' WHERE academic_year = $1 RETURNING id`,
@@ -866,7 +866,7 @@ router.post('/hod/groups/clear-guides', verifyToken, requireRole('hod'), async (
  */
 router.get('/hod/stages', verifyToken, requireRole('hod', 'faculty'), async (req, res) => {
   try {
-    const acadYear = req.query.academic_year || '2025-26';
+    const acadYear = req.query.academic_year || '2026-27';
 
     const stagesRes = await pool.query(
       `SELECT * FROM project_evaluation_stages WHERE academic_year = $1 ORDER BY sequence_order ASC`,
@@ -899,7 +899,7 @@ router.post('/hod/stages', verifyToken, requireRole('hod'), async (req, res) => 
       return res.status(400).json({ error: 'Stage Name and Sequence Order are required' });
     }
 
-    const acadYear = academic_year || '2025-26';
+    const acadYear = academic_year || '2026-27';
     const dateFrom = scheduled_date_from && scheduled_date_from.trim() !== '' ? scheduled_date_from : null;
     const dateTo = scheduled_date_to && scheduled_date_to.trim() !== '' ? scheduled_date_to : null;
     const maxMarks = max_marks_total !== undefined && max_marks_total !== null ? Number(max_marks_total) : 100;
@@ -1036,7 +1036,7 @@ router.post('/hod/panel-assignments', verifyToken, requireRole('hod'), async (re
  */
 router.get('/hod/panel-matrix', verifyToken, requireRole('hod', 'faculty'), async (req, res) => {
   try {
-    const acadYear = req.query.academic_year || '2025-26';
+    const acadYear = req.query.academic_year || '2026-27';
     const stageId = req.query.stage_id ? Number(req.query.stage_id) : null;
 
     const groupsRes = await pool.query(
@@ -1095,7 +1095,7 @@ router.post('/hod/panel-auto-assign', verifyToken, requireRole('hod'), async (re
     const { stage_id, academic_year, panel_size = 2, faculty_ids } = req.body;
     if (!stage_id) return res.status(400).json({ error: 'stage_id is required' });
 
-    const acadYear = academic_year || '2025-26';
+    const acadYear = academic_year || '2026-27';
     const targetPanelSize = Math.max(1, Math.min(3, Number(panel_size)));
 
     // Fetch active groups
@@ -1310,7 +1310,7 @@ router.post('/hod/score-releases', verifyToken, requireRole('hod'), async (req, 
  */
 router.get('/hod/reports/export', verifyToken, requireRole('hod', 'faculty'), async (req, res) => {
   try {
-    const acadYear = req.query.academic_year || '2025-26';
+    const acadYear = req.query.academic_year || '2026-27';
 
     const groupsRes = await pool.query(
       `SELECT g.id, g.group_code, g.title, g.domain, g.batch, u.name as guide_name

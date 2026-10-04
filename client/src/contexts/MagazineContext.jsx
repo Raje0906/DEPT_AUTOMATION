@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { parseClassAndDivision } from '../utils/toppersUtils';
+import { DEMO_MAGAZINE_METADATA, DEMO_MAGAZINE_SECTION_DATA } from '../utils/demoMagazineData';
 
 const MagazineContext = createContext(null);
 
 // ── Sample magazine issues ────────────────────────────────────────────────────
 const SAMPLE_MAGAZINES = [
+  DEMO_MAGAZINE_METADATA,
   {
     id: 'MAG-2025-32',
     title: 'Reflection',
@@ -15,6 +17,7 @@ const SAMPLE_MAGAZINES = [
     period: 'June – December 2025',
     description: 'The annual departmental magazine capturing student achievements, academic milestones, and departmental events of the first half of academic year 2025–26.',
     status: 'Published',
+    template: 'modern-academic',
     publishedDate: '2026-01-15',
     coverColor: '#1E2D5A',
     totalPages: 20,
@@ -43,6 +46,7 @@ const SAMPLE_MAGAZINES = [
     period: 'January – May 2025',
     description: 'Departmental magazine for the second semester of academic year 2024–25.',
     status: 'Published',
+    template: 'editorial',
     publishedDate: '2025-06-10',
     coverColor: '#6B2737',
     totalPages: 18,
@@ -71,6 +75,7 @@ const SAMPLE_MAGAZINES = [
     period: 'June – December 2024',
     description: 'First-semester edition covering departmental achievements and academic highlights.',
     status: 'Archived',
+    template: 'institutional-premium',
     publishedDate: '2025-01-20',
     coverColor: '#3B6B47',
     totalPages: 16,
@@ -250,7 +255,16 @@ export function MagazineProvider({ children }) {
       const saved = localStorage.getItem(STORAGE_KEY_MAGAZINES);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Guarantee MAG-2026-33 is present as the published issue at the top
+          const exists = parsed.some(m => m.id === DEMO_MAGAZINE_METADATA.id);
+          if (!exists) {
+            const updated = [DEMO_MAGAZINE_METADATA, ...parsed];
+            localStorage.setItem(STORAGE_KEY_MAGAZINES, JSON.stringify(updated));
+            return updated;
+          }
+          return parsed;
+        }
       }
     } catch (e) {
       console.warn('Could not read saved magazines from localStorage:', e);
@@ -299,6 +313,11 @@ export function MagazineProvider({ children }) {
     } catch (e) {
       console.warn(`Could not load sectionData for ${magId}:`, e);
     }
+    if (magId === DEMO_MAGAZINE_METADATA.id) {
+      const demoData = JSON.parse(JSON.stringify(DEMO_MAGAZINE_SECTION_DATA));
+      demoData.toppers = normalizeToppersData(demoData.toppers);
+      return demoData;
+    }
     return fallbackData || defaultSectionData();
   }, []);
 
@@ -308,6 +327,7 @@ export function MagazineProvider({ children }) {
     const newMag = {
       id,
       ...info,
+      template: info.template || 'modern-academic',
       status: 'Draft',
       publishedDate: null,
       coverColor: '#1E2D5A',
@@ -553,6 +573,20 @@ export function MagazineProvider({ children }) {
     }
   }, [currentMagazine?.id, saveMagazinesList]);
 
+  // Update magazine design template (presentation only, content untouched)
+  const updateMagazineTemplate = useCallback((templateId, magId) => {
+    const targetId = magId || currentMagazine?.id;
+    if (!targetId) return;
+    setMagazines(prev => {
+      const updated = prev.map(m => m.id === targetId ? { ...m, template: templateId } : m);
+      saveMagazinesList(updated);
+      return updated;
+    });
+    if (currentMagazine?.id === targetId) {
+      setCurrentMagazine(prev => prev ? { ...prev, template: templateId } : null);
+    }
+  }, [currentMagazine?.id, saveMagazinesList]);
+
   // Load an existing magazine for editing/preview
   const loadMagazine = useCallback((id) => {
     let mag = magazines.find(m => m.id === id);
@@ -567,12 +601,16 @@ export function MagazineProvider({ children }) {
         department: 'Computer Engineering',
         period: 'June – December 2025',
         status: 'Draft',
+        template: 'modern-academic',
         sections: {},
       };
       setMagazines(prev => [mag, ...prev]);
     }
 
     if (mag) {
+      if (!mag.template) {
+        mag = { ...mag, template: 'modern-academic' };
+      }
       setCurrentMagazine(mag);
       const loadedData = getPersistedSectionData(mag.id, mag.sectionData || defaultSectionData());
       setSectionData(loadedData);
@@ -607,6 +645,7 @@ export function MagazineProvider({ children }) {
       requestChangesMagazine,
       loadMagazine,
       setCurrentMagazine,
+      updateMagazineTemplate,
       addTopperStudent,
       updateTopperStudent,
       deleteTopperStudent,

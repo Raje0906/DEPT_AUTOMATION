@@ -8,7 +8,7 @@ export default function PublishResults() {
   const [matrixData, setMatrixData]     = useState(null);
   const [loading, setLoading]           = useState(true);
   const [publishing, setPublishing]     = useState(false);
-  const [target, setTarget]             = useState({ semester: '5', academicYear: '2025-26', division: 'TE 1' });
+  const [target, setTarget]             = useState({ semester: '5', academicYear: '2026-27', division: 'TE 1' });
   const [activeView, setActiveView]     = useState('publish'); // 'publish' | 'matrix'
 
   const loadData = () => {
@@ -114,7 +114,7 @@ export default function PublishResults() {
               value={target.academicYear}
               onChange={e => setTarget(t => ({ ...t, academicYear: e.target.value }))}
             >
-              {['2025-26', '2024-25'].map(y => <option key={y} value={y}>{y}</option>)}
+              {['2026-27', '2025-26', '2024-25'].map(y => <option key={y} value={y}>{y}</option>)}
             </select>
           </div>
           <div>

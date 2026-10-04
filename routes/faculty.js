@@ -1,4 +1,5 @@
 const express = require('express');
+const bcrypt = require('bcryptjs');
 const pool = require('../db/pool');
 const multer = require('multer');
 const csv = require('csv-parser');
@@ -9,6 +10,314 @@ const { logAudit, auditMark, auditRecord } = require('../middleware/auditLogger'
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+// Allow any authenticated user (student, faculty, hod) to get full faculty list
+router.get('/all', verifyToken, async (req, res) => {
+  try {
+    const { department, search, limit, offset } = req.query;
+    let query = `
+      SELECT f.id, f.user_id, f.employee_id, f.designation, f.department,
+             f.is_seminar_coordinator, u.name, u.email, u.role, u.is_active, u.created_at
+      FROM faculty f
+      JOIN users u ON u.id = f.user_id
+      WHERE 1=1
+    `;
+    const params = [];
+
+    if (department && department !== 'all') {
+      params.push(department);
+      query += ` AND f.department = $${params.length}`;
+    }
+
+    if (search && search.trim()) {
+      params.push(`%${search.trim().toLowerCase()}%`);
+      const pIdx = params.length;
+      query += ` AND (LOWER(u.name) LIKE $${pIdx} OR LOWER(u.email) LIKE $${pIdx} OR LOWER(f.employee_id) LIKE $${pIdx} OR LOWER(f.designation) LIKE $${pIdx})`;
+    }
+
+    // Get total count
+    const countRes = await pool.query(
+      `SELECT COUNT(*) FROM (${query}) AS subquery`,
+      params
+    );
+    const total = parseInt(countRes.rows[0].count, 10);
+
+    query += ` ORDER BY f.id ASC`;
+
+    if (limit) {
+      params.push(parseInt(limit, 10));
+      query += ` LIMIT $${params.length}`;
+    }
+    if (offset) {
+      params.push(parseInt(offset, 10));
+      query += ` OFFSET $${params.length}`;
+    }
+
+    const result = await pool.query(query, params);
+    res.json({ faculty: result.rows, total });
+  } catch (err) {
+    console.error('[Faculty] Get all error:', err.message);
+    res.status(500).json({ error: 'Internal server error while fetching faculty members' });
+  }
+});
+
+// ─── POST /api/faculty — Add new faculty (HOD only) ──────────────────────────
+router.post('/', verifyToken, requireRole('hod'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const {
+      name,
+      email,
+      employee_id,
+      designation,
+      department,
+      password,
+      is_seminar_coordinator = false
+    } = req.body;
+
+    if (!name || !email || !employee_id || !designation || !department) {
+      return res.status(400).json({ error: 'Name, email, employee ID, designation, and department are required' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanEmpId = employee_id.trim().toUpperCase();
+
+    // Check unique email and empId
+    const checkUser = await client.query(`SELECT id FROM users WHERE LOWER(email) = $1`, [cleanEmail]);
+    if (checkUser.rows.length > 0) {
+      return res.status(409).json({ error: 'A user with this email address already exists' });
+    }
+
+    const checkEmp = await client.query(`SELECT id FROM faculty WHERE UPPER(employee_id) = $1`, [cleanEmpId]);
+    if (checkEmp.rows.length > 0) {
+      return res.status(409).json({ error: 'A faculty member with this Employee ID already exists' });
+    }
+
+    await client.query('BEGIN');
+
+    const rawPassword = password || 'faculty@123';
+    const passwordHash = bcrypt.hashSync(rawPassword, 10);
+
+    const userRes = await client.query(
+      `INSERT INTO users (name, role, email, password_hash, department)
+       VALUES ($1, 'faculty', $2, $3, $4)
+       RETURNING id, name, email, role, department, created_at`,
+      [name.trim(), cleanEmail, passwordHash, department.trim()]
+    );
+    const newUserId = userRes.rows[0].id;
+
+    const facRes = await client.query(
+      `INSERT INTO faculty (user_id, department, designation, employee_id, is_seminar_coordinator)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, user_id, department, designation, employee_id, is_seminar_coordinator`,
+      [newUserId, department.trim(), designation.trim(), cleanEmpId, !!is_seminar_coordinator]
+    );
+
+    await client.query('COMMIT');
+
+    const createdFaculty = {
+      ...facRes.rows[0],
+      name: userRes.rows[0].name,
+      email: userRes.rows[0].email,
+      role: userRes.rows[0].role,
+      is_active: true,
+      created_at: userRes.rows[0].created_at,
+    };
+
+    auditRecord({
+      tableName: 'faculty',
+      recordId: createdFaculty.id,
+      changedBy: req.user.id,
+      oldValue: null,
+      newValue: createdFaculty,
+      action: 'INSERT',
+      reason: `HOD added new faculty member ${name} (${cleanEmpId})`,
+    });
+
+    res.status(201).json({
+      message: `Faculty member ${name} created successfully!`,
+      faculty: createdFaculty,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[Faculty] Create faculty error:', err.message);
+    res.status(500).json({ error: 'Failed to create faculty member: ' + err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// ─── PUT /api/faculty/:id — Update faculty (HOD only) ────────────────────────
+router.put('/:id', verifyToken, requireRole('hod'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const {
+      name,
+      email,
+      employee_id,
+      designation,
+      department,
+      password,
+      is_seminar_coordinator
+    } = req.body;
+
+    const facCheck = await client.query(
+      `SELECT f.*, u.name, u.email, u.department as user_dept 
+       FROM faculty f JOIN users u ON f.user_id = u.id WHERE f.id = $1`,
+      [id]
+    );
+    if (facCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Faculty record not found' });
+    }
+    const current = facCheck.rows[0];
+
+    const cleanEmail = email ? email.trim().toLowerCase() : current.email;
+    const cleanEmpId = employee_id ? employee_id.trim().toUpperCase() : current.employee_id;
+    const cleanName = name ? name.trim() : current.name;
+    const cleanDesig = designation ? designation.trim() : current.designation;
+    const cleanDept = department ? department.trim() : current.department;
+    const coordFlag = is_seminar_coordinator !== undefined ? !!is_seminar_coordinator : current.is_seminar_coordinator;
+
+    // Check email conflict
+    if (cleanEmail !== current.email) {
+      const emailDup = await client.query(`SELECT id FROM users WHERE LOWER(email) = $1 AND id != $2`, [cleanEmail, current.user_id]);
+      if (emailDup.rows.length > 0) {
+        return res.status(409).json({ error: 'Email address already in use by another account' });
+      }
+    }
+
+    // Check empId conflict
+    if (cleanEmpId !== current.employee_id) {
+      const empDup = await client.query(`SELECT id FROM faculty WHERE UPPER(employee_id) = $1 AND id != $2`, [cleanEmpId, id]);
+      if (empDup.rows.length > 0) {
+        return res.status(409).json({ error: 'Employee ID already in use by another faculty' });
+      }
+    }
+
+    await client.query('BEGIN');
+
+    if (password && password.trim().length >= 6) {
+      const pwHash = bcrypt.hashSync(password.trim(), 10);
+      await client.query(
+        `UPDATE users SET name = $1, email = $2, department = $3, password_hash = $4 WHERE id = $5`,
+        [cleanName, cleanEmail, cleanDept, pwHash, current.user_id]
+      );
+    } else {
+      await client.query(
+        `UPDATE users SET name = $1, email = $2, department = $3 WHERE id = $4`,
+        [cleanName, cleanEmail, cleanDept, current.user_id]
+      );
+    }
+
+    const updatedFac = await client.query(
+      `UPDATE faculty 
+       SET employee_id = $1, designation = $2, department = $3, is_seminar_coordinator = $4 
+       WHERE id = $5 
+       RETURNING id, user_id, department, designation, employee_id, is_seminar_coordinator`,
+      [cleanEmpId, cleanDesig, cleanDept, coordFlag, id]
+    );
+
+    // Also update cached names in seminar_guides/groups if name or designation changed
+    await client.query(
+      `UPDATE seminar_guides SET guide_name = $1, designation = $2 WHERE faculty_id = $3`,
+      [cleanName, cleanDesig, id]
+    );
+    await client.query(
+      `UPDATE seminar_groups SET guide_name = $1 WHERE guide_id = $2`,
+      [cleanName, id]
+    );
+    await client.query(
+      `UPDATE seminar_coordinator_history SET faculty_name = $1 WHERE faculty_id = $2`,
+      [cleanName, id]
+    );
+
+    await client.query('COMMIT');
+
+    const resultFaculty = {
+      ...updatedFac.rows[0],
+      name: cleanName,
+      email: cleanEmail,
+    };
+
+    auditRecord({
+      tableName: 'faculty',
+      recordId: parseInt(id, 10),
+      changedBy: req.user.id,
+      oldValue: current,
+      newValue: resultFaculty,
+      action: 'UPDATE',
+      reason: `HOD updated faculty #${id} details (${cleanName})`,
+    });
+
+    res.json({
+      message: `Faculty member ${cleanName} updated successfully!`,
+      faculty: resultFaculty,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[Faculty] Update error:', err.message);
+    res.status(500).json({ error: 'Failed to update faculty member: ' + err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// ─── DELETE /api/faculty/:id — Delete faculty (HOD only) ─────────────────────
+router.delete('/:id', verifyToken, requireRole('hod'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+
+    const facRes = await client.query(
+      `SELECT f.*, u.name, u.email FROM faculty f JOIN users u ON f.user_id = u.id WHERE f.id = $1`,
+      [id]
+    );
+    if (facRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Faculty member not found' });
+    }
+    const faculty = facRes.rows[0];
+
+    // Prevent deleting own account
+    if (faculty.user_id === req.user.id) {
+      return res.status(400).json({ error: 'You cannot delete your own account' });
+    }
+
+    await client.query('BEGIN');
+
+    // Remove from seminar guides and groups references
+    await client.query(`UPDATE seminar_groups SET guide_id = NULL WHERE guide_id = $1`, [id]);
+    await client.query(`DELETE FROM seminar_guides WHERE faculty_id = $1`, [id]);
+    await client.query(`DELETE FROM faculty_subject_map WHERE faculty_id = $1`, [id]);
+    await client.query(`DELETE FROM class_teachers WHERE faculty_id = $1`, [id]);
+    await client.query(`DELETE FROM coordinator_assignments WHERE faculty_id = $1`, [id]);
+    await client.query(`UPDATE project_groups SET guide_id = NULL WHERE guide_id = $1`, [id]);
+    await client.query(`DELETE FROM project_panel_assignments WHERE panel_member_id = $1`, [id]);
+
+    // Deleting the user cascades to faculty table
+    await client.query(`DELETE FROM users WHERE id = $1`, [faculty.user_id]);
+
+    await client.query('COMMIT');
+
+    auditRecord({
+      tableName: 'faculty',
+      recordId: parseInt(id, 10),
+      changedBy: req.user.id,
+      oldValue: faculty,
+      newValue: null,
+      action: 'DELETE',
+      reason: `HOD deleted faculty member #${id} (${faculty.name})`,
+    });
+
+    res.json({ message: `Faculty member ${faculty.name} has been removed successfully.` });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[Faculty] Delete error:', err.message);
+    res.status(500).json({ error: 'Failed to delete faculty member: ' + err.message });
+  } finally {
+    client.release();
+  }
+});
 
 router.use(verifyToken, requireRole('faculty', 'hod'));
 
@@ -45,7 +354,7 @@ router.get('/dashboard', async (req, res) => {
       [faculty.id]
     );
     const academicYears = yearsRes.rows.map(r => r.academic_year);
-    const selectedYear = req.query.academic_year || academicYears[0] || '2025-26';
+    const selectedYear = req.query.academic_year || academicYears[0] || '2026-27';
 
     // Assigned subjects for selected year with student_exam_marks stats
     const subjectsRes = await pool.query(
@@ -141,7 +450,7 @@ router.get('/subjects', async (req, res) => {
       [faculty.id]
     );
     const academicYears = yearsRes.rows.map(r => r.academic_year);
-    const selectedYear = req.query.academic_year || academicYears[0] || '2025-26';
+    const selectedYear = req.query.academic_year || academicYears[0] || '2026-27';
 
     const result = await pool.query(
       `SELECT fsm.id AS map_id, s.id, s.name, s.code, s.semester, s.credits,
@@ -180,7 +489,7 @@ router.get('/marks/:subjectId', async (req, res) => {
 
     const { subjectId } = req.params;
     const semester = parseInt(req.query.semester, 10) || 5;
-    const academicYear = req.query.academic_year || '2025-26';
+    const academicYear = req.query.academic_year || '2026-27';
     const division = req.query.division || 'TE 1';
     let examTypeId = req.query.exam_type_id ? parseInt(req.query.exam_type_id, 10) : null;
 
@@ -230,11 +539,20 @@ router.get('/marks/:subjectId', async (req, res) => {
       [subjectId, examTypeId, semester, academicYear, division]
     );
 
+    // Fetch all divisions/classes this faculty teaches for this subject & semester
+    const availableDivisionsRes = await pool.query(
+      `SELECT DISTINCT division FROM faculty_subject_map
+       WHERE faculty_id = $1 AND subject_id = $2 AND semester = $3 AND academic_year = $4
+       ORDER BY division`,
+      [faculty.id, subjectId, semester, academicYear]
+    );
+
     res.json({
       subject,
       examTypes,
       currentExamType,
       selectedExamTypeId: examTypeId,
+      availableDivisions: availableDivisionsRes.rows.map(r => r.division),
       students: studentsResult.rows
     });
   } catch (err) {
@@ -405,9 +723,11 @@ router.post('/term-work', async (req, res) => {
       const tim = Number(timelySubmission) || 0;
       const totalTW = Math.round((att + a1 + a2 + tim) * 100) / 100;
 
-      if (att > 5) throw new Error(`Attendance marks (${att}) exceed maximum of 5`);
-      if (tim > 5) throw new Error(`Timely submission marks (${tim}) exceed maximum of 5`);
-      if (totalTW > 25) throw new Error(`Total Term Work (${totalTW}) exceeds maximum of 25`);
+      if (att < 0 || att > 5) throw new Error(`Attendance marks (${att}) must be between 0 and 5`);
+      if (a1 < 0 || a1 > 7) throw new Error(`Assignment 1 marks (${a1}) must be between 0 and 7`);
+      if (a2 < 0 || a2 > 7) throw new Error(`Assignment 2 marks (${a2}) must be between 0 and 7`);
+      if (tim < 0 || tim > 6) throw new Error(`Timely submission marks (${tim}) must be between 0 and 6`);
+      if (totalTW < 0 || totalTW > 25) throw new Error(`Total Term Work (${totalTW}) must be between 0 and 25`);
 
       const existingTW = await client.query(
         `SELECT * FROM student_term_work_details 

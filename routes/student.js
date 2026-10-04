@@ -49,7 +49,7 @@ router.get('/results/:semester', async (req, res) => {
       return res.json({
         student,
         semester,
-        academicYear: '2025-26',
+        academicYear: '2026-27',
         examTypes,
         subjects: [],
         termWorkDetails: {},
@@ -65,7 +65,7 @@ router.get('/results/:semester', async (req, res) => {
     // Check publication status for this semester & division
     const pubCheck = await pool.query(
       `SELECT status FROM result_publish_status 
-       WHERE semester = 5 AND academic_year = '2025-26' AND division = $1`,
+       WHERE semester = 5 AND academic_year = '2026-27' AND division = $1`,
       [student.division]
     );
     const isPublished = pubCheck.rows.length > 0 && pubCheck.rows[0].status === 'published';
@@ -80,7 +80,7 @@ router.get('/results/:semester', async (req, res) => {
        FROM student_exam_marks sem
        JOIN subjects s ON s.id = sem.subject_id
        JOIN exam_types et ON et.id = sem.exam_type_id
-       WHERE sem.student_id = $1 AND sem.semester = 5 AND sem.academic_year = '2025-26'
+       WHERE sem.student_id = $1 AND sem.semester = 5 AND sem.academic_year = '2026-27'
        ORDER BY s.code, et.display_order`,
       [student.id]
     );
@@ -90,7 +90,7 @@ router.get('/results/:semester', async (req, res) => {
       `SELECT tw.*, s.code AS subject_code, s.name AS subject_name
        FROM student_term_work_details tw
        JOIN subjects s ON s.id = tw.subject_id
-       WHERE tw.student_id = $1 AND tw.semester = 5 AND tw.academic_year = '2025-26'`,
+       WHERE tw.student_id = $1 AND tw.semester = 5 AND tw.academic_year = '2026-27'`,
       [student.id]
     );
     const termWorkDetails = {};
@@ -132,7 +132,7 @@ router.get('/results/:semester', async (req, res) => {
     res.json({
       student,
       semester,
-      academicYear: '2025-26',
+      academicYear: '2026-27',
       examTypes,
       subjects: rolledUpSubjects,
       termWorkDetails,
@@ -158,7 +158,7 @@ router.get('/results', async (req, res) => {
     // Check publication for TE Sem 1 (Semester 5)
     const pubCheck = await pool.query(
       `SELECT status FROM result_publish_status 
-       WHERE semester = 5 AND academic_year = '2025-26' AND division = $1`,
+       WHERE semester = 5 AND academic_year = '2026-27' AND division = $1`,
       [student.division]
     );
     const isPublished = pubCheck.rows.length > 0 && pubCheck.rows[0].status === 'published';
@@ -172,7 +172,7 @@ router.get('/results', async (req, res) => {
        FROM student_exam_marks sem
        JOIN subjects s ON s.id = sem.subject_id
        JOIN exam_types et ON et.id = sem.exam_type_id
-       WHERE sem.student_id = $1 AND sem.semester = 5 AND sem.academic_year = '2025-26'
+       WHERE sem.student_id = $1 AND sem.semester = 5 AND sem.academic_year = '2026-27'
        ORDER BY s.code, et.display_order`,
       [student.id]
     );
@@ -205,7 +205,7 @@ router.get('/results', async (req, res) => {
       if (s === 5) {
         semesters.push({
           semester: 5,
-          academic_year: '2025-26',
+          academic_year: '2026-27',
           subjects: sem5Subjects,
           sgpa: sem5SGPA,
           totalCredits: sem5Credits,
@@ -214,7 +214,7 @@ router.get('/results', async (req, res) => {
       } else {
         semesters.push({
           semester: s,
-          academic_year: '2025-26',
+          academic_year: '2026-27',
           subjects: [],
           sgpa: 0,
           totalCredits: 22,

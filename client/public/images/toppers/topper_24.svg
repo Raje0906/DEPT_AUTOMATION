@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" width="320" height="320">
+  <defs>
+    <linearGradient id="bgGrad24" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#0c4a6e" />
+    </linearGradient>
+    <filter id="shadow24" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+  <rect width="320" height="320" fill="url(#bgGrad24)"/>
+  <circle cx="280" cy="40" r="90" fill="white" opacity="0.08"/>
+  <circle cx="40" cy="280" r="110" fill="white" opacity="0.05"/>
+
+  <!-- Body / Shoulder -->
+  <path d="M 60 320 Q 60 230 110 220 L 140 240 L 180 240 L 210 220 Q 260 230 260 320 Z" fill="#f0f9ff" filter="url(#shadow24)"/>
+  
+  <path d="M 130 220 Q 160 250 190 220" stroke="#cbd5e1" stroke-width="3" fill="none"/>
+  
+
+  <!-- Neck -->
+  <rect x="142" y="170" width="36" height="50" fill="#e5b28d" rx="6"/>
+
+  <!-- Face -->
+  <ellipse cx="160" cy="140" rx="46" ry="54" fill="#e5b28d" filter="url(#shadow24)"/>
+
+  
+  <!-- Female Hair Behind -->
+  <path d="M 104 130 Q 95 210 115 250 Q 125 210 120 160 Z" fill="#1c1917"/>
+  <path d="M 216 130 Q 225 210 205 250 Q 195 210 200 160 Z" fill="#1c1917"/>
+  <!-- Female Hair Top -->
+  <path d="M 108 140 C 105 85 215 85 212 140 C 205 105 180 98 160 98 C 140 98 115 105 108 140 Z" fill="#1c1917"/>
+  
+
+  <!-- Eyes -->
+  <ellipse cx="143" cy="140" rx="5" ry="3.5" fill="#1e293b"/>
+  <ellipse cx="177" cy="140" rx="5" ry="3.5" fill="#1e293b"/>
+  <circle cx="144.5" cy="139" r="1.5" fill="white"/>
+  <circle cx="178.5" cy="139" r="1.5" fill="white"/>
+
+  <!-- Eyebrows -->
+  <path d="M 134 131 Q 143 128 152 131" stroke="#1c1917" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M 168 131 Q 177 128 186 131" stroke="#1c1917" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+
+  <!-- Nose -->
+  <path d="M 160 141 L 157 155 L 163 155" stroke="#9a3412" stroke-width="1.8" fill="none" stroke-linecap="round" opacity="0.6"/>
+
+  <!-- Smile -->
+  <path d="M 148 167 Q 160 176 172 167" stroke="#991b1b" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+
+  
+
+  <!-- Rank / Student ID -->
+  <g transform="translate(18, 18)">
+    <rect width="64" height="22" rx="11" fill="rgba(0,0,0,0.35)"/>
+    <text x="32" y="15" fill="#f8fafc" font-family="system-ui, sans-serif" font-size="10" font-weight="bold" text-anchor="middle">#24</text>
+  </g>
+</svg>

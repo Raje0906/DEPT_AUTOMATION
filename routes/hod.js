@@ -10,7 +10,7 @@ router.use(verifyToken, requireRole('hod'));
 // ─── GET /api/hod/dashboard ───────────────────────────────────────────────────
 router.get('/dashboard', async (req, res) => {
   try {
-    const selectedYear = req.query.academic_year || '2025-26';
+    const selectedYear = req.query.academic_year || '2026-27';
     const selectedSem = req.query.semester ? parseInt(req.query.semester, 10) : 5;
 
     // Dept-wide subject submission status table
@@ -62,7 +62,7 @@ router.get('/dashboard', async (req, res) => {
 router.get('/exam-completion-status', async (req, res) => {
   try {
     const semester = req.query.semester ? parseInt(req.query.semester, 10) : 5;
-    const academicYear = req.query.academic_year || '2025-26';
+    const academicYear = req.query.academic_year || '2026-27';
 
     const examTypesRes = await pool.query(`SELECT * FROM exam_types ORDER BY display_order`);
     const examTypes = examTypesRes.rows;
@@ -110,7 +110,7 @@ router.get('/marks/:subjectId', async (req, res) => {
   try {
     const { subjectId } = req.params;
     const semester = parseInt(req.query.semester, 10) || 5;
-    const academicYear = req.query.academic_year || '2025-26';
+    const academicYear = req.query.academic_year || '2026-27';
     const division = req.query.division || 'TE 1';
 
     const subjectResult = await pool.query(`SELECT * FROM subjects WHERE id = $1`, [subjectId]);
@@ -180,7 +180,7 @@ router.get('/marks/:subjectId', async (req, res) => {
 router.post('/approve/:subjectId', async (req, res) => {
   try {
     const { subjectId } = req.params;
-    const { semester = 5, academicYear = '2025-26', division = 'TE 1' } = req.body;
+    const { semester = 5, academicYear = '2026-27', division = 'TE 1' } = req.body;
 
     const updateResult = await pool.query(
       `UPDATE student_exam_marks sem
@@ -217,7 +217,7 @@ router.post('/approve/:subjectId', async (req, res) => {
 router.post('/sendback/:subjectId', async (req, res) => {
   try {
     const { subjectId } = req.params;
-    const { semester = 5, academicYear = '2025-26', division = 'TE 1', comment } = req.body;
+    const { semester = 5, academicYear = '2026-27', division = 'TE 1', comment } = req.body;
 
     if (!comment || comment.trim().length < 5) {
       return res.status(400).json({ error: 'A remark is required when sending marks back for correction' });
@@ -253,7 +253,7 @@ router.post('/sendback/:subjectId', async (req, res) => {
 // ─── POST /api/hod/publish ────────────────────────────────────────────────────
 router.post('/publish', async (req, res) => {
   try {
-    const { semester = 5, academicYear = '2025-26', division = 'TE 1', confirmPublish } = req.body;
+    const { semester = 5, academicYear = '2026-27', division = 'TE 1', confirmPublish } = req.body;
 
     if (!confirmPublish) {
       return res.status(400).json({ error: 'Publish confirmation is required' });
@@ -557,7 +557,7 @@ router.post('/teachers/assign', async (req, res) => {
       return res.status(400).json({ error: 'Faculty is required' });
     }
 
-    const year = academicYear || '2025-26';
+    const year = academicYear || '2026-27';
 
     // Support both batch assignment (assignments: [...]) and single assignment
     const itemsToAssign = Array.isArray(assignments) && assignments.length > 0
@@ -661,7 +661,7 @@ router.post('/teachers/set-class-teacher', async (req, res) => {
     if (!facultyId || !className) {
       return res.status(400).json({ error: 'Faculty and class name are required' });
     }
-    const year = academicYear || '2025-26';
+    const year = academicYear || '2026-27';
 
     await pool.query(
       `INSERT INTO class_teachers (faculty_id, class_name, academic_year)
@@ -726,6 +726,285 @@ router.delete('/teachers/unassign/:mappingId', async (req, res) => {
   } catch (err) {
     console.error('[HOD] Unassign teacher error:', err.message);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── GET /api/hod/term-rollover/status ────────────────────────────────────────
+router.get('/term-rollover/status', async (req, res) => {
+  try {
+    const selectedYear = req.query.academic_year || '2026-27';
+
+    // 1. Current student breakdown by semester and division
+    const studentBreakdownRes = await pool.query(
+      `SELECT current_semester, division, COUNT(*) AS student_count
+       FROM students
+       GROUP BY current_semester, division
+       ORDER BY current_semester, division`
+    );
+
+    // 2. Available subjects grouped by semester
+    const subjectsRes = await pool.query(
+      `SELECT id, name, code, semester, credits, subject_type, has_practical
+       FROM subjects
+       ORDER BY semester, code`
+    );
+
+    // 3. Faculty count
+    const facultyCountRes = await pool.query(
+      `SELECT COUNT(*) AS total_faculty FROM faculty WHERE department = $1`,
+      [req.user.dept || 'Computer Engineering']
+    );
+
+    // 4. Existing publication statuses for selected year
+    const publishRes = await pool.query(
+      `SELECT semester, division, status, published_at
+       FROM result_publish_status
+       WHERE academic_year = $1 AND department = $2
+       ORDER BY semester, division`,
+      [selectedYear, req.user.dept || 'Computer Engineering']
+    );
+
+    // 5. Existing marks counts by semester and academic year
+    const marksStatsRes = await pool.query(
+      `SELECT semester, academic_year, COUNT(*) AS total_marks
+       FROM student_exam_marks
+       GROUP BY semester, academic_year
+       ORDER BY academic_year DESC, semester ASC`
+    );
+
+    res.json({
+      academicYear: selectedYear,
+      availableYears: ['2026-27', '2025-26', '2024-25'],
+      studentBreakdown: studentBreakdownRes.rows,
+      subjects: subjectsRes.rows,
+      totalFaculty: parseInt(facultyCountRes.rows[0]?.total_faculty || 0, 10),
+      publishStatuses: publishRes.rows,
+      marksStats: marksStatsRes.rows
+    });
+  } catch (err) {
+    console.error('[HOD] Term rollover status error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch rollover status' });
+  }
+});
+
+// ─── POST /api/hod/term-rollover/preview ───────────────────────────────────────
+router.post('/term-rollover/preview', async (req, res) => {
+  try {
+    const { fromSemester, toSemester, academicYear, divisions } = req.body;
+    const fromSem = parseInt(fromSemester, 10);
+    const toSem = parseInt(toSemester, 10);
+    const ay = academicYear || '2026-27';
+    const divList = Array.isArray(divisions) && divisions.length > 0 ? divisions : ['TE 1', 'TE 2', 'TE 3'];
+
+    // 1. Count students eligible for promotion
+    const eligibleStudentsRes = await pool.query(
+      `SELECT s.id, s.roll_no, s.enrollment_no, s.division, u.name
+       FROM students s
+       JOIN users u ON u.id = s.user_id
+       WHERE s.current_semester = $1 AND s.division = ANY($2::text[])
+       ORDER BY s.division, s.roll_no`,
+      [fromSem, divList]
+    );
+
+    // 2. Fetch target semester subjects
+    const targetSubjectsRes = await pool.query(
+      `SELECT id, name, code, semester, credits, subject_type
+       FROM subjects
+       WHERE semester = $1
+       ORDER BY code`,
+      [toSem]
+    );
+
+    // 3. Check if target semester marks already exist
+    const existingTargetMarksRes = await pool.query(
+      `SELECT COUNT(*) AS count
+       FROM student_exam_marks
+       WHERE semester = $1 AND academic_year = $2`,
+      [toSem, ay]
+    );
+
+    // 4. Fetch faculty members available
+    const facultyRes = await pool.query(
+      `SELECT f.id, u.name, f.employee_id, f.designation
+       FROM faculty f
+       JOIN users u ON u.id = f.user_id
+       WHERE f.department = $1
+       ORDER BY f.id ASC`,
+      [req.user.dept || 'Computer Engineering']
+    );
+
+    res.json({
+      fromSemester: fromSem,
+      toSemester: toSem,
+      academicYear: ay,
+      divisions: divList,
+      eligibleStudentsCount: eligibleStudentsRes.rows.length,
+      sampleStudents: eligibleStudentsRes.rows.slice(0, 5),
+      targetSubjects: targetSubjectsRes.rows,
+      targetSubjectsCount: targetSubjectsRes.rows.length,
+      existingTargetMarksCount: parseInt(existingTargetMarksRes.rows[0]?.count || 0, 10),
+      availableFacultyCount: facultyRes.rows.length
+    });
+  } catch (err) {
+    console.error('[HOD] Term rollover preview error:', err.message);
+    res.status(500).json({ error: 'Failed to generate rollover preview' });
+  }
+});
+
+// ─── POST /api/hod/term-rollover/execute ───────────────────────────────────────
+router.post('/term-rollover/execute', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const {
+      fromSemester,
+      toSemester,
+      academicYear,
+      divisions,
+      advanceStudents = true,
+      autoAssignFaculty = true,
+      initPublishStatus = true
+    } = req.body;
+
+    const fromSem = parseInt(fromSemester, 10);
+    const toSem = parseInt(toSemester, 10);
+    const ay = academicYear || '2026-27';
+    const divList = Array.isArray(divisions) && divisions.length > 0 ? divisions : ['TE 1', 'TE 2', 'TE 3'];
+
+    if (!fromSem || !toSem || fromSem === toSem) {
+      return res.status(400).json({ error: 'Valid distinct source and target semesters are required.' });
+    }
+
+    await client.query('BEGIN');
+
+    let updatedStudentsCount = 0;
+    let facultyMappingsCount = 0;
+
+    // 1. Advance Students
+    if (advanceStudents) {
+      const updateRes = await client.query(
+        `UPDATE students
+         SET current_semester = $1
+         WHERE current_semester = $2 AND division = ANY($3::text[])
+         RETURNING id`,
+        [toSem, fromSem, divList]
+      );
+      updatedStudentsCount = updateRes.rows.length;
+    }
+
+    // 2. Auto-Assign Faculty to Target Semester Subjects
+    if (autoAssignFaculty) {
+      const targetSubjectsRes = await client.query(
+        `SELECT id, code, name FROM subjects WHERE semester = $1 ORDER BY code`,
+        [toSem]
+      );
+      const targetSubjects = targetSubjectsRes.rows;
+
+      const facultyRes = await client.query(
+        `SELECT id FROM faculty WHERE department = $1 ORDER BY id ASC`,
+        [req.user.dept || 'Computer Engineering']
+      );
+      const facultyList = facultyRes.rows;
+
+      if (facultyList.length > 0 && targetSubjects.length > 0) {
+        let fIdx = 0;
+        for (const div of divList) {
+          for (const sub of targetSubjects) {
+            const facId = facultyList[fIdx % facultyList.length].id;
+            await client.query(
+              `INSERT INTO faculty_subject_map (faculty_id, subject_id, semester, academic_year, division)
+               VALUES ($1, $2, $3, $4, $5)
+               ON CONFLICT (faculty_id, subject_id, semester, academic_year, division) DO NOTHING`,
+              [facId, sub.id, toSem, ay, div]
+            );
+            facultyMappingsCount++;
+            fIdx++;
+          }
+        }
+      }
+    }
+
+    // 3. Initialize fresh Publish Status in 'draft' mode
+    if (initPublishStatus) {
+      for (const div of divList) {
+        await client.query(
+          `INSERT INTO result_publish_status (semester, academic_year, department, division, status)
+           VALUES ($1, $2, $3, $4, 'draft')
+           ON CONFLICT (semester, academic_year, department, division)
+           DO UPDATE SET status = 'draft', published_at = NULL`,
+          [toSem, ay, req.user.dept || 'Computer Engineering', div]
+        );
+      }
+    }
+
+    // Audit Log
+    auditRecord({
+      tableName: 'academic_term_rollover',
+      recordId: toSem,
+      changedBy: req.user.id,
+      oldValue: { fromSemester: fromSem, academicYear: ay },
+      newValue: { toSemester: toSem, updatedStudentsCount, facultyMappingsCount, divisions: divList },
+      action: 'UPDATE',
+      reason: `HOD executed Academic Term Rollover from Semester ${fromSem} to Semester ${toSem} (${ay})`,
+    });
+
+    await client.query('COMMIT');
+
+    res.json({
+      success: true,
+      message: `Term Rollover successfully completed! Promoted ${updatedStudentsCount} students to Semester ${toSem}, initialized new evaluation sheets for ${divList.join(', ')}.`,
+      promotedStudents: updatedStudentsCount,
+      facultyMappings: facultyMappingsCount,
+      toSemester: toSem,
+      academicYear: ay
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[HOD] Term rollover execution error:', err.message);
+    res.status(500).json({ error: 'Term rollover failed: ' + err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// ─── POST /api/hod/term-rollover/switch-active-semester ────────────────────────
+// Quick utility for HOD to switch students between semesters (e.g. back to Sem 5 or forward to Sem 6)
+router.post('/term-rollover/switch-active-semester', async (req, res) => {
+  try {
+    const { targetSemester, divisions } = req.body;
+    const targetSem = parseInt(targetSemester, 10);
+    const divList = Array.isArray(divisions) && divisions.length > 0 ? divisions : ['TE 1', 'TE 2', 'TE 3'];
+
+    if (!targetSem || targetSem < 1 || targetSem > 8) {
+      return res.status(400).json({ error: 'Valid target semester (1-8) required.' });
+    }
+
+    const result = await pool.query(
+      `UPDATE students
+       SET current_semester = $1
+       WHERE division = ANY($2::text[])
+       RETURNING id`,
+      [targetSem, divList]
+    );
+
+    auditRecord({
+      tableName: 'students',
+      recordId: targetSem,
+      changedBy: req.user.id,
+      oldValue: null,
+      newValue: { targetSemester: targetSem, divisions: divList, count: result.rows.length },
+      action: 'UPDATE',
+      reason: `HOD switched active current_semester to ${targetSem} for divisions: ${divList.join(', ')}`,
+    });
+
+    res.json({
+      success: true,
+      message: `Active working semester switched to Semester ${targetSem} for ${result.rows.length} students across ${divList.join(', ')}.`,
+      updatedStudents: result.rows.length,
+      currentSemester: targetSem
+    });
+  } catch (err) {
+    console.error('[HOD] Switch active semester error:', err.message);
+    res.status(500).json({ error: 'Failed to switch active semester' });
   }
 });
 

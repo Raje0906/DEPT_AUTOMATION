@@ -265,7 +265,7 @@ export default function SeminarAssignment() {
                   <div>
                     <input
                       type="text"
-                      placeholder="Guide Name (e.g. Prof. J. K. Patil)"
+                      placeholder="Guide Name (e.g. Dr. (Mrs.) S. K. Wagh)"
                       value={customName}
                       onChange={e => setCustomName(e.target.value)}
                       className="w-full border border-[var(--rule)] rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--navy)]/30 bg-white"

@@ -1,15 +1,81 @@
 import { normalizeToppersData, groupToppersByClassAndDivision, formatClassLabel } from './toppersUtils.js';
 
 /**
- * Generates the complete 15-page magazine manifest from current magazine metadata and section data.
- * Single source of truth for both MagazinePreview and PDF generation.
+ * Generates the complete magazine pages manifest from magazine metadata and section data.
+ * Single source of truth for MagazinePreview, OnlineMagazineViewer, and PDF generation.
  */
 export function generateMagazinePages(currentMagazine, sectionData) {
   const data = sectionData || {};
+  const pages = [];
+  let pageCounter = 1;
+
+  // 1. Cover Page
+  pages.push({
+    id: pageCounter++,
+    template: 'cover',
+    title: 'Cover Page',
+    data: {
+      title: data.cover?.title || currentMagazine?.title || 'Reflection',
+      issueNumber: data.cover?.issueNumber || currentMagazine?.issueNumber || 33,
+      tagline: data.cover?.tagline || currentMagazine?.tagline || 'Connecting Ideas, Innovation and Impact',
+      period: data.cover?.period || currentMagazine?.period || 'June – December 2026',
+      academicYear: data.cover?.academicYear || currentMagazine?.academicYear || '2026–27',
+      department: data.cover?.department || currentMagazine?.department || 'Department of Computer Engineering',
+      collegeLogo: data.cover?.collegeLogo || '/images/college-logo.jpg',
+      coverImage: data.cover?.coverImage || currentMagazine?.coverImage || '/images/reflection-cover-issue33.jpg',
+      coverOverlay: data.cover?.overlay || { type: 'none', color: '#000000', opacity: 0 },
+    },
+  });
+
+  // 2. Head of Department's Message (Always prominent)
+  const hod = data.message?.hod;
+  if (hod?.message || hod?.name) {
+    pages.push({
+      id: pageCounter++,
+      template: 'article',
+      title: "HOD's Message",
+      data: {
+        section: "Head of Department's Message",
+        title: "From the Desk of the Head of Department",
+        author: hod?.name || "Dr. Neha Sharma",
+        designation: hod?.designation || "Head of Department, Department of Computer Engineering",
+        image: hod?.photo || '/images/hod-neha-sharma.jpg',
+        paragraphs: typeof hod?.message === 'string'
+          ? hod.message.split('\n\n').filter(Boolean)
+          : [
+              "It is with immense pride and joy that I present Issue 33 of 'Reflection', the flagship publication of the Department of Computer Engineering.",
+              "Our department continues to pioneer excellence in computing education, research, and industry-oriented innovation.",
+            ],
+      },
+    });
+  }
+
+  // 3. Principal's Message
+  const principal = data.message?.principal;
+  if (principal?.message || principal?.name) {
+    pages.push({
+      id: pageCounter++,
+      template: 'article',
+      title: "Principal's Message",
+      data: {
+        section: "Principal's Message",
+        title: "From the Desk of the Principal",
+        author: principal?.name || "Dr. S. V. Kulkarni",
+        designation: principal?.designation || "Principal, MES Wadia College of Engineering",
+        image: principal?.photo || '/images/college-emblem.jpg',
+        paragraphs: typeof principal?.message === 'string'
+          ? principal.message.split('\n\n').filter(Boolean)
+          : [
+              "I extend my warmest greetings to the faculty, staff, and students of the Department of Computer Engineering on the publication of Reflection.",
+              "This living record mirrors our shared pursuit of academic distinction and technological leadership.",
+            ],
+      },
+    });
+  }
+
+  // 4. Class Toppers (SE, TE, BE)
   const toppersData = normalizeToppersData(data.toppers);
   const allStudents = toppersData.students || [];
-
-  // Group by class and division, and sort by rank/CGPA
   const groupedByClassAndDiv = groupToppersByClassAndDivision(allStudents);
 
   function createClassTopperPageData(year) {
@@ -36,238 +102,297 @@ export function generateMagazinePages(currentMagazine, sectionData) {
     };
   }
 
-  const sePageData = createClassTopperPageData('SE');
-  const tePageData = createClassTopperPageData('TE');
-  const bePageData = createClassTopperPageData('BE');
+  const seData = createClassTopperPageData('SE');
+  const teData = createClassTopperPageData('TE');
+  const beData = createClassTopperPageData('BE');
 
-  // Extract uploaded photos helpers
-  const getPhotoUrl = (p) => (typeof p === 'string' ? p : p?.url || p?.photo || null);
+  pages.push({
+    id: pageCounter++,
+    template: 'toppers',
+    title: 'Class Toppers — SE',
+    data: seData,
+  });
 
-  const firstEvent = data.events?.[0];
-  const firstEventPhoto = getPhotoUrl(firstEvent?.photos?.[0]);
-  const allEventPhotos = (data.events || []).flatMap(e =>
-    (e.photos || []).map(p => ({
-      url: getPhotoUrl(p),
-      caption: (typeof p === 'object' && p?.caption) ? p.caption : (e.title || 'Event Photo')
-    }))
-  ).filter(p => !!p.url);
+  pages.push({
+    id: pageCounter++,
+    template: 'toppers',
+    title: 'Class Toppers — TE',
+    data: teData,
+  });
 
-  const firstWorkshop = data.workshops?.[0];
-  const firstWorkshopPhoto = getPhotoUrl(firstWorkshop?.photos?.[0]);
+  pages.push({
+    id: pageCounter++,
+    template: 'toppers',
+    title: 'Class Toppers — BE',
+    data: beData,
+  });
 
-  const firstLecture = data.lectures?.[0];
-  const firstLecturePhoto = getPhotoUrl(firstLecture?.photos?.[0]);
+  // 5. Department Events (Multi-page display + photo gallery)
+  const eventsList = data.events || [];
+  if (eventsList.length > 0) {
+    // Page 1: Events 0 and 1
+    const evChunk1 = eventsList.slice(0, 2);
+    pages.push({
+      id: pageCounter++,
+      template: 'events',
+      title: 'Department Events — Highlights',
+      data: {
+        title: 'Department Technical & Academic Events',
+        subtitle: 'Fostering Innovation, Collaboration & Student Leadership',
+        events: evChunk1,
+      },
+    });
 
-  const firstAchievementWithPhoto = (data.achievements || []).find(a => !!a.photo);
-  const firstCoePhoto = getPhotoUrl(data.coe?.photos?.[0]);
-  const firstStaffWithPhoto = (data.staffAchievements || []).flatMap(s => s.achievements || []).find(a => !!a.photo);
+    // Page 2: Events 2, 3, 4
+    if (eventsList.length > 2) {
+      const evChunk2 = eventsList.slice(2, 5);
+      pages.push({
+        id: pageCounter++,
+        template: 'events',
+        title: 'Department Events — Conclaves & Showcase',
+        data: {
+          title: 'Industry Connect & Annual Celebrations',
+          subtitle: 'Bridging Academia with Industry Leadership',
+          events: evChunk2,
+        },
+      });
+    }
 
-  return [
-    {
-      id: 1,
-      template: 'cover',
-      title: 'Cover Page',
+    // Page 3: Events Photo Gallery
+    const allPhotos = eventsList.flatMap(e =>
+      (e.photos || []).map(p => ({
+        url: typeof p === 'string' ? p : p?.url || '',
+        caption: (typeof p === 'object' && p?.caption) ? p.caption : (e.title || 'Event Photo'),
+      }))
+    ).filter(p => !!p.url);
+
+    if (allPhotos.length > 0) {
+      pages.push({
+        id: pageCounter++,
+        template: 'photoGrid',
+        title: 'Events & Campus Life Gallery',
+        data: {
+          title: 'Campus Life & Event Moments',
+          photos: allPhotos.slice(0, 6),
+        },
+      });
+    }
+  }
+
+  // 6. Student Workshops (Multi-page display)
+  const workshopsList = data.workshops || [];
+  if (workshopsList.length > 0) {
+    const wsChunk1 = workshopsList.slice(0, 2);
+    pages.push({
+      id: pageCounter++,
+      template: 'workshops',
+      title: 'Student Workshops — Advanced Computing',
       data: {
-        title: data.cover?.title || currentMagazine?.title || 'Reflection',
-        issueNumber: data.cover?.issueNumber || currentMagazine?.issueNumber || 32,
-        tagline: data.cover?.tagline || currentMagazine?.tagline || 'Knowledge grows when it is shared with others',
-        period: currentMagazine?.period || 'June – December 2025',
-        academicYear: data.cover?.academicYear || currentMagazine?.academicYear || '2025–26',
-        department: data.cover?.department || currentMagazine?.department || 'Computer Engineering',
-        collegeLogo: data.cover?.collegeLogo || null,
-        coverImage: data.cover?.coverImage || null,
-        coverOverlay: data.cover?.overlay || { type: 'none', color: '#000000', opacity: 0 },
+        title: 'Hands-on Technical Workshops',
+        subtitle: 'Skill Enhancement & Emerging Technology Bootcamps',
+        workshops: wsChunk1,
       },
-    },
-    {
-      id: 2,
-      template: 'article',
-      title: "Principal's Message",
+    });
+
+    if (workshopsList.length > 2) {
+      const wsChunk2 = workshopsList.slice(2, 4);
+      pages.push({
+        id: pageCounter++,
+        template: 'workshops',
+        title: 'Student Workshops — Systems & Security',
+        data: {
+          title: 'Software Systems & Cybersecurity Workshops',
+          subtitle: 'Industry-Grade Toolchains & Practical Labs',
+          workshops: wsChunk2,
+        },
+      });
+    }
+  }
+
+  // 7. Guest Lectures (Multi-page display)
+  const lecturesList = data.lectures || [];
+  if (lecturesList.length > 0) {
+    const lecChunk1 = lecturesList.slice(0, 2);
+    pages.push({
+      id: pageCounter++,
+      template: 'lectures',
+      title: 'Guest Lectures — Industry Insights',
       data: {
-        section: "Principal's Message",
-        title: "From the Desk of the Principal",
-        author: data.message?.principal?.name || "Dr. S. V. Kulkarni",
-        designation: data.message?.principal?.designation || "Principal, MES Wadia College of Engineering",
-        image: data.message?.principal?.photo || null,
-        paragraphs: data.message?.principal?.message
-          ? data.message.principal.message.split('\n\n').filter(Boolean)
-          : [
-              "It is with immense pride and joy that I present the 32nd edition of 'Reflection,' the annual magazine of the Department of Computer Engineering.",
-              "This magazine is a living document of our students' achievements, faculty excellence, and the departmental milestones that define our academic year.",
-              "I extend my heartfelt congratulations to all contributors and the editorial team for their tireless dedication."
-            ],
+        title: 'Distinguished Guest Lectures',
+        subtitle: 'Insights from Global Technology Leaders & Researchers',
+        lectures: lecChunk1,
       },
-    },
-    {
-      id: 3,
-      template: 'article',
-      title: "HOD's Message",
+    });
+
+    if (lecturesList.length > 2) {
+      const lecChunk2 = lecturesList.slice(2, 4);
+      pages.push({
+        id: pageCounter++,
+        template: 'lectures',
+        title: 'Guest Lectures — Scale & Entrepreneurship',
+        data: {
+          title: 'Architecture & Startup Keynotes',
+          subtitle: 'Transforming Academic Prototypes into Enterprise Products',
+          lectures: lecChunk2,
+        },
+      });
+    }
+  }
+
+  // 8. Student Achievements (Multi-page display)
+  const achievementsList = data.achievements || [];
+  if (achievementsList.length > 0) {
+    const achChunk1 = achievementsList.slice(0, 5);
+    pages.push({
+      id: pageCounter++,
+      template: 'achievements',
+      title: 'Student Achievements — National Triumphs',
       data: {
-        section: "Head of Department's Message",
-        title: "Message from the HOD",
-        author: data.message?.hod?.name || "Dr. A. B. Patil",
-        designation: data.message?.hod?.designation || "Head of Department, Computer Engineering",
-        image: data.message?.hod?.photo || null,
-        paragraphs: data.message?.hod?.message
-          ? data.message.hod.message.split('\n\n').filter(Boolean)
-          : [
-              "The Department of Computer Engineering continues to make significant strides in academic, research, and co-curricular domains.",
-              "This edition of Reflection captures the essence of our collective journey — from class toppers to national hackathon winners, from industry certifications to path-breaking research publications."
-            ],
+        title: 'Student Honors & Hackathon Victories',
+        subtitle: 'Recognizing Distinction at National & International Arenas',
+        achievements: achChunk1,
       },
-    },
-    {
-      id: 4,
-      template: 'toppers',
-      title: 'Class Toppers — SE',
-      data: sePageData,
-    },
-    {
-      id: 5,
-      template: 'toppers',
-      title: 'Class Toppers — TE',
-      data: tePageData,
-    },
-    {
-      id: 6,
-      template: 'toppers',
-      title: 'Class Toppers — BE',
-      data: bePageData,
-    },
-    {
-      id: 7,
-      template: 'article',
-      title: 'Department Events',
+    });
+
+    if (achievementsList.length > 5) {
+      const achChunk2 = achievementsList.slice(5, 10);
+      pages.push({
+        id: pageCounter++,
+        template: 'achievements',
+        title: 'Student Achievements — Research & Patents',
+        data: {
+          title: 'Patents, Certifications & Technical Laurels',
+          subtitle: 'Demonstrating Engineering Excellence & Research Rigor',
+          achievements: achChunk2,
+        },
+      });
+    }
+  }
+
+  // 9. Centre of Excellence (2 Feature Pages)
+  const coe = data.coe;
+  if (coe && (coe.name || coe.description)) {
+    // CoE Page 1: Vision, Mission & Infrastructure
+    pages.push({
+      id: pageCounter++,
+      template: 'coe',
+      title: 'Centre of Excellence — Overview',
       data: {
-        section: 'Department Events',
-        title: firstEvent?.title || 'National Science Day Celebration',
-        subtitle: firstEvent?.date ? `${firstEvent.date} · ${firstEvent.venue || ''}` : '',
-        image: firstEventPhoto || null,
-        paragraphs: firstEvent?.description
-          ? firstEvent.description.split('\n\n').filter(Boolean)
-          : [
-              "The Department of Computer Engineering celebrated National Science Day on 28 February 2026 with great enthusiasm.",
-              "The event featured technical presentations, a science quiz, and an inspiring poster exhibition showcasing student projects."
-            ],
+        part: 1,
+        coe,
       },
-    },
-    {
-      id: 8,
-      template: 'photoGrid',
-      title: 'Events Gallery',
+    });
+
+    // CoE Page 2: Activities, Student Projects & Gallery
+    pages.push({
+      id: pageCounter++,
+      template: 'coe',
+      title: 'Centre of Excellence — Activities & Innovation',
       data: {
-        title: 'Department Events & Activities — Photo Gallery',
-        photos: allEventPhotos.length > 0 ? allEventPhotos : [],
+        part: 2,
+        coe,
       },
-    },
-    {
-      id: 9,
-      template: 'article',
-      title: 'Student Workshops',
+    });
+  }
+
+  // 10. Staff Achievements (Multi-page display)
+  const staffList = data.staffAchievements || [];
+  if (staffList.length > 0) {
+    const staffChunk1 = staffList.slice(0, 4);
+    pages.push({
+      id: pageCounter++,
+      template: 'staff',
+      title: 'Faculty Achievements — Research & Patents',
       data: {
-        section: 'Student Workshops',
-        title: firstWorkshop?.title || 'Workshop on Ethical Hacking & Penetration Testing',
-        subtitle: firstWorkshop?.speaker ? `Conducted by ${firstWorkshop.speaker} · ${firstWorkshop.date || ''}` : '',
-        image: firstWorkshopPhoto || null,
-        paragraphs: firstWorkshop?.description
-          ? firstWorkshop.description.split('\n\n').filter(Boolean)
-          : [
-              "A two-day hands-on workshop was conducted by Mr. Vivek Ranade from CyberShield Technologies on 18–19 April 2026.",
-              "68 students from TE and BE participated in the workshop, gaining practical experience with tools like Metasploit, Burp Suite, and Wireshark."
-            ],
+        title: 'Faculty Excellence & Academic Distinction',
+        subtitle: 'Recognizing Patents, Doctoral Concurrences & Professional Honors',
+        staff: staffChunk1,
       },
-    },
-    {
-      id: 10,
-      template: 'article',
-      title: 'Guest Lectures',
-      data: {
-        section: 'Guest Lectures',
-        title: firstLecture?.topic || firstLecture?.title || 'Generative AI: Opportunities and Challenges',
-        subtitle: firstLecture?.speaker ? `Speaker: ${firstLecture.speaker} (${firstLecture.organization || ''})` : '',
-        image: firstLecturePhoto || null,
-        paragraphs: firstLecture?.description
-          ? firstLecture.description.split('\n\n').filter(Boolean)
-          : [
-              "Dr. Prashant Borkar, Principal Research Scientist at Microsoft Research India, delivered a keynote lecture on 5 March 2026.",
-              "The lecture covered the transformative impact of LLMs, multimodal AI systems, and emerging career pathways for engineering graduates."
-            ],
-      },
-    },
-    {
-      id: 11,
-      template: 'article',
-      title: 'Student Achievements',
-      data: {
-        section: 'Student Achievements',
-        title: firstAchievementWithPhoto
-          ? `${firstAchievementWithPhoto.name} (${firstAchievementWithPhoto.class}) — ${firstAchievementWithPhoto.achievement}`
-          : 'National & International Achievements 2025–26',
-        subtitle: firstAchievementWithPhoto ? `${firstAchievementWithPhoto.position} · ${firstAchievementWithPhoto.level}` : '',
-        image: firstAchievementWithPhoto?.photo || null,
-        paragraphs: firstAchievementWithPhoto?.description
-          ? firstAchievementWithPhoto.description.split('\n\n').filter(Boolean)
-          : [
-              "Our students have excelled at competitions across national and international platforms this academic year.",
-              "Ketan Patil (BE II) and his team secured Runner-up at the GitLab CodeForge Hackathon, winning ₹70,000 prize."
-            ],
-      },
-    },
-    {
-      id: 12,
-      template: 'article',
-      title: 'Centre of Excellence',
-      data: {
-        section: 'Centre of Excellence',
-        title: data.coe?.name || 'Centre of Excellence in AI & Cloud Computing',
-        subtitle: data.coe?.partner ? `In partnership with ${data.coe.partner}` : '',
-        image: firstCoePhoto || null,
-        paragraphs: data.coe?.description
-          ? [data.coe.description, data.coe.activities, data.coe.achievements].filter(Boolean)
-          : [
-              "Established in partnership with IBM India Pvt. Ltd. in 2022, the CoE continues to deliver industry-relevant training.",
-              "This year, 42 students received IBM Cloud Practitioner certification and 3 research papers were co-authored with IBM researchers."
-            ],
-      },
-    },
-    {
-      id: 13,
-      template: 'article',
-      title: 'Staff Achievements',
-      data: {
-        section: 'Staff Achievements',
-        title: firstStaffWithPhoto ? `${firstStaffWithPhoto.title}` : 'Faculty Research & Recognition',
-        subtitle: firstStaffWithPhoto ? `${firstStaffWithPhoto.organization || ''} · ${firstStaffWithPhoto.date || ''}` : '',
-        image: firstStaffWithPhoto?.photo || null,
-        paragraphs: firstStaffWithPhoto?.description
-          ? [firstStaffWithPhoto.description]
-          : [
-              "Dr. N. F. Shaikh published a research paper in IEEE Access (Impact Factor 3.9) on federated learning in IoT networks.",
-              "Prof. R. K. Joshi received an Indian Patent for an AI-based smart irrigation system."
-            ],
-      },
-    },
-    {
-      id: 14,
+    });
+
+    if (staffList.length > 4) {
+      const staffChunk2 = staffList.slice(4, 8);
+      pages.push({
+        id: pageCounter++,
+        template: 'staff',
+        title: 'Faculty Achievements — Grants & Keynotes',
+        data: {
+          title: 'Research Grants, Textbooks & Keynotes',
+          subtitle: 'Advancing Frontiers of Computer Science & Engineering',
+          staff: staffChunk2,
+        },
+      });
+    }
+  }
+
+  // 11. FDP / STTP (2 Table Pages for clean, unclipped A4 rendering)
+  const fdpList = data.fdpSttp || [];
+  if (fdpList.length > 0) {
+    const mapRow = (r, idx) => [
+      idx + 1,
+      r.facultyName || '—',
+      r.activity || '—',
+      r.organization || '—',
+      r.duration ? `${r.duration} (${r.startDate} to ${r.endDate})` : `${r.startDate} to ${r.endDate}`,
+      r.mode || 'Online',
+    ];
+
+    const fdpRows1 = fdpList.slice(0, 5).map((r, i) => mapRow(r, i));
+    pages.push({
+      id: pageCounter++,
       template: 'table',
-      title: 'FDP / STTP Table',
+      title: 'FDP / STTP Records — Part I',
       data: {
-        title: 'Faculty Development Programmes & STTPs',
-        columns: ['Sr.', 'Faculty Name', 'Activity', 'Organization', 'Period', 'Mode'],
+        title: 'Faculty Development Programmes & STTPs (Part I)',
+        columns: ['Sr.', 'Faculty Name', 'Programme Title', 'Organizing Body', 'Period / Duration', 'Mode'],
+        rows: fdpRows1,
       },
-    },
-    {
-      id: 15,
-      template: 'article',
-      title: 'Publications',
+    });
+
+    if (fdpList.length > 5) {
+      const fdpRows2 = fdpList.slice(5, 10).map((r, i) => mapRow(r, i + 5));
+      pages.push({
+        id: pageCounter++,
+        template: 'table',
+        title: 'FDP / STTP Records — Part II',
+        data: {
+          title: 'Faculty Development Programmes & STTPs (Part II)',
+          columns: ['Sr.', 'Faculty Name', 'Programme Title', 'Organizing Body', 'Period / Duration', 'Mode'],
+          rows: fdpRows2,
+        },
+      });
+    }
+  }
+
+  // 12. Publications (2 Pages with rich citation cards and DOI links)
+  const pubList = data.publications || [];
+  if (pubList.length > 0) {
+    const pubChunk1 = pubList.slice(0, 5);
+    pages.push({
+      id: pageCounter++,
+      template: 'publications',
+      title: 'Publications — Peer-Reviewed Journals',
       data: {
-        section: 'Publications',
-        title: 'Research Publications 2025–26',
-        paragraphs: [
-          "The department faculty published 12 research papers in peer-reviewed journals and conferences this academic year.",
-          "Publications appeared in IEEE Access, Elsevier journals, and international conferences including ICML and CVPR."
-        ],
+        title: 'Peer-Reviewed Journal Publications',
+        subtitle: 'High-Impact Scopus and Web of Science Indexed Research',
+        publications: pubChunk1,
       },
-    },
-  ];
+    });
+
+    if (pubList.length > 5) {
+      const pubChunk2 = pubList.slice(5, 10);
+      pages.push({
+        id: pageCounter++,
+        template: 'publications',
+        title: 'Publications — Conferences & Books',
+        data: {
+          title: 'International Conferences & Book Chapters',
+          subtitle: 'Peer-Reviewed Conference Proceedings & Technical Monographs',
+          publications: pubChunk2,
+        },
+      });
+    }
+  }
+
+  return pages;
 }

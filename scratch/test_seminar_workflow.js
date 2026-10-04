@@ -6,10 +6,10 @@ async function testWorkflow() {
   console.log('--- STARTING COMPREHENSIVE SEMINAR WORKFLOW VERIFICATION ---');
 
   // 1. Fetch Users
-  const hodRes = await pool.query("SELECT u.id, u.email, u.role FROM users u WHERE u.email = 'hod@meswadiacoe.edu'");
-  const coordRes = await pool.query("SELECT u.id, u.email, u.role, f.id as faculty_id, f.is_seminar_coordinator FROM users u JOIN faculty f ON f.user_id = u.id WHERE u.email = 'sunita@meswadiacoe.edu'");
-  const guideRes = await pool.query("SELECT u.id, u.email, u.role, f.id as faculty_id FROM users u JOIN faculty f ON f.user_id = u.id WHERE u.email = 'rajan@meswadiacoe.edu'");
-  const studentRes = await pool.query("SELECT u.id, u.email, u.role, s.id as student_id, s.enrollment_no FROM users u JOIN students s ON s.user_id = u.id WHERE u.email = 'ce6a001@meswadiacoe.edu'");
+  const hodRes = await pool.query("SELECT u.id, u.email, u.role FROM users u WHERE u.role = 'hod' LIMIT 1");
+  const coordRes = await pool.query("SELECT u.id, u.email, u.role, f.id as faculty_id, f.is_seminar_coordinator FROM users u JOIN faculty f ON f.user_id = u.id WHERE f.is_seminar_coordinator = true LIMIT 1");
+  const guideRes = await pool.query("SELECT u.id, u.email, u.role, f.id as faculty_id FROM users u JOIN faculty f ON f.user_id = u.id WHERE u.role = 'faculty' LIMIT 1");
+  const studentRes = await pool.query("SELECT u.id, u.email, u.role, s.id as student_id, s.enrollment_no FROM users u JOIN students s ON s.user_id = u.id LIMIT 1");
 
   console.log(`✓ HOD: ${hodRes.rows[0].email} (ID: ${hodRes.rows[0].id})`);
   console.log(`✓ Coordinator: ${coordRes.rows[0].email} (Faculty ID: ${coordRes.rows[0].faculty_id}, is_coord: ${coordRes.rows[0].is_seminar_coordinator})`);

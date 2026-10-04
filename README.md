@@ -47,10 +47,10 @@ http://localhost:5173
 
 | Role    | Login                      | Password     |
 |---------|----------------------------|--------------|
-| HOD     | hod@meswadiacoe.edu        | hod@123      |
-| Faculty | rajan@meswadiacoe.edu      | faculty@123  |
-| Faculty | sunita@meswadiacoe.edu     | faculty@123  |
-| Faculty | arjun@meswadiacoe.edu      | faculty@123  |
+| HOD     | nfs@meswadiacoe.edu        | hod@123      |
+| Faculty | skw@meswadiacoe.edu        | faculty@123  |
+| Faculty | jrp@meswadiacoe.edu        | faculty@123  |
+| Faculty | rmw@meswadiacoe.edu        | faculty@123  |
 | Student | ce6a001@meswadiacoe.edu    | student@123  |
 | Student | ce6a002@meswadiacoe.edu    | student@123  |
 | Student | (ce6a001 – ce6a020)        | student@123  |

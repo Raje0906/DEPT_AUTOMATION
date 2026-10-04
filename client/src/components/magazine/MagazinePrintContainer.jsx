@@ -30,6 +30,7 @@ export default function MagazinePrintContainer({ pages, currentMagazine, contain
           pageNumber={index + 1}
           totalPages={pages.length}
           currentMagazine={currentMagazine}
+          templateId={currentMagazine?.template}
         />
       ))}
     </div>

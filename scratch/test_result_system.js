@@ -64,10 +64,10 @@ async function runTests() {
   // Test 3: Faculty RBAC Enforcement
   console.log('\n[Test 3] Verifying Server-Side Faculty RBAC:');
   const facultyRes = await pool.query(
-    `SELECT f.id, u.name, f.user_id FROM faculty f JOIN users u ON u.id = f.user_id WHERE u.email = 'rajan@meswadiacoe.edu'`
+    `SELECT f.id, u.name, f.user_id FROM faculty f JOIN users u ON u.id = f.user_id ORDER BY f.id ASC LIMIT 1`
   );
-  const facultyRajan = facultyRes.rows[0];
-  console.log(`  ✓ Faculty: ${facultyRajan.name} (ID: ${facultyRajan.id})`);
+  const facultyTest = facultyRes.rows[0];
+  console.log(`  ✓ Faculty: ${facultyTest.name} (ID: ${facultyTest.id})`);
 
   // Check assigned subjects
   const assigned = await pool.query(
@@ -75,27 +75,27 @@ async function runTests() {
      FROM faculty_subject_map fsm
      JOIN subjects s ON s.id = fsm.subject_id
      WHERE fsm.faculty_id = $1 AND fsm.semester = 5 AND fsm.division = 'TE 1'`,
-    [facultyRajan.id]
+    [facultyTest.id]
   );
-  console.log(`  ✓ Assigned subjects for Prof. Rajan Mehta in TE 1:`, assigned.rows.map(r => r.code));
+  console.log(`  ✓ Assigned subjects for ${facultyTest.name} in TE 1:`, assigned.rows.map(r => r.code));
   const assignedSubjectId = assigned.rows[0]?.subject_id;
 
   // Verify positive RBAC
   const validCheck = await pool.query(
     `SELECT id FROM faculty_subject_map WHERE faculty_id = $1 AND subject_id = $2 AND division = 'TE 1' AND semester = 5`,
-    [facultyRajan.id, assignedSubjectId]
+    [facultyTest.id, assignedSubjectId]
   );
   console.log(`  ✓ Authorization check for assigned subject: ${validCheck.rows.length > 0 ? 'ALLOWED (200)' : 'DENIED'}`);
 
   // Verify negative RBAC
   const unassignedSub = await pool.query(
     `SELECT s.id, s.code FROM subjects s WHERE s.id NOT IN (SELECT subject_id FROM faculty_subject_map WHERE faculty_id = $1) LIMIT 1`,
-    [facultyRajan.id]
+    [facultyTest.id]
   );
   if (unassignedSub.rows.length > 0) {
     const invalidCheck = await pool.query(
       `SELECT id FROM faculty_subject_map WHERE faculty_id = $1 AND subject_id = $2 AND division = 'TE 1' AND semester = 5`,
-      [facultyRajan.id, unassignedSub.rows[0].id]
+      [facultyTest.id, unassignedSub.rows[0].id]
     );
     console.log(`  ✓ Authorization check for unassigned subject (${unassignedSub.rows[0].code}): ${invalidCheck.rows.length === 0 ? 'PROPERLY REJECTED (403 Forbidden)' : 'FAILED'}`);
   }
