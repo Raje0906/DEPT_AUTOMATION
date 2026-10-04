@@ -163,6 +163,9 @@ router.post('/assign', verifyToken, requireRole('hod'), async (req, res) => {
     if (roleType === 'TE_SEMINAR_COORDINATOR') {
       await client.query('UPDATE faculty SET is_seminar_coordinator = FALSE');
       await client.query('UPDATE faculty SET is_seminar_coordinator = TRUE WHERE id = $1', [facultyId]);
+    } else if (roleType === 'BE_PROJECT_COORDINATOR') {
+      await client.query('UPDATE faculty SET is_project_coordinator = FALSE');
+      await client.query('UPDATE faculty SET is_project_coordinator = TRUE WHERE id = $1', [facultyId]);
     }
 
     await client.query('COMMIT');
@@ -225,6 +228,13 @@ router.post('/remove', verifyToken, requireRole('hod'), async (req, res) => {
         await client.query('UPDATE faculty SET is_seminar_coordinator = FALSE WHERE id = $1', [facultyId]);
       } else if (target?.faculty_id) {
         await client.query('UPDATE faculty SET is_seminar_coordinator = FALSE WHERE id = $1', [target.faculty_id]);
+      }
+    }
+    if (roleType === 'BE_PROJECT_COORDINATOR' || target?.role_type === 'BE_PROJECT_COORDINATOR') {
+      if (facultyId) {
+        await client.query('UPDATE faculty SET is_project_coordinator = FALSE WHERE id = $1', [facultyId]);
+      } else if (target?.faculty_id) {
+        await client.query('UPDATE faculty SET is_project_coordinator = FALSE WHERE id = $1', [target.faculty_id]);
       }
     }
 

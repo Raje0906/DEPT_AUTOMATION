@@ -205,6 +205,17 @@ async function runMigrations() {
     await client.query(`ALTER TABLE project_group_members ADD COLUMN IF NOT EXISTS division VARCHAR(30)`);
     await client.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS class_year VARCHAR(10) DEFAULT 'TE'`);
 
+    // BE Project Coordinator Governance & HOD Confirmation fields
+    await client.query(`ALTER TABLE faculty ADD COLUMN IF NOT EXISTS is_project_coordinator BOOLEAN DEFAULT FALSE`);
+    await client.query(`ALTER TABLE project_groups ADD COLUMN IF NOT EXISTS proposed_guide_id INTEGER REFERENCES faculty(id) ON DELETE SET NULL`);
+    await client.query(`ALTER TABLE project_groups ADD COLUMN IF NOT EXISTS guide_approval_status VARCHAR(30) DEFAULT 'NONE'`);
+    await client.query(`ALTER TABLE project_groups ADD COLUMN IF NOT EXISTS guide_requested_by INTEGER REFERENCES users(id)`);
+    await client.query(`ALTER TABLE project_groups ADD COLUMN IF NOT EXISTS guide_decided_at TIMESTAMPTZ`);
+    await client.query(`ALTER TABLE project_score_releases ADD COLUMN IF NOT EXISTS status VARCHAR(30) DEFAULT 'APPROVED'`);
+    await client.query(`ALTER TABLE project_score_releases ADD COLUMN IF NOT EXISTS requested_by INTEGER REFERENCES users(id)`);
+    await client.query(`ALTER TABLE project_score_releases ADD COLUMN IF NOT EXISTS approved_by INTEGER REFERENCES users(id)`);
+    await client.query(`ALTER TABLE project_score_releases ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ`);
+
     // ─── PROJECT GUIDE REQUESTS ───────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS project_guide_requests (
@@ -581,6 +592,12 @@ async function runMigrations() {
         has_result_impact = EXCLUDED.has_result_impact,
         default_max_marks = EXCLUDED.default_max_marks,
         display_order = EXCLUDED.display_order;
+
+      -- BE Project Individual Student Scoring Migration
+      ALTER TABLE project_evaluation_scores ADD COLUMN IF NOT EXISTS member_id INTEGER REFERENCES project_group_members(id) ON DELETE CASCADE;
+      ALTER TABLE project_evaluation_scores ADD COLUMN IF NOT EXISTS student_id INTEGER REFERENCES students(id) ON DELETE CASCADE;
+      ALTER TABLE project_evaluation_scores DROP CONSTRAINT IF EXISTS project_evaluation_scores_evaluation_id_criterion_id_key;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_proj_eval_score_member ON project_evaluation_scores(evaluation_id, criterion_id, member_id);
     `);
 
     await client.query('COMMIT');

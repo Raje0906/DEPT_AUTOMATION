@@ -1,10 +1,16 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function HODProjectMgmt() {
+  const { user } = useAuth();
+  const isHOD = user?.role === 'hod';
+  const isCoordinator = user?.role === 'faculty' && user?.is_project_coordinator;
+
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'groups' | 'stages' | 'panels' | 'governance' | 'reports'
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'approvals' | 'groups' | 'stages' | 'panels' | 'governance' | 'reports'
   const [academicYear, setAcademicYear] = useState('2026-27');
 
   // Backend state
@@ -13,6 +19,7 @@ export default function HODProjectMgmt() {
   const [stages, setStages] = useState([]);
   const [availableGuides, setAvailableGuides] = useState([]);
   const [reportData, setReportData] = useState(null);
+  const [pendingApprovals, setPendingApprovals] = useState(null);
 
   // Panel Matrix & Auto-Assign state
   const [panelMatrix, setPanelMatrix] = useState([]);
@@ -70,18 +77,20 @@ export default function HODProjectMgmt() {
   const fetchHODData = async () => {
     setLoading(true);
     try {
-      const [dashRes, groupsRes, stagesRes, guidesRes, repRes] = await Promise.all([
+      const [dashRes, groupsRes, stagesRes, guidesRes, repRes, pendingRes] = await Promise.all([
         api.get(`/projects/hod/dashboard?academic_year=${academicYear}`),
         api.get(`/projects/hod/groups?academic_year=${academicYear}`),
         api.get(`/projects/hod/stages?academic_year=${academicYear}`),
         api.get('/projects/student/available-guides'),
         api.get(`/projects/hod/reports/export?academic_year=${academicYear}`),
+        api.get(`/projects/hod/pending-approvals?academic_year=${academicYear}`).catch(() => ({ data: { pendingGuides: [], pendingScoreReleases: [], totalPending: 0 } })),
       ]);
       setDashboardData(dashRes.data);
       setGroups(groupsRes.data);
       setStages(stagesRes.data);
       setAvailableGuides(guidesRes.data);
       setReportData(repRes.data);
+      setPendingApprovals(pendingRes.data);
 
       const defaultStage = stagesRes.data?.[0]?.id;
       if (defaultStage) {
@@ -90,9 +99,29 @@ export default function HODProjectMgmt() {
         fetchPanelMatrix(defaultStage);
       }
     } catch (err) {
-      toast.error('Failed to load HOD project data');
+      toast.error('Failed to load project management data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleConfirmGuide = async (groupId, action) => {
+    try {
+      const res = await api.post(`/projects/groups/${groupId}/confirm-guide`, { action });
+      toast.success(res.data.message);
+      fetchHODData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to process guide confirmation');
+    }
+  };
+
+  const handleConfirmScoreRelease = async (releaseId, action) => {
+    try {
+      const res = await api.post('/projects/confirm-score-release', { release_id: releaseId, action });
+      toast.success(res.data.message);
+      fetchHODData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to process score release confirmation');
     }
   };
 
@@ -275,6 +304,44 @@ export default function HODProjectMgmt() {
     }
   };
 
+  const handleExportFormResponses = async () => {
+    try {
+      const res = await api.get(`/projects/export/form-responses?academic_year=${academicYear}`, {
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `BE Project Topic Preferences form (AY ${academicYear}) (Responses).xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success('Form responses Excel downloaded successfully!');
+    } catch (err) {
+      toast.error('Failed to export form responses Excel');
+    }
+  };
+
+  const handleExportGuideAssignments = async () => {
+    try {
+      const res = await api.get(`/projects/export/guide-assignments?academic_year=${academicYear}`, {
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `BE Project Guide Assignments (AY ${academicYear}).xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success('Guide assignments Excel downloaded successfully!');
+    } catch (err) {
+      toast.error('Failed to export guide assignments Excel');
+    }
+  };
+
+
+
   if (loading) {
     return (
       <div className="p-8 max-w-7xl mx-auto flex items-center justify-center min-h-[400px]">
@@ -307,9 +374,6 @@ export default function HODProjectMgmt() {
       <div className="pb-5 border-b border-rule flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="font-serif text-3xl font-bold text-ink">BE Project Governance Center</h1>
-          <p className="text-base text-draft mt-1 font-medium">
-            Department-wide Project Lifecycle Management, Panel Assignments, &amp; Score Governance
-          </p>
         </div>
         <div className="flex items-center gap-3">
           <label className="text-xs font-semibold text-draft">Academic Year:</label>
@@ -325,6 +389,27 @@ export default function HODProjectMgmt() {
         </div>
       </div>
 
+      {/* Role Banner */}
+      {isHOD && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-semibold shadow-xs">
+          <div className="flex items-center gap-2">
+            <span className="text-base">🏛️</span>
+            <span>
+              Logged in as <strong>Head of Department (HOD)</strong>. The system is managed by the BE Project Coordinator.
+              Final guide assignments &amp; score release decisions require your confirmation below.
+            </span>
+          </div>
+          {pendingApprovals?.totalPending > 0 && (
+            <button
+              onClick={() => setActiveTab('approvals')}
+              className="px-3 py-1.5 bg-amber-700 hover:bg-amber-800 text-white rounded text-xs font-bold transition-colors shadow-xs whitespace-nowrap"
+            >
+              Review {pendingApprovals.totalPending} Pending Approvals →
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex gap-2 border-b border-rule pb-2 overflow-x-auto">
         <button
@@ -334,6 +419,19 @@ export default function HODProjectMgmt() {
           }`}
         >
           📊 Governance Overview
+        </button>
+        <button
+          onClick={() => setActiveTab('approvals')}
+          className={`px-4 py-2 text-xs font-semibold rounded flex items-center gap-1.5 ${
+            activeTab === 'approvals' ? 'bg-navy text-white' : 'bg-paper text-draft hover:text-ink'
+          }`}
+        >
+          <span>⚖️ HOD Approvals</span>
+          {pendingApprovals?.totalPending > 0 && (
+            <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-red-600 text-white animate-pulse">
+              {pendingApprovals.totalPending}
+            </span>
+          )}
         </button>
         <button
           onClick={() => setActiveTab('groups')}
@@ -388,15 +486,15 @@ export default function HODProjectMgmt() {
               </p>
             </div>
             <div className="panel p-5">
-              <span className="text-xs font-mono font-bold text-draft uppercase">Guide Assigned Groups</span>
+              <span className="text-xs font-mono font-bold text-draft uppercase">Confirmed Guide Groups</span>
               <p className="font-serif text-3xl font-bold text-emerald-700 mt-1">
                 {dashboardData.stats?.guide_assigned_groups ?? (dashboardData.group_status_breakdown?.find((b) => b.status === 'ACTIVE')?.count || 0)}
               </p>
             </div>
             <div className="panel p-5">
-              <span className="text-xs font-mono font-bold text-draft uppercase">Pending Guide Assignment</span>
+              <span className="text-xs font-mono font-bold text-draft uppercase">Pending HOD Approvals</span>
               <p className="font-serif text-3xl font-bold text-amber-700 mt-1">
-                {dashboardData.stats?.pending_guide_groups ?? groups.filter((g) => !g.guide_id).length}
+                {pendingApprovals?.totalPending ?? 0}
               </p>
             </div>
             <div className="panel p-5">
@@ -450,6 +548,152 @@ export default function HODProjectMgmt() {
         </div>
       )}
 
+      {/* TAB: HOD APPROVALS */}
+      {activeTab === 'approvals' && (
+        <div className="space-y-6">
+
+          {/* Section 1: Pending Guide Assignments */}
+          <div className="panel">
+            <div className="panel-header flex items-center justify-between">
+              <div>
+                <h3 className="font-serif text-lg font-bold text-ink">Pending Guide Assignment Confirmations</h3>
+                <span className="text-xs text-draft font-mono font-medium">Total Pending: {pendingApprovals?.pendingGuides?.length || 0}</span>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="result-table">
+                <thead>
+                  <tr>
+                    <th>Group Code</th>
+                    <th>Project Title &amp; Domain</th>
+                    <th>Proposed Guide</th>
+                    <th>Requested By</th>
+                    <th className="text-right">HOD Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {!pendingApprovals?.pendingGuides || pendingApprovals.pendingGuides.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="text-center py-6 text-xs text-draft italic">
+                        No pending guide assignments requiring HOD confirmation.
+                      </td>
+                    </tr>
+                  ) : (
+                    pendingApprovals.pendingGuides.map((g) => (
+                      <tr key={g.id}>
+                        <td className="font-mono text-sm font-bold text-navy">{g.group_code}</td>
+                        <td className="max-w-xs">
+                          <div className="font-semibold text-ink text-sm">{g.title}</div>
+                          <div className="text-xs text-draft">{g.domain}</div>
+                        </td>
+                        <td>
+                          {g.proposed_guide_name ? (
+                            <div>
+                              <div className="font-bold text-emerald-800 text-xs">{g.proposed_guide_name}</div>
+                              <div className="text-[10px] text-draft">{g.proposed_guide_designation}</div>
+                            </div>
+                          ) : (
+                            <span className="text-xs font-semibold text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded">
+                              Unassign Guide Request
+                            </span>
+                          )}
+                        </td>
+                        <td className="text-xs text-draft">{g.requested_by_name || 'BE Project Coordinator'}</td>
+                        <td className="text-right">
+                          {isHOD ? (
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => handleConfirmGuide(g.id, 'APPROVE')}
+                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold shadow-xs"
+                              >
+                                ✓ Confirm &amp; Activate
+                              </button>
+                              <button
+                                onClick={() => handleConfirmGuide(g.id, 'REJECT')}
+                                className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold shadow-xs"
+                              >
+                                ✕ Reject
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+                              Awaiting HOD Action
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Section 2: Pending Score Releases */}
+          <div className="panel">
+            <div className="panel-header flex items-center justify-between">
+              <div>
+                <h3 className="font-serif text-lg font-bold text-ink">Pending Score Release Requests</h3>
+                <span className="text-xs text-draft font-mono font-medium">Total Pending: {pendingApprovals?.pendingScoreReleases?.length || 0}</span>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="result-table">
+                <thead>
+                  <tr>
+                    <th>Stage Name</th>
+                    <th>Group Scope</th>
+                    <th>Requested By</th>
+                    <th>Requested Date</th>
+                    <th className="text-right">HOD Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {!pendingApprovals?.pendingScoreReleases || pendingApprovals.pendingScoreReleases.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="text-center py-6 text-xs text-draft italic">
+                        No pending score release requests requiring HOD confirmation.
+                      </td>
+                    </tr>
+                  ) : (
+                    pendingApprovals.pendingScoreReleases.map((sr) => (
+                      <tr key={sr.release_id}>
+                        <td className="font-bold text-sm text-ink">{sr.stage_name}</td>
+                        <td className="font-mono text-xs font-bold text-navy">{sr.group_code || 'All Stage Groups (Stage-Wide)'}</td>
+                        <td className="text-xs text-draft">{sr.requested_by_name || 'BE Project Coordinator'}</td>
+                        <td className="text-xs text-draft">{new Date(sr.requested_at).toLocaleString()}</td>
+                        <td className="text-right">
+                          {isHOD ? (
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => handleConfirmScoreRelease(sr.release_id, 'APPROVE')}
+                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold shadow-xs"
+                              >
+                                ✓ Confirm &amp; Release
+                              </button>
+                              <button
+                                onClick={() => handleConfirmScoreRelease(sr.release_id, 'REJECT')}
+                                className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold shadow-xs"
+                              >
+                                ✕ Reject
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+                              Awaiting HOD Action
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* TAB 2: GROUPS & GUIDES */}
       {activeTab === 'groups' && (
         <div className="panel">
@@ -458,13 +702,29 @@ export default function HODProjectMgmt() {
               <h2 className="font-serif text-xl font-semibold">Department BE Project Groups</h2>
               <span className="text-xs text-draft font-mono font-medium">Total: {groups.length} groups</span>
             </div>
-            <button
-              type="button"
-              onClick={handleClearAllGuides}
-              className="px-3 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors"
-            >
-              <span>🗑️</span> Reset / Unassign All Guides
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleExportFormResponses}
+                className="px-3.5 py-1.5 bg-indigo-700 hover:bg-indigo-800 text-white rounded text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
+              >
+                <span>📥</span> Form Responses (Excel)
+              </button>
+              <button
+                type="button"
+                onClick={handleExportGuideAssignments}
+                className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
+              >
+                <span>📥</span> Guide Assignments (Excel)
+              </button>
+              <button
+                type="button"
+                onClick={handleClearAllGuides}
+                className="px-3 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors"
+              >
+                <span>🗑️</span> Reset / Unassign All Guides
+              </button>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="result-table">
@@ -493,10 +753,22 @@ export default function HODProjectMgmt() {
                       </div>
                     </td>
                     <td>
-                      {g.guide_name ? (
+                      {g.guide_approval_status === 'PENDING_HOD_APPROVAL' ? (
+                        <div>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                            Proposed: {g.proposed_guide_name || 'Clear Guide'} (Pending HOD Confirmation)
+                          </span>
+                          {g.guide_name && (
+                            <div className="text-[10px] text-draft mt-0.5">Current Active: {g.guide_name}</div>
+                          )}
+                        </div>
+                      ) : g.guide_name ? (
                         <div>
                           <div className="font-bold text-emerald-800 text-xs">{g.guide_name}</div>
                           <div className="text-[10px] text-draft">{g.guide_designation}</div>
+                          <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            Confirmed by HOD
+                          </span>
                         </div>
                       ) : (
                         <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
@@ -513,7 +785,7 @@ export default function HODProjectMgmt() {
                       <button
                         onClick={() => {
                           setGuideModalGroup(g);
-                          setSelectedGuideId(g.guide_faculty_id ? String(g.guide_faculty_id) : '');
+                          setSelectedGuideId(g.proposed_guide_faculty_id || g.guide_faculty_id ? String(g.proposed_guide_faculty_id || g.guide_faculty_id) : '');
                         }}
                         className="btn-secondary py-1 px-3 text-xs"
                       >
@@ -531,8 +803,13 @@ export default function HODProjectMgmt() {
       {/* TAB 3: STAGES */}
       {activeTab === 'stages' && (
         <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h2 className="font-serif text-xl font-bold text-ink">Continuous Assessment Evaluation Stages</h2>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-rule pb-4">
+            <div>
+              <h2 className="font-serif text-xl font-bold text-ink">Continuous Assessment Evaluation Stages</h2>
+              <p className="text-xs text-draft mt-0.5">
+                Fully controlled &amp; configured by BE Project Coordinator — Create, order, and edit rubrics &amp; criteria.
+              </p>
+            </div>
             <button
               onClick={() => {
                 setStageModal('new');
@@ -632,12 +909,9 @@ export default function HODProjectMgmt() {
           <div className="bg-white border border-rule rounded p-6 shadow-xs space-y-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-rule pb-4">
               <div>
-                <span className="text-[10px] font-mono font-bold text-navy uppercase tracking-wider bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded">
-                  High-Performance Panel Center (60+ Groups)
-                </span>
                 <h2 className="font-serif text-2xl font-bold text-ink mt-1">Batch Panel Assignments</h2>
                 <p className="text-xs text-draft mt-0.5">
-                  Automate panel distribution &amp; workload balancing across department faculty.
+                  Fully controlled by BE Project Coordinator — Automate panel distribution &amp; workload balancing across department faculty.
                 </p>
               </div>
 
@@ -646,7 +920,8 @@ export default function HODProjectMgmt() {
                 <button
                   type="button"
                   onClick={() => {
-                    if (stages.length > 0) setAutoAssignStageId(String(stages[0].id));
+                    const selStage = panelMatrixStageId || (stages.length > 0 ? String(stages[0].id) : '');
+                    setAutoAssignStageId(selStage);
                     setAutoAssignModal(true);
                   }}
                   className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded flex items-center gap-2 shadow-xs transition-colors"
@@ -811,8 +1086,8 @@ export default function HODProjectMgmt() {
       )}
 
       {/* AUTO-ASSIGN MODAL */}
-      {autoAssignModal && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
+      {autoAssignModal && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded border border-rule max-w-md w-full p-6 shadow-2xl animate-fade-in">
             <h3 className="font-serif text-xl font-bold text-ink border-b border-rule pb-3 mb-4 flex items-center gap-2">
               <span className="text-emerald-700">⚡</span> One-Click Auto-Assign Panels
@@ -873,12 +1148,13 @@ export default function HODProjectMgmt() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* COPY STAGE PANELS MODAL */}
-      {copyStageModal && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
+      {copyStageModal && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded border border-rule max-w-md w-full p-6 shadow-2xl animate-fade-in">
             <h3 className="font-serif text-xl font-bold text-ink border-b border-rule pb-3 mb-4 flex items-center gap-2">
               <span className="text-navy">📋</span> Copy Panel Assignments Between Stages
@@ -940,7 +1216,8 @@ export default function HODProjectMgmt() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* TAB 5: SCORE RELEASE & GOVERNANCE */}
@@ -1027,10 +1304,9 @@ export default function HODProjectMgmt() {
           </div>
         </div>
       )}
-
-      {/* ASSIGN GUIDE MODAL */}
-      {guideModalGroup && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
+              {/* ASSIGN GUIDE MODAL */}
+      {guideModalGroup && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded border border-rule max-w-md w-full p-6 shadow-xl">
             <h3 className="font-serif text-lg font-bold text-ink border-b border-rule pb-2 mb-4">
               Assign Guide for {guideModalGroup.group_code}
@@ -1065,12 +1341,13 @@ export default function HODProjectMgmt() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* PANEL ASSIGNMENT MODAL (SINGLE GROUP) */}
-      {panelModal && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
+      {panelModal && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded border border-rule max-w-lg w-full p-6 shadow-2xl animate-fade-in">
             <h3 className="font-serif text-xl font-bold text-ink border-b border-rule pb-3 mb-4 flex items-center justify-between">
               <span>Assign Panel Evaluators</span>
@@ -1182,125 +1459,13 @@ export default function HODProjectMgmt() {
               </div>
             </form>
           </div>
-        </div>
-      )}
-
-      {/* AUTO ASSIGN PANELS MODAL */}
-      {autoAssignModal && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded border border-rule max-w-md w-full p-6 shadow-2xl">
-            <h3 className="font-serif text-lg font-bold text-ink border-b border-rule pb-2 mb-4">
-              ⚡ Batch Auto-Assign Panels
-            </h3>
-            <form onSubmit={handleAutoAssignPanels} className="space-y-4">
-              <div>
-                <label className="input-label">Target Evaluation Stage *</label>
-                <select
-                  value={autoAssignStageId}
-                  onChange={(e) => setAutoAssignStageId(e.target.value)}
-                  className="input-field text-xs"
-                  required
-                >
-                  <option value="">Select Stage...</option>
-                  {stages.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} (Stage #{s.sequence_order})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="input-label">Panelists Per Group *</label>
-                <select
-                  value={panelistsPerGroup}
-                  onChange={(e) => setPanelistsPerGroup(Number(e.target.value))}
-                  className="input-field text-xs"
-                >
-                  <option value={1}>1 Evaluator per group</option>
-                  <option value={2}>2 Evaluators per group</option>
-                  <option value={3}>3 Evaluators per group</option>
-                </select>
-              </div>
-              <p className="text-xs text-draft italic">
-                Auto-assigns faculty panelists fairly balancing workloads.
-              </p>
-              <div className="flex justify-end gap-3 pt-3 border-t border-rule">
-                <button
-                  type="button"
-                  onClick={() => setAutoAssignModal(false)}
-                  className="px-4 py-2 border border-rule rounded text-xs font-semibold"
-                >
-                  Cancel
-                </button>
-                <button type="submit" disabled={submitting} className="btn-primary py-2 px-5 text-xs font-bold">
-                  {submitting ? 'Auto-Assigning...' : 'Run Auto-Assignment'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* COPY STAGE PANELS MODAL */}
-      {copyStageModal && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded border border-rule max-w-md w-full p-6 shadow-2xl">
-            <h3 className="font-serif text-lg font-bold text-ink border-b border-rule pb-2 mb-4">
-              📋 Copy Panel Assignments From Stage
-            </h3>
-            <form onSubmit={handleCopyStagePanels} className="space-y-4">
-              <div>
-                <label className="input-label">Source Stage (Copy FROM) *</label>
-                <select
-                  value={copySourceStageId}
-                  onChange={(e) => setCopySourceStageId(e.target.value)}
-                  className="input-field text-xs"
-                  required
-                >
-                  <option value="">Select Source Stage...</option>
-                  {stages.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} (Stage #{s.sequence_order})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="input-label">Target Stage (Copy TO) *</label>
-                <select
-                  value={copyTargetStageId}
-                  onChange={(e) => setCopyTargetStageId(e.target.value)}
-                  className="input-field text-xs"
-                  required
-                >
-                  <option value="">Select Target Stage...</option>
-                  {stages.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} (Stage #{s.sequence_order})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex justify-end gap-3 pt-3 border-t border-rule">
-                <button
-                  type="button"
-                  onClick={() => setCopyStageModal(false)}
-                  className="px-4 py-2 border border-rule rounded text-xs font-semibold"
-                >
-                  Cancel
-                </button>
-                <button type="submit" disabled={submitting} className="btn-primary py-2 px-5 text-xs font-bold">
-                  {submitting ? 'Copying Panels...' : 'Confirm & Copy Panels'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* EVALUATION STAGE MODAL (CREATE / EDIT) */}
-      {stageModal && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
+      {stageModal && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded border border-rule max-w-xl w-full p-6 shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto">
             <h3 className="font-serif text-xl font-bold text-ink border-b border-rule pb-3 mb-4 flex items-center justify-between">
               <span>{stageModal === 'edit' ? 'Edit Evaluation Stage' : 'Add New Evaluation Stage'}</span>
@@ -1446,7 +1611,8 @@ export default function HODProjectMgmt() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

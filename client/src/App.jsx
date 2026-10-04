@@ -39,6 +39,7 @@ import MarksApproval  from './pages/hod/MarksApproval'
 import PublishResults from './pages/hod/PublishResults'
 import HODAnalytics   from './pages/hod/HODAnalytics'
 import HODProjectMgmt from './pages/hod/HODProjectMgmt'
+import HODProjectApprovals from './pages/hod/HODProjectApprovals'
 import AuditLog       from './pages/hod/AuditLog'
 import HODMagazineApprovals from './pages/hod/HODMagazineApprovals'
 import TermRollover   from './pages/hod/TermRollover'
@@ -110,6 +111,7 @@ export default function App() {
           <Route path="/faculty/reports" element={<FacultyLayout><ClassReports /></FacultyLayout>} />
           <Route path="/faculty/lab-maintenance" element={<FacultyLayout><LabMaintenance /></FacultyLayout>} />
           <Route path="/faculty/project-eval" element={<FacultyLayout><ProjectEval /></FacultyLayout>} />
+          <Route path="/faculty/project-coordination" element={<FacultyLayout><HODProjectMgmt /></FacultyLayout>} />
           <Route path="/faculty/magazines" element={<FacultyLayout><Magazines /></FacultyLayout>} />
           <Route path="/faculty/magazines/create" element={<FacultyLayout><CreateMagazineForm /></FacultyLayout>} />
           <Route path="/faculty/magazines/editor/:id" element={<MagazineEditor />} />
@@ -141,7 +143,7 @@ export default function App() {
           <Route path="/hod/publish" element={<HODLayout><PublishResults /></HODLayout>} />
           <Route path="/hod/rollover" element={<HODLayout><TermRollover /></HODLayout>} />
           <Route path="/hod/analytics" element={<HODLayout><HODAnalytics /></HODLayout>} />
-          <Route path="/hod/projects" element={<HODLayout><HODProjectMgmt /></HODLayout>} />
+          <Route path="/hod/projects" element={<HODLayout><HODProjectApprovals /></HODLayout>} />
           <Route path="/hod/audit" element={<HODLayout><AuditLog /></HODLayout>} />
 
           {/* Alumni */}
