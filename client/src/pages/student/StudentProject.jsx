@@ -131,7 +131,7 @@ export default function StudentProject() {
         <form onSubmit={handleRegisterGroup} className="space-y-6">
           {/* PART A: STUDENT TEAM MEMBERS DETAILS */}
           <div className="bg-white border border-rule rounded shadow-sm p-6 space-y-6">
-            <div className="border-b border-rule pb-3 flex items-center justify-between">
+            <div className="border-b border-rule pb-3">
               <div>
                 <h2 className="font-serif text-xl font-bold text-ink flex items-center gap-2">
                   <span className="w-6 h-6 rounded bg-navy text-white text-xs flex items-center justify-center font-sans font-bold">1</span>
@@ -139,9 +139,6 @@ export default function StudentProject() {
                 </h2>
                 <p className="text-xs text-draft mt-0.5">Minimum 3 students · Maximum 4 students per group</p>
               </div>
-              <span className="text-xs font-mono text-draft bg-paper px-3 py-1 border border-rule rounded">
-                Table Format (Sheet Upload)
-              </span>
             </div>
 
             <div className="space-y-6 divide-y divide-rule">

@@ -172,11 +172,27 @@ export default function Layout({ children }) {
   const pendingMagazinesCount = magazines?.filter(m => m.status === 'Under Review').length || 0;
 
   let navGroups = roleNav[user?.role] || [];
-  if (user?.role === 'faculty' && !user?.is_seminar_coordinator) {
-    navGroups = navGroups.map(group => ({
-      ...group,
-      items: group.items.filter(item => item.to !== '/faculty/seminar')
-    }));
+  if (user?.role === 'faculty') {
+    if (!user?.is_seminar_coordinator) {
+      navGroups = navGroups.map(group => ({
+        ...group,
+        items: group.items.filter(item => item.to !== '/faculty/seminar')
+      }));
+    }
+    if (user?.is_project_coordinator) {
+      navGroups = navGroups.map(group => {
+        if (group.group === 'Department Administration') {
+          return {
+            ...group,
+            items: [
+              { to: '/faculty/project-coordination', label: 'BE Project Governance', icon: Icons.project },
+              ...group.items
+            ]
+          };
+        }
+        return group;
+      });
+    }
   }
   if (user?.role === 'hod' && pendingMagazinesCount > 0) {
     navGroups = navGroups.map(group => ({

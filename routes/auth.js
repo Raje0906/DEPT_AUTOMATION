@@ -122,10 +122,15 @@ router.post('/login', async (req, res) => {
       roleData = s.rows[0] || {};
     } else if (user.role === 'faculty' || user.role === 'hod') {
       const f = await pool.query(
-        `SELECT id AS faculty_id, employee_id, designation, is_seminar_coordinator FROM faculty WHERE user_id = $1`,
+        `SELECT f.id AS faculty_id, f.employee_id, f.designation, f.is_seminar_coordinator, f.is_project_coordinator,
+                (SELECT COUNT(*) > 0 FROM coordinator_assignments ca WHERE ca.faculty_id = f.id AND ca.role_type = 'BE_PROJECT_COORDINATOR' AND ca.is_active = TRUE) as is_be_proj_coord
+         FROM faculty f WHERE f.user_id = $1`,
         [user.id]
       );
       roleData = f.rows[0] || {};
+      if (roleData.is_be_proj_coord) {
+        roleData.is_project_coordinator = true;
+      }
     }
 
     const payload = {
@@ -287,10 +292,15 @@ router.get('/me', verifyToken, async (req, res) => {
     let extra = {};
     if (user.role === 'faculty' || user.role === 'hod') {
       const f = await pool.query(
-        `SELECT id AS faculty_id, employee_id, designation, is_seminar_coordinator FROM faculty WHERE user_id = $1`,
+        `SELECT f.id AS faculty_id, f.employee_id, f.designation, f.is_seminar_coordinator, f.is_project_coordinator,
+                (SELECT COUNT(*) > 0 FROM coordinator_assignments ca WHERE ca.faculty_id = f.id AND ca.role_type = 'BE_PROJECT_COORDINATOR' AND ca.is_active = TRUE) as is_be_proj_coord
+         FROM faculty f WHERE f.user_id = $1`,
         [user.id]
       );
       extra = f.rows[0] || {};
+      if (extra.is_be_proj_coord) {
+        extra.is_project_coordinator = true;
+      }
     } else if (user.role === 'student') {
       const s = await pool.query(
         `SELECT id AS student_id, roll_no, enrollment_no, batch, current_semester, division FROM students WHERE user_id = $1`,
