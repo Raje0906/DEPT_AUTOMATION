@@ -347,13 +347,14 @@ export default function ProjectEval() {
                             max={crit.max_marks}
                             step="0.5"
                             value={curr.marks_awarded}
+                            onFocus={(e) => e.target.select()}
                             onChange={(e) =>
                               setScoresInput({
                                 ...scoresInput,
                                 [crit.id]: { ...curr, marks_awarded: e.target.value },
                               })
                             }
-                            className="input-field font-mono font-bold text-navy text-right"
+                            className="input-field font-mono font-bold text-navy text-right focus:bg-blue-50 focus:ring-2 focus:ring-navy selection:bg-blue-200"
                             required
                           />
                         </div>

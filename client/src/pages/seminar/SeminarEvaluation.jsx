@@ -373,8 +373,9 @@ export default function SeminarEvaluation() {
                             required
                             placeholder="Req *"
                             value={marksInput[m.prn]?.attendance_marks ?? ''}
+                            onFocus={(e) => e.target.select()}
                             onChange={e => handleMarkChange(m.prn, 'attendance_marks', e.target.value)}
-                            className={`w-16 text-center border rounded-md px-1.5 py-1.5 text-xs font-mono focus:outline-none focus:border-[var(--navy)] focus:ring-1 focus:ring-[var(--navy)]/20 ${
+                            className={`w-16 text-center border rounded-md px-1.5 py-1.5 text-xs font-mono focus:outline-none focus:border-[var(--navy)] focus:ring-1 focus:ring-[var(--navy)]/20 focus:bg-blue-50/50 selection:bg-blue-200 ${
                               marksInput[m.prn]?.attendance_marks === '' ? 'border-red-300 bg-red-50/30' : 'border-[var(--rule)] bg-white'
                             }`}
                           />
@@ -393,8 +394,9 @@ export default function SeminarEvaluation() {
                           max="10"
                           step="0.01"
                           value={marksInput[m.prn]?.presentation_marks ?? 0}
+                          onFocus={(e) => e.target.select()}
                           onChange={e => handleMarkChange(m.prn, 'presentation_marks', e.target.value)}
-                          className="w-16 text-center border border-[var(--rule)] rounded-md px-1.5 py-1.5 text-xs font-mono focus:outline-none focus:border-[var(--navy)] focus:ring-1 focus:ring-[var(--navy)]/20 bg-white"
+                          className="w-16 text-center border border-[var(--rule)] rounded-md px-1.5 py-1.5 text-xs font-mono focus:outline-none focus:border-[var(--navy)] focus:ring-1 focus:ring-[var(--navy)]/20 focus:bg-blue-50/50 selection:bg-blue-200 bg-white"
                         />
                       ) : (
                         <ScoreBadge value={marksInput[m.prn]?.presentation_marks ?? 0} max={10} />
@@ -410,8 +412,9 @@ export default function SeminarEvaluation() {
                           max="10"
                           step="0.01"
                           value={marksInput[m.prn]?.subject_understanding_marks ?? 0}
+                          onFocus={(e) => e.target.select()}
                           onChange={e => handleMarkChange(m.prn, 'subject_understanding_marks', e.target.value)}
-                          className="w-16 text-center border border-[var(--rule)] rounded-md px-1.5 py-1.5 text-xs font-mono focus:outline-none focus:border-[var(--navy)] focus:ring-1 focus:ring-[var(--navy)]/20 bg-white"
+                          className="w-16 text-center border border-[var(--rule)] rounded-md px-1.5 py-1.5 text-xs font-mono focus:outline-none focus:border-[var(--navy)] focus:ring-1 focus:ring-[var(--navy)]/20 focus:bg-blue-50/50 selection:bg-blue-200 bg-white"
                         />
                       ) : (
                         <ScoreBadge value={marksInput[m.prn]?.subject_understanding_marks ?? 0} max={10} />
@@ -427,8 +430,9 @@ export default function SeminarEvaluation() {
                           max="10"
                           step="0.01"
                           value={marksInput[m.prn]?.publication_marks ?? 0}
+                          onFocus={(e) => e.target.select()}
                           onChange={e => handleMarkChange(m.prn, 'publication_marks', e.target.value)}
-                          className="w-16 text-center border border-[var(--rule)] rounded-md px-1.5 py-1.5 text-xs font-mono focus:outline-none focus:border-[var(--navy)] focus:ring-1 focus:ring-[var(--navy)]/20 bg-white"
+                          className="w-16 text-center border border-[var(--rule)] rounded-md px-1.5 py-1.5 text-xs font-mono focus:outline-none focus:border-[var(--navy)] focus:ring-1 focus:ring-[var(--navy)]/20 focus:bg-blue-50/50 selection:bg-blue-200 bg-white"
                         />
                       ) : (
                         <ScoreBadge value={marksInput[m.prn]?.publication_marks ?? 0} max={10} />
@@ -444,8 +448,9 @@ export default function SeminarEvaluation() {
                           max="10"
                           step="0.01"
                           value={marksInput[m.prn]?.viva_marks ?? 0}
+                          onFocus={(e) => e.target.select()}
                           onChange={e => handleMarkChange(m.prn, 'viva_marks', e.target.value)}
-                          className="w-16 text-center border border-[var(--rule)] rounded-md px-1.5 py-1.5 text-xs font-mono focus:outline-none focus:border-[var(--navy)] focus:ring-1 focus:ring-[var(--navy)]/20 bg-white"
+                          className="w-16 text-center border border-[var(--rule)] rounded-md px-1.5 py-1.5 text-xs font-mono focus:outline-none focus:border-[var(--navy)] focus:ring-1 focus:ring-[var(--navy)]/20 focus:bg-blue-50/50 selection:bg-blue-200 bg-white"
                         />
                       ) : (
                         <ScoreBadge value={marksInput[m.prn]?.viva_marks ?? 0} max={10} />

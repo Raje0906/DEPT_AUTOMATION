@@ -625,19 +625,21 @@ router.post('/evaluations', verifyToken, requireRole('faculty','hod'), async (re
       let evalId;
       if (existingEvalRes.rows.length > 0) {
         evalId = existingEvalRes.rows[0].id;
+        const submittedAt = status === 'SUBMITTED' ? (existingEvalRes.rows[0].submitted_at || new Date()) : existingEvalRes.rows[0].submitted_at;
         await client.query(
           `UPDATE project_evaluations
-           SET status = $1, submitted_at = CASE WHEN $1 = 'SUBMITTED' THEN NOW() ELSE submitted_at END,
-               overall_remarks = $2, is_unlocked = false
-           WHERE id = $3`,
-          [status, overall_remarks || '', evalId]
+           SET status = $1, submitted_at = $2,
+               overall_remarks = $3, is_unlocked = false
+           WHERE id = $4`,
+          [status, submittedAt, overall_remarks || '', evalId]
         );
       } else {
+        const submittedAt = status === 'SUBMITTED' ? new Date() : null;
         const newEval = await client.query(
           `INSERT INTO project_evaluations (panel_assignment_id, status, submitted_at, overall_remarks)
-           VALUES ($1, $2, CASE WHEN $2 = 'SUBMITTED' THEN NOW() ELSE NULL END, $3)
+           VALUES ($1, $2, $3, $4)
            RETURNING id`,
-          [assignment_id, status, overall_remarks || '']
+          [assignment_id, status, submittedAt, overall_remarks || '']
         );
         evalId = newEval.rows[0].id;
       }
@@ -812,6 +814,28 @@ router.patch('/hod/groups/:id/guide', verifyToken, requireRole('hod'), async (re
   } catch (err) {
     console.error('[HOD Assign Guide Error]', err);
     res.status(500).json({ error: 'Failed to assign guide' });
+  }
+});
+
+/**
+ * DELETE /api/projects/hod/groups/all
+ * Clear all BE project group data (groups, members, assignments, evaluations, scores).
+ */
+router.delete('/hod/groups/all', verifyToken, requireRole('hod'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `TRUNCATE TABLE project_evaluation_scores, project_evaluations, project_panel_assignments, project_score_releases, project_guide_requests, project_group_members, project_groups RESTART IDENTITY CASCADE`
+    );
+    await client.query('COMMIT');
+    res.json({ message: 'All BE project group data erased successfully' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[HOD Clear All Groups Error]', err);
+    res.status(500).json({ error: 'Failed to erase project group data' });
+  } finally {
+    client.release();
   }
 });
 
