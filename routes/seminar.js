@@ -365,16 +365,23 @@ router.get('/my-submission', verifyToken, async (req, res) => {
 
     let isLeader = true;
 
-    // If not found by leader_user_id, check if student's PRN or email is in any group's members
-    if (groupRes.rows.length === 0 && studentProfile.prn) {
+    // If not found by leader_user_id, check if student's PRN, enrollment_no, roll_no, or email is in any group's members
+    if (groupRes.rows.length === 0) {
+      const prnNorm = studentProfile.prn ? normPrn(studentProfile.prn) : '';
+      const emailNorm = studentProfile.email ? normEmail(studentProfile.email) : '';
+
       const memberGroupRes = await pool.query(
         `SELECT sg.*, u.name as leader_name, u.email as leader_email
          FROM seminar_groups sg
          JOIN seminar_group_members sgm ON sgm.group_id = sg.id
          LEFT JOIN users u ON sg.leader_user_id = u.id
-         WHERE sg.session_id = $1 AND (UPPER(REPLACE(sgm.prn, ' ', '')) = $2 OR LOWER(sgm.email) = $3)
+         WHERE sg.session_id = $1
+           AND (
+             ($2 <> '' AND UPPER(REPLACE(sgm.prn, ' ', '')) = $2)
+             OR ($3 <> '' AND LOWER(sgm.email) = $3)
+           )
          LIMIT 1`,
-        [session.id, normPrn(studentProfile.prn), normEmail(studentProfile.email)]
+        [session.id, prnNorm, emailNorm]
       );
       if (memberGroupRes.rows.length > 0) {
         groupRes = memberGroupRes;
@@ -398,6 +405,36 @@ router.get('/my-submission', verifyToken, async (req, res) => {
       `SELECT * FROM seminar_group_members WHERE group_id = $1 ORDER BY member_index ASC`,
       [group.id]
     );
+
+    // Query per-group registration record
+    let regRes = await pool.query(
+      `SELECT r.*, u.name as registered_by_name, u.email as registered_by_email
+       FROM registrations r
+       JOIN users u ON r.registered_by = u.id
+       WHERE r.group_id = $1 AND r.seminar_id = $2`,
+      [group.id, session.id]
+    );
+
+    let registration = regRes.rows[0] || null;
+
+    // If registrations row was missing for existing group, ensure registration record is populated
+    if (!registration) {
+      const regInsert = await pool.query(
+        `INSERT INTO registrations (group_id, seminar_id, registered_by, registered_at, status)
+         VALUES ($1, $2, COALESCE($3, $4), COALESCE($5, NOW()), 'REGISTERED')
+         ON CONFLICT (group_id, seminar_id) DO UPDATE SET status = 'REGISTERED'
+         RETURNING *`,
+        [group.id, session.id, group.leader_user_id, req.user.id, group.submitted_at || group.created_at]
+      );
+      if (regInsert.rows.length) {
+        const uRes = await pool.query('SELECT name, email FROM users WHERE id = $1', [regInsert.rows[0].registered_by]);
+        registration = {
+          ...regInsert.rows[0],
+          registered_by_name: uRes.rows[0]?.name || 'Group Leader',
+          registered_by_email: uRes.rows[0]?.email || '',
+        };
+      }
+    }
 
     const canEdit = isLeader && (!session.is_locked || group.allow_edit) && session.status !== 'PUBLISHED';
     
@@ -426,6 +463,7 @@ router.get('/my-submission', verifyToken, async (req, res) => {
       hasSubmission: true,
       group,
       members: membersRes.rows,
+      registration,
       myMarks,
       isLeader,
       canEdit,
@@ -498,9 +536,11 @@ router.post('/register-group', verifyToken, requireRole('student'), async (req, 
     // Database check for duplicate PRNs across OTHER groups in this session
     const prnList = cleanedGroup.members.map(m => m.prn);
     const conflictQuery = `
-      SELECT sg.id as group_id, sg.group_no, m.student_name, m.prn
+      SELECT sg.id as group_id, sg.group_no, m.student_name, m.prn, r.registered_by, u.name as registered_by_name, r.registered_at
       FROM seminar_group_members m
       JOIN seminar_groups sg ON m.group_id = sg.id
+      LEFT JOIN registrations r ON (r.group_id = sg.id AND r.seminar_id = sg.session_id)
+      LEFT JOIN users u ON r.registered_by = u.id
       WHERE sg.session_id = $1
         AND UPPER(REPLACE(m.prn, ' ', '')) = ANY($2)
         AND ($3::int IS NULL OR sg.id != $3)
@@ -515,8 +555,12 @@ router.post('/register-group', verifyToken, requireRole('student'), async (req, 
     if (conflictRes.rows.length > 0) {
       const conflict = conflictRes.rows[0];
       await client.query('ROLLBACK');
+      const regByName = conflict.registered_by_name || 'another student';
       return res.status(409).json({
-        error: `PRN "${conflict.prn}" (${conflict.student_name}) is already registered in Group ${conflict.group_no}. A student cannot be registered in multiple groups.`,
+        error: `Already registered by ${regByName}. PRN "${conflict.prn}" (${conflict.student_name}) is registered in Group ${conflict.group_no}.`,
+        alreadyRegistered: true,
+        registeredBy: regByName,
+        registeredAt: conflict.registered_at,
         conflict: {
           prn: conflict.prn,
           name: conflict.student_name,
@@ -551,6 +595,15 @@ router.post('/register-group', verifyToken, requireRole('student'), async (req, 
           [finalGroupId, m.memberIndex, m.student_name, m.prn, m.division, m.mobile, m.email, m.topic1, m.topic2, m.topic3, m.is_leader]
         );
       }
+
+      // Upsert into registrations
+      await client.query(
+        `INSERT INTO registrations (group_id, seminar_id, registered_by, registered_at, status)
+         VALUES ($1, $2, $3, NOW(), 'REGISTERED')
+         ON CONFLICT (group_id, seminar_id)
+         DO UPDATE SET registered_by = EXCLUDED.registered_by, registered_at = NOW(), status = 'REGISTERED'`,
+        [finalGroupId, sessionId, req.user.id]
+      );
     } else {
       // INSERT new group
       actionType = 'INSERT';
@@ -573,6 +626,31 @@ router.post('/register-group', verifyToken, requireRole('student'), async (req, 
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
           [finalGroupId, m.memberIndex, m.student_name, m.prn, m.division, m.mobile, m.email, m.topic1, m.topic2, m.topic3, m.is_leader]
         );
+      }
+
+      // Insert into registrations
+      try {
+        await client.query(
+          `INSERT INTO registrations (group_id, seminar_id, registered_by, registered_at, status)
+           VALUES ($1, $2, $3, NOW(), 'REGISTERED')`,
+          [finalGroupId, sessionId, req.user.id]
+        );
+      } catch (regErr) {
+        if (regErr.code === '23505') {
+          // Unique constraint violation: race condition - fetch registered_by name
+          const rRes = await client.query(
+            `SELECT r.*, u.name as registered_by_name FROM registrations r JOIN users u ON r.registered_by = u.id WHERE r.group_id = $1 AND r.seminar_id = $2`,
+            [finalGroupId, sessionId]
+          );
+          const regBy = rRes.rows[0]?.registered_by_name || 'Another member';
+          await client.query('ROLLBACK');
+          return res.status(409).json({
+            error: `Already registered by ${regBy}`,
+            alreadyRegistered: true,
+            registeredBy: regBy,
+          });
+        }
+        throw regErr;
       }
     }
 

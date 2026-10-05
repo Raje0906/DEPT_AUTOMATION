@@ -9,6 +9,7 @@ export default function SeminarGroupRegistration() {
   const [session, setSession] = useState(null);
   const [hasSubmission, setHasSubmission] = useState(false);
   const [groupData, setGroupData] = useState(null);
+  const [registrationData, setRegistrationData] = useState(null);
   const [membersData, setMembersData] = useState([]);
   const [isLeader, setIsLeader] = useState(true);
   const [canEdit, setCanEdit] = useState(true);
@@ -50,11 +51,13 @@ export default function SeminarGroupRegistration() {
       if (data.hasSubmission) {
         setHasSubmission(true);
         setGroupData({ ...data.group, myMarks: data.myMarks });
+        setRegistrationData(data.registration || null);
         setMembersData(data.members || []);
         setIsLeader(data.isLeader);
         setCanEdit(data.canEdit);
       } else {
         setHasSubmission(false);
+        setRegistrationData(null);
         setCanEdit(data.canEdit);
         // Pre-fill Student 1 from login
         if (data.prefill) {
@@ -299,6 +302,12 @@ export default function SeminarGroupRegistration() {
       await loadData();
     } catch (err) {
       console.error('Registration submission error:', err);
+      if (err.response?.data?.alreadyRegistered) {
+        toast.error(err.response.data.error, { duration: 6000 });
+        setIsEditing(false);
+        await loadData();
+        return;
+      }
       const msg = err.response?.data?.error || 'Registration failed. Please check your inputs.';
       toast.error(msg, { duration: 5000 });
     } finally {
@@ -333,22 +342,29 @@ export default function SeminarGroupRegistration() {
 
   // ─── VIEW MODE: GROUP ALREADY REGISTERED ────────────────────────────────────
   if (hasSubmission && !isEditing) {
+    const regByName = registrationData?.registered_by_name || groupData?.leader_name || 'Group Member';
+    const regDate = registrationData?.registered_at || groupData?.submitted_at || groupData?.created_at;
+
     return (
       <div className="p-6 max-w-5xl mx-auto space-y-6">
         {/* Header Banner */}
         <div className="bg-white border border-[var(--rule)] rounded-xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1.5">
-              <span className="text-[10px] font-mono font-bold uppercase tracking-wider bg-blue-50 text-blue-800 border border-blue-200 px-2 py-0.5 rounded">
-                TE Seminar Group #{groupData.group_no}
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-300 px-2.5 py-0.5 rounded-full flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                Registered · Group #{groupData.group_no}
               </span>
               <span className="text-[10px] font-mono text-[var(--ink)]/50">
                 {session.name} · {session.academic_year} (Batch {session.batch})
               </span>
             </div>
             <h1 className="text-2xl font-bold text-[var(--navy)]">Your Seminar Group Registration</h1>
-            <p className="text-xs text-[var(--ink)]/60 mt-0.5">
-              Domain: <span className="font-semibold text-[var(--ink)]">{groupData.domain}</span> · {membersData.length} team members registered
+            <p className="text-xs text-[var(--ink)]/70 mt-1">
+              Registered by <span className="font-semibold text-[var(--navy)]">{regByName}</span>
+              {regDate && (
+                <span> on <span className="font-medium text-[var(--ink)]">{new Date(regDate).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</span></span>
+              )}
             </p>
           </div>
 
@@ -372,6 +388,34 @@ export default function SeminarGroupRegistration() {
                 <p className="text-[10px] text-[var(--ink)]/50 mt-1">Read-only view</p>
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Group Registration Summary Bar */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="bg-white border border-[var(--rule)] rounded-lg p-3 shadow-xs">
+            <p className="text-[10px] text-[var(--ink)]/60 font-semibold uppercase">Registration Status</p>
+            <p className="text-sm font-bold text-emerald-700 mt-0.5 flex items-center gap-1">
+              ✓ Registered
+            </p>
+          </div>
+          <div className="bg-white border border-[var(--rule)] rounded-lg p-3 shadow-xs">
+            <p className="text-[10px] text-[var(--ink)]/60 font-semibold uppercase">Registered By</p>
+            <p className="text-sm font-bold text-[var(--navy)] mt-0.5 truncate" title={regByName}>
+              {regByName}
+            </p>
+          </div>
+          <div className="bg-white border border-[var(--rule)] rounded-lg p-3 shadow-xs">
+            <p className="text-[10px] text-[var(--ink)]/60 font-semibold uppercase">Domain</p>
+            <p className="text-sm font-bold text-[var(--ink)] mt-0.5 truncate" title={groupData.domain}>
+              {groupData.domain}
+            </p>
+          </div>
+          <div className="bg-white border border-[var(--rule)] rounded-lg p-3 shadow-xs">
+            <p className="text-[10px] text-[var(--ink)]/60 font-semibold uppercase">Group Members</p>
+            <p className="text-sm font-bold text-[var(--ink)] mt-0.5">
+              {membersData.length} Students
+            </p>
           </div>
         </div>
 
