@@ -462,6 +462,93 @@ async function runMigrations() {
       ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS hod_remarks TEXT;
     `);
 
+    // ─── SEMINAR GROUP REGISTRATIONS ──────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS registrations (
+        id            SERIAL PRIMARY KEY,
+        group_id      INTEGER NOT NULL REFERENCES seminar_groups(id) ON DELETE CASCADE,
+        seminar_id    INTEGER NOT NULL REFERENCES seminar_sessions(id) ON DELETE CASCADE,
+        registered_by INTEGER NOT NULL REFERENCES users(id),
+        registered_at TIMESTAMPTZ DEFAULT NOW(),
+        status        VARCHAR(30) NOT NULL DEFAULT 'REGISTERED' CHECK (status IN ('REGISTERED', 'CANCELLED', 'PENDING')),
+        CONSTRAINT uq_group_seminar_registration UNIQUE (group_id, seminar_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_registrations_group_id ON registrations(group_id);
+      CREATE INDEX IF NOT EXISTS idx_registrations_seminar_id ON registrations(seminar_id);
+      CREATE INDEX IF NOT EXISTS idx_registrations_registered_by ON registrations(registered_by);
+
+      -- Backfill existing seminar_groups into registrations if not already present
+      INSERT INTO registrations (group_id, seminar_id, registered_by, registered_at, status)
+      SELECT sg.id, sg.session_id, COALESCE(sg.leader_user_id, ss.created_by), COALESCE(sg.submitted_at, sg.created_at, NOW()), 'REGISTERED'
+      FROM seminar_groups sg
+      JOIN seminar_sessions ss ON sg.session_id = ss.id
+      WHERE sg.leader_user_id IS NOT NULL OR ss.created_by IS NOT NULL
+      ON CONFLICT (group_id, seminar_id) DO NOTHING;
+
+      -- Enable Row Level Security (RLS) on registrations
+      ALTER TABLE registrations ENABLE ROW LEVEL SECURITY;
+
+      DROP POLICY IF EXISTS "Allow group members and faculty to view registrations" ON registrations;
+      CREATE POLICY "Allow group members and faculty to view registrations"
+      ON registrations
+      FOR SELECT
+      USING (
+        registered_by = (NULLIF(current_setting('app.current_user_id', true), ''))::int
+        OR EXISTS (
+          SELECT 1 FROM seminar_group_members sgm
+          JOIN students s ON (
+            UPPER(REPLACE(s.enrollment_no, ' ', '')) = UPPER(REPLACE(sgm.prn, ' ', ''))
+            OR UPPER(REPLACE(s.roll_no, ' ', '')) = UPPER(REPLACE(sgm.prn, ' ', ''))
+          )
+          WHERE sgm.group_id = registrations.group_id
+            AND s.user_id = (NULLIF(current_setting('app.current_user_id', true), ''))::int
+        )
+        OR EXISTS (
+          SELECT 1 FROM users u
+          WHERE u.id = (NULLIF(current_setting('app.current_user_id', true), ''))::int
+            AND u.role IN ('faculty', 'hod')
+        )
+      );
+
+      DROP POLICY IF EXISTS "Allow only group members to register for their group" ON registrations;
+      CREATE POLICY "Allow only group members to register for their group"
+      ON registrations
+      FOR INSERT
+      WITH CHECK (
+        registered_by = (NULLIF(current_setting('app.current_user_id', true), ''))::int
+        AND (
+          EXISTS (
+            SELECT 1 FROM seminar_groups sg
+            WHERE sg.id = registrations.group_id
+              AND sg.leader_user_id = (NULLIF(current_setting('app.current_user_id', true), ''))::int
+          )
+          OR EXISTS (
+            SELECT 1 FROM seminar_group_members sgm
+            JOIN students s ON (
+              UPPER(REPLACE(s.enrollment_no, ' ', '')) = UPPER(REPLACE(sgm.prn, ' ', ''))
+              OR UPPER(REPLACE(s.roll_no, ' ', '')) = UPPER(REPLACE(sgm.prn, ' ', ''))
+            )
+            WHERE sgm.group_id = registrations.group_id
+              AND s.user_id = (NULLIF(current_setting('app.current_user_id', true), ''))::int
+          )
+        )
+      );
+
+      DROP POLICY IF EXISTS "Allow group members to update their registration" ON registrations;
+      CREATE POLICY "Allow group members to update their registration"
+      ON registrations
+      FOR UPDATE
+      USING (
+        registered_by = (NULLIF(current_setting('app.current_user_id', true), ''))::int
+        OR EXISTS (
+          SELECT 1 FROM seminar_groups sg
+          WHERE sg.id = registrations.group_id
+            AND sg.leader_user_id = (NULLIF(current_setting('app.current_user_id', true), ''))::int
+        )
+      );
+    `);
+
     // ─── SEMINAR MARKS ────────────────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS seminar_marks (
