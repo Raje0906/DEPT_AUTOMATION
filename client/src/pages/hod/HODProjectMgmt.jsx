@@ -74,16 +74,22 @@ export default function HODProjectMgmt() {
     }
   };
 
+  // Registration Settings State
+  const [regSettings, setRegSettings] = useState({ is_registration_open: true, due_date: null, is_open: true });
+  const [dueDateInput, setDueDateInput] = useState('');
+  const [submittingRegSettings, setSubmittingRegSettings] = useState(false);
+
   const fetchHODData = async () => {
     setLoading(true);
     try {
-      const [dashRes, groupsRes, stagesRes, guidesRes, repRes, pendingRes] = await Promise.all([
+      const [dashRes, groupsRes, stagesRes, guidesRes, repRes, pendingRes, settingsRes] = await Promise.all([
         api.get(`/projects/hod/dashboard?academic_year=${academicYear}`),
         api.get(`/projects/hod/groups?academic_year=${academicYear}`),
         api.get(`/projects/hod/stages?academic_year=${academicYear}`),
         api.get('/projects/student/available-guides'),
         api.get(`/projects/hod/reports/export?academic_year=${academicYear}`),
         api.get(`/projects/hod/pending-approvals?academic_year=${academicYear}`).catch(() => ({ data: { pendingGuides: [], pendingScoreReleases: [], totalPending: 0 } })),
+        api.get(`/projects/registration-settings?academic_year=${academicYear}`).catch(() => ({ data: { is_registration_open: true, due_date: null, is_open: true } })),
       ]);
       setDashboardData(dashRes.data);
       setGroups(groupsRes.data);
@@ -91,6 +97,14 @@ export default function HODProjectMgmt() {
       setAvailableGuides(guidesRes.data);
       setReportData(repRes.data);
       setPendingApprovals(pendingRes.data);
+      setRegSettings(settingsRes.data);
+      if (settingsRes.data?.due_date) {
+        const d = new Date(settingsRes.data.due_date);
+        const pad = (n) => String(n).padStart(2, '0');
+        setDueDateInput(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
+      } else {
+        setDueDateInput('');
+      }
 
       const defaultStage = stagesRes.data?.[0]?.id;
       if (defaultStage) {
@@ -340,6 +354,91 @@ export default function HODProjectMgmt() {
     }
   };
 
+  const handleExportScoreExcel = async () => {
+    try {
+      const res = await api.get(`/projects/export/score-excel?academic_year=${academicYear}`, {
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `BE Project Score Report (AY ${academicYear}).xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success('Score Excel downloaded successfully!');
+    } catch (err) {
+      toast.error('Failed to export score Excel');
+    }
+  };
+  const handleToggleRegistration = async (newStatus) => {
+    setSubmittingRegSettings(true);
+    try {
+      const res = await api.patch('/projects/registration-settings', {
+        academic_year: academicYear,
+        is_registration_open: newStatus,
+        due_date: regSettings.due_date,
+      });
+      toast.success(res.data.message);
+      setRegSettings(res.data.settings);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update registration status');
+    } finally {
+      setSubmittingRegSettings(false);
+    }
+  };
+
+  const handleSaveDueDate = async () => {
+    setSubmittingRegSettings(true);
+    try {
+      const res = await api.patch('/projects/registration-settings', {
+        academic_year: academicYear,
+        is_registration_open: regSettings.is_registration_open,
+        due_date: dueDateInput ? new Date(dueDateInput).toISOString() : null,
+      });
+      toast.success(res.data.message);
+      setRegSettings(res.data.settings);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update due date');
+    } finally {
+      setSubmittingRegSettings(false);
+    }
+  };
+
+  const handleClearDueDate = async () => {
+    setDueDateInput('');
+    setSubmittingRegSettings(true);
+    try {
+      const res = await api.patch('/projects/registration-settings', {
+        academic_year: academicYear,
+        is_registration_open: regSettings.is_registration_open,
+        due_date: null,
+      });
+      toast.success('Registration due date cleared');
+      setRegSettings(res.data.settings);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to clear due date');
+    } finally {
+      setSubmittingRegSettings(false);
+    }
+  };
+
+  const handlePurgeAllGroups = async () => {
+    if (!window.confirm(`⚠️ DANGER: Are you sure you want to DELETE ALL registered project group forms for Academic Year ${academicYear}?\n\nThis will permanently remove all ${groups.length} registered groups and their member details. This action CANNOT be undone.`)) {
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await api.delete(`/projects/hod/groups/purge?academic_year=${academicYear}`);
+      toast.success(res.data.message);
+      fetchHODData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to delete registered forms');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
 
 
   if (loading) {
@@ -414,17 +513,15 @@ export default function HODProjectMgmt() {
       <div className="flex gap-2 border-b border-rule pb-2 overflow-x-auto">
         <button
           onClick={() => setActiveTab('overview')}
-          className={`px-4 py-2 text-xs font-semibold rounded ${
-            activeTab === 'overview' ? 'bg-navy text-white' : 'bg-paper text-draft hover:text-ink'
-          }`}
+          className={`px-4 py-2 text-xs font-semibold rounded ${activeTab === 'overview' ? 'bg-navy text-white' : 'bg-paper text-draft hover:text-ink'
+            }`}
         >
           📊 Governance Overview
         </button>
         <button
           onClick={() => setActiveTab('approvals')}
-          className={`px-4 py-2 text-xs font-semibold rounded flex items-center gap-1.5 ${
-            activeTab === 'approvals' ? 'bg-navy text-white' : 'bg-paper text-draft hover:text-ink'
-          }`}
+          className={`px-4 py-2 text-xs font-semibold rounded flex items-center gap-1.5 ${activeTab === 'approvals' ? 'bg-navy text-white' : 'bg-paper text-draft hover:text-ink'
+            }`}
         >
           <span>⚖️ HOD Approvals</span>
           {pendingApprovals?.totalPending > 0 && (
@@ -435,41 +532,36 @@ export default function HODProjectMgmt() {
         </button>
         <button
           onClick={() => setActiveTab('groups')}
-          className={`px-4 py-2 text-xs font-semibold rounded ${
-            activeTab === 'groups' ? 'bg-navy text-white' : 'bg-paper text-draft hover:text-ink'
-          }`}
+          className={`px-4 py-2 text-xs font-semibold rounded ${activeTab === 'groups' ? 'bg-navy text-white' : 'bg-paper text-draft hover:text-ink'
+            }`}
         >
           👥 Groups &amp; Guides ({groups.length})
         </button>
         <button
           onClick={() => setActiveTab('stages')}
-          className={`px-4 py-2 text-xs font-semibold rounded ${
-            activeTab === 'stages' ? 'bg-navy text-white' : 'bg-paper text-draft hover:text-ink'
-          }`}
+          className={`px-4 py-2 text-xs font-semibold rounded ${activeTab === 'stages' ? 'bg-navy text-white' : 'bg-paper text-draft hover:text-ink'
+            }`}
         >
           📝 Evaluation Stages ({stages.length})
         </button>
         <button
           onClick={() => setActiveTab('panels')}
-          className={`px-4 py-2 text-xs font-semibold rounded ${
-            activeTab === 'panels' ? 'bg-navy text-white' : 'bg-paper text-draft hover:text-ink'
-          }`}
+          className={`px-4 py-2 text-xs font-semibold rounded ${activeTab === 'panels' ? 'bg-navy text-white' : 'bg-paper text-draft hover:text-ink'
+            }`}
         >
-          🛡️ Panel Assignments &amp; COI
+          🛡️ Panel Assignments
         </button>
         <button
           onClick={() => setActiveTab('governance')}
-          className={`px-4 py-2 text-xs font-semibold rounded ${
-            activeTab === 'governance' ? 'bg-navy text-white' : 'bg-paper text-draft hover:text-ink'
-          }`}
+          className={`px-4 py-2 text-xs font-semibold rounded ${activeTab === 'governance' ? 'bg-navy text-white' : 'bg-paper text-draft hover:text-ink'
+            }`}
         >
           🔓 Score Release &amp; Unlocks
         </button>
         <button
           onClick={() => setActiveTab('reports')}
-          className={`px-4 py-2 text-xs font-semibold rounded ${
-            activeTab === 'reports' ? 'bg-navy text-white' : 'bg-paper text-draft hover:text-ink'
-          }`}
+          className={`px-4 py-2 text-xs font-semibold rounded ${activeTab === 'reports' ? 'bg-navy text-white' : 'bg-paper text-draft hover:text-ink'
+            }`}
         >
           📋 Marksheet Reports
         </button>
@@ -696,106 +788,219 @@ export default function HODProjectMgmt() {
 
       {/* TAB 2: GROUPS & GUIDES */}
       {activeTab === 'groups' && (
-        <div className="panel">
-          <div className="panel-header flex items-center justify-between">
-            <div>
-              <h2 className="font-serif text-xl font-semibold">Department BE Project Groups</h2>
-              <span className="text-xs text-draft font-mono font-medium">Total: {groups.length} groups</span>
+        <div className="space-y-6">
+          {/* Registration Form Governance Controls Card */}
+          <div className="bg-white border border-rule rounded-lg p-6 space-y-6 shadow-xs">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-rule pb-4">
+              <div>
+                <h3 className="font-serif text-lg font-bold text-ink">Registration Form</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`px-3 py-1 rounded-full text-xs font-bold ${regSettings.is_open ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-red-100 text-red-800 border border-red-300'
+                  }`}>
+                  {regSettings.is_open ? '● Registration Form OPEN' : '● Registration Form CLOSED'}
+                </span>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleExportFormResponses}
-                className="px-3.5 py-1.5 bg-indigo-700 hover:bg-indigo-800 text-white rounded text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
-              >
-                <span>📥</span> Form Responses (Excel)
-              </button>
-              <button
-                type="button"
-                onClick={handleExportGuideAssignments}
-                className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
-              >
-                <span>📥</span> Guide Assignments (Excel)
-              </button>
-              <button
-                type="button"
-                onClick={handleClearAllGuides}
-                className="px-3 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors"
-              >
-                <span>🗑️</span> Reset / Unassign All Guides
-              </button>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Controls Panel */}
+              <div className="space-y-4 bg-paper/50 p-4 border border-rule rounded-md">
+                <h4 className="font-semibold text-sm text-ink flex items-center gap-2">
+                  <span>📅</span> Registration Window
+                </h4>
+
+                <div className="space-y-4">
+                  {/* Toggle Registration */}
+                  <div className="flex items-center justify-between gap-4 p-3 bg-white border border-rule rounded">
+                    <div>
+                      <p className="text-xs font-bold text-ink">Form Submission Access</p>
+                      <p className="text-[11px] text-draft">Enable or close project group registration for students.</p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={submittingRegSettings}
+                      onClick={() => handleToggleRegistration(!regSettings.is_registration_open)}
+                      className={`px-3 py-1.5 rounded text-xs font-bold transition-colors whitespace-nowrap ${regSettings.is_registration_open
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                        : 'bg-red-600 hover:bg-red-700 text-white'
+                        }`}
+                    >
+                      {regSettings.is_registration_open ? '✓ Enabled (Click to Close Form)' : '🔒 Closed (Click to Open Form)'}
+                    </button>
+                  </div>
+
+                  {/* Due Date & Time Picker */}
+                  <div className="p-3 bg-white border border-rule rounded space-y-2">
+                    <label className="text-xs font-bold text-ink block">
+                      Registration Due Date &amp; Time (Deadline):
+                    </label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="datetime-local"
+                        value={dueDateInput}
+                        onChange={(e) => setDueDateInput(e.target.value)}
+                        className="input-field text-xs py-1.5 max-w-xs font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSaveDueDate}
+                        disabled={submittingRegSettings}
+                        className="btn-primary text-xs py-1.5 px-4 font-bold whitespace-nowrap"
+                      >
+                        Save Due Date &amp; Time
+                      </button>
+                      {regSettings.due_date && (
+                        <button
+                          type="button"
+                          onClick={handleClearDueDate}
+                          disabled={submittingRegSettings}
+                          className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 border border-rule text-draft rounded text-xs font-semibold"
+                        >
+                          Clear Date &amp; Time
+                        </button>
+                      )}
+                    </div>
+                    {regSettings.due_date && (
+                      <div className="text-xs text-draft mt-2 font-mono bg-paper p-2.5 rounded border border-rule space-y-1">
+                        <div className="flex items-center gap-4 flex-wrap">
+                          <span>📅 <strong>Due Date:</strong> <span className="text-ink font-bold">{new Date(regSettings.due_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span></span>
+                          <span>⏰ <strong>Due Time:</strong> <span className="text-ink font-bold">{new Date(regSettings.due_date).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}</span></span>
+                        </div>
+                        {regSettings.is_past_due_date && <p className="text-red-600 font-bold mt-1">⚠️ Deadline Passed</p>}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Danger Zone: Delete All Registered Forms */}
+              <div className="space-y-4 bg-red-50/40 p-4 border border-red-200 rounded-md flex flex-col justify-between">
+                <div>
+                  <h4 className="font-semibold text-sm text-red-900 flex items-center gap-2">
+                    <span>⚠️</span> Danger Zone: Reset Registered Forms
+                  </h4>
+                  <p className="text-xs text-red-800 mt-2 leading-relaxed">
+                    Delete all registered BE project group forms for Academic Year <strong>{academicYear}</strong> ({groups.length} registered groups).
+                    This will clear all registered group choices and student roster submissions.
+                  </p>
+                </div>
+
+                <div className="pt-4 border-t border-red-200">
+                  <button
+                    type="button"
+                    onClick={handlePurgeAllGroups}
+                    disabled={groups.length === 0}
+                    className="w-full py-2.5 px-4 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold text-xs rounded transition-colors shadow-xs flex items-center justify-center gap-2"
+                  >
+                    <span>🗑️</span> Delete All Forms Registered ({groups.length} Groups)
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="result-table">
-              <thead>
-                <tr>
-                  <th>Group Code</th>
-                  <th>Title &amp; Domain</th>
-                  <th>Roster</th>
-                  <th>Guide Status</th>
-                  <th>Group Status</th>
-                  <th className="text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {groups.map((g) => (
-                  <tr key={g.id}>
-                    <td className="font-mono text-sm font-bold text-navy">{g.group_code}</td>
-                    <td className="max-w-xs">
-                      <div className="font-semibold text-ink text-sm">{g.title}</div>
-                      <div className="text-xs text-draft">{g.domain}</div>
-                    </td>
-                    <td>
-                      <div className="text-xs text-ink">{g.members_count || g.members?.length || 0} members</div>
-                      <div className="text-[10px] text-draft truncate max-w-[180px]">
-                        {g.leader_name || g.members?.find(m => m.is_leader)?.name || 'Leader'} (Leader)
-                      </div>
-                    </td>
-                    <td>
-                      {g.guide_approval_status === 'PENDING_HOD_APPROVAL' ? (
-                        <div>
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
-                            Proposed: {g.proposed_guide_name || 'Clear Guide'} (Pending HOD Confirmation)
-                          </span>
-                          {g.guide_name && (
-                            <div className="text-[10px] text-draft mt-0.5">Current Active: {g.guide_name}</div>
-                          )}
-                        </div>
-                      ) : g.guide_name ? (
-                        <div>
-                          <div className="font-bold text-emerald-800 text-xs">{g.guide_name}</div>
-                          <div className="text-[10px] text-draft">{g.guide_designation}</div>
-                          <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            Confirmed by HOD
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
-                          Unassigned
-                        </span>
-                      )}
-                    </td>
-                    <td>
-                      <span className={`badge ${g.status === 'ACTIVE' ? 'badge-published' : 'badge-draft'}`}>
-                        {g.status}
-                      </span>
-                    </td>
-                    <td className="text-right">
-                      <button
-                        onClick={() => {
-                          setGuideModalGroup(g);
-                          setSelectedGuideId(g.proposed_guide_faculty_id || g.guide_faculty_id ? String(g.proposed_guide_faculty_id || g.guide_faculty_id) : '');
-                        }}
-                        className="btn-secondary py-1 px-3 text-xs"
-                      >
-                        {g.guide_name ? 'Change Guide' : 'Assign Guide'}
-                      </button>
-                    </td>
+
+          <div className="panel">
+            <div className="panel-header flex items-center justify-between">
+              <div>
+                <h2 className="font-serif text-xl font-semibold">Department BE Project Groups</h2>
+                <span className="text-xs text-draft font-mono font-medium">Total: {groups.length} groups</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleExportFormResponses}
+                  className="px-3.5 py-1.5 bg-indigo-700 hover:bg-indigo-800 text-white rounded text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
+                >
+                  <span>📥</span> Form Responses (Excel)
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportGuideAssignments}
+                  className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
+                >
+                  <span>📥</span> Guide Assignments (Excel)
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearAllGuides}
+                  className="px-3 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                >
+                  <span>🗑️</span> Reset / Unassign All Guides
+                </button>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="result-table">
+                <thead>
+                  <tr>
+                    <th>Group Code</th>
+                    <th>Title &amp; Domain</th>
+                    <th>Roster</th>
+                    <th>Guide Status</th>
+                    <th>Group Status</th>
+                    <th className="text-right">Action</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {groups.map((g) => (
+                    <tr key={g.id}>
+                      <td className="font-mono text-sm font-bold text-navy">{g.group_code}</td>
+                      <td className="max-w-xs">
+                        <div className="font-semibold text-ink text-sm">{g.title}</div>
+                        <div className="text-xs text-draft">{g.domain}</div>
+                      </td>
+                      <td>
+                        <div className="text-xs text-ink">{g.members_count || g.members?.length || 0} members</div>
+                        <div className="text-[10px] text-draft truncate max-w-[180px]">
+                          {g.leader_name || g.members?.find(m => m.is_leader)?.name || 'Leader'} (Leader)
+                        </div>
+                      </td>
+                      <td>
+                        {g.guide_approval_status === 'PENDING_HOD_APPROVAL' ? (
+                          <div>
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                              Proposed: {g.proposed_guide_name || 'Clear Guide'} (Pending HOD Confirmation)
+                            </span>
+                            {g.guide_name && (
+                              <div className="text-[10px] text-draft mt-0.5">Current Active: {g.guide_name}</div>
+                            )}
+                          </div>
+                        ) : g.guide_name ? (
+                          <div>
+                            <div className="font-bold text-emerald-800 text-xs">{g.guide_name}</div>
+                            <div className="text-[10px] text-draft">{g.guide_designation}</div>
+                            <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              Confirmed by HOD
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+                            Unassigned
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        <span className={`badge ${g.status === 'ACTIVE' ? 'badge-published' : 'badge-draft'}`}>
+                          {g.status}
+                        </span>
+                      </td>
+                      <td className="text-right">
+                        <button
+                          onClick={() => {
+                            setGuideModalGroup(g);
+                            setSelectedGuideId(g.proposed_guide_faculty_id || g.guide_faculty_id ? String(g.proposed_guide_faculty_id || g.guide_faculty_id) : '');
+                          }}
+                          className="btn-secondary py-1 px-3 text-xs"
+                        >
+                          {g.guide_name ? 'Change Guide' : 'Assign Guide'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -910,9 +1115,6 @@ export default function HODProjectMgmt() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-rule pb-4">
               <div>
                 <h2 className="font-serif text-2xl font-bold text-ink mt-1">Batch Panel Assignments</h2>
-                <p className="text-xs text-draft mt-0.5">
-                  Fully controlled by BE Project Coordinator — Automate panel distribution &amp; workload balancing across department faculty.
-                </p>
               </div>
 
               {/* Bulk Quick Action Buttons */}
@@ -1224,8 +1426,19 @@ export default function HODProjectMgmt() {
       {activeTab === 'governance' && (
         <div className="space-y-6">
           <div className="panel p-6 space-y-4">
-            <h2 className="font-serif text-xl font-bold text-ink">Score Visibility Control (Release to Students)</h2>
-            <p className="text-xs text-draft">Publish continuous assessment marks &amp; panel remarks per stage.</p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-rule pb-4">
+              <div>
+                <h2 className="font-serif text-xl font-bold text-ink">Score Visibility Control (Release to Students)</h2>
+                <p className="text-xs text-draft mt-0.5">Publish continuous assessment marks &amp; panel remarks per stage or export formatted score excel.</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleExportScoreExcel}
+                className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-xs font-bold flex items-center gap-2 transition-colors shadow-xs self-start sm:self-auto"
+              >
+                <span>📊</span> Export Score Excel ↓
+              </button>
+            </div>
             <div className="grid md:grid-cols-3 gap-4 pt-2">
               {stages.map((stage) => (
                 <div key={stage.id} className="p-4 border border-rule rounded bg-paper flex flex-col justify-between space-y-3">
@@ -1249,22 +1462,14 @@ export default function HODProjectMgmt() {
       {/* TAB 6: REPORTS & EXPORT */}
       {activeTab === 'reports' && reportData && (
         <div className="panel">
-          <div className="panel-header flex items-center justify-between">
+          <div className="panel-header flex items-center justify-between gap-3 flex-wrap">
             <h2 className="font-serif text-xl font-semibold">Consolidated BE Project Marksheet Report</h2>
             <button
-              onClick={() => {
-                const jsonStr = JSON.stringify(reportData, null, 2);
-                const blob = new Blob([jsonStr], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `BE_Project_Marksheet_${academicYear}.json`;
-                a.click();
-                toast.success('Report downloaded');
-              }}
-              className="px-3 py-1 bg-navy text-white rounded text-xs font-semibold hover:bg-blue-900"
+              type="button"
+              onClick={handleExportScoreExcel}
+              className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
             >
-              Export JSON Report ↓
+              <span>📊</span> Export Score Excel ↓
             </button>
           </div>
           <div className="overflow-x-auto">
@@ -1304,20 +1509,86 @@ export default function HODProjectMgmt() {
           </div>
         </div>
       )}
-              {/* ASSIGN GUIDE MODAL */}
+      {/* ASSIGN GUIDE MODAL */}
       {guideModalGroup && createPortal(
         <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded border border-rule max-w-md w-full p-6 shadow-xl">
-            <h3 className="font-serif text-lg font-bold text-ink border-b border-rule pb-2 mb-4">
-              Assign Guide for {guideModalGroup.group_code}
+          <div className="bg-white rounded-lg border border-rule max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto animate-fade-in">
+            <h3 className="font-serif text-xl font-bold text-ink border-b border-rule pb-3 flex items-center justify-between">
+              <span>Assign Guide for {guideModalGroup.group_code}</span>
+              <button
+                type="button"
+                onClick={() => setGuideModalGroup(null)}
+                className="text-draft hover:text-ink font-bold text-base"
+              >
+                ✕
+              </button>
             </h3>
-            <form onSubmit={handleAssignGuide} className="space-y-4">
+
+            {/* Group Details Section: Domain, Student Names, and 3 Project Topics */}
+            <div className="bg-paper p-4 rounded-md border border-rule space-y-3">
+              {/* 1. Project Domain */}
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-draft uppercase tracking-wider">Project Domain:</span>
+                <span className="px-2.5 py-0.5 rounded text-xs font-bold bg-indigo-50 text-indigo-900 border border-indigo-200">
+                  {guideModalGroup.domain || 'Not Specified'}
+                </span>
+              </div>
+
+              {/* 2. Students in Group (Each Student Name) */}
+              <div>
+                <span className="text-xs font-semibold text-draft uppercase tracking-wider block mb-1">
+                  Students in Group ({guideModalGroup.members?.length || 0}):
+                </span>
+                <div className="grid grid-cols-1 gap-1.5 text-xs">
+                  {guideModalGroup.members && guideModalGroup.members.length > 0 ? (
+                    guideModalGroup.members.map((m, idx) => (
+                      <div key={idx} className="flex items-center justify-between bg-white px-3 py-1.5 rounded border border-rule">
+                        <span className="font-semibold text-ink">
+                          {idx + 1}. {m.name || m.student_name || 'Student'}
+                          {m.is_leader && (
+                            <span className="ml-2 text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded">
+                              Leader
+                            </span>
+                          )}
+                        </span>
+                        {m.roll_no && <span className="font-mono text-[11px] text-draft">{m.roll_no}</span>}
+                      </div>
+                    ))
+                  ) : (
+                    <span className="text-draft italic">No student details available</span>
+                  )}
+                </div>
+              </div>
+
+              {/* 3. 3 Project Topics */}
+              <div>
+                <span className="text-xs font-semibold text-draft uppercase tracking-wider block mb-1">
+                  3 Project Topics:
+                </span>
+                <div className="space-y-1.5 text-xs">
+                  <div className="p-2.5 bg-white rounded border border-rule">
+                    <span className="font-bold text-navy text-[11px] block">Topic Preference 1:</span>
+                    <span className="text-ink font-semibold leading-tight block mt-0.5">{guideModalGroup.title || 'Not Specified'}</span>
+                  </div>
+                  <div className="p-2.5 bg-white rounded border border-rule">
+                    <span className="font-bold text-draft text-[11px] block">Topic Preference 2:</span>
+                    <span className="text-ink font-medium leading-tight block mt-0.5">{guideModalGroup.title_2 || <em className="text-draft">Not provided</em>}</span>
+                  </div>
+                  <div className="p-2.5 bg-white rounded border border-rule">
+                    <span className="font-bold text-draft text-[11px] block">Topic Preference 3:</span>
+                    <span className="text-ink font-medium leading-tight block mt-0.5">{guideModalGroup.title_3 || <em className="text-draft">Not provided</em>}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <form onSubmit={handleAssignGuide} className="space-y-4 pt-1">
               <div>
                 <label className="input-label">Select Faculty Guide *</label>
                 <select
                   value={selectedGuideId}
                   onChange={(e) => setSelectedGuideId(e.target.value)}
-                  className="input-field"
+                  className="input-field font-semibold"
                 >
                   <option value="">-- Leave Unassigned --</option>
                   {availableGuides.map((g) => (
@@ -1331,7 +1602,7 @@ export default function HODProjectMgmt() {
                 <button
                   type="button"
                   onClick={() => setGuideModalGroup(null)}
-                  className="px-4 py-2 border border-rule rounded text-xs font-semibold"
+                  className="px-4 py-2 border border-rule rounded text-xs font-semibold hover:bg-gray-50"
                 >
                   Cancel
                 </button>

@@ -91,6 +91,24 @@ export default function HODProjectApprovals() {
     }
   };
 
+  const handleExportScoreExcel = async () => {
+    try {
+      const res = await api.get(`/projects/export/score-excel?academic_year=${academicYear}`, {
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `BE Project Score Report (AY ${academicYear}).xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success('Score Excel downloaded successfully!');
+    } catch (err) {
+      toast.error('Failed to export score Excel');
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-8 max-w-7xl mx-auto flex items-center justify-center min-h-[400px]">
@@ -111,7 +129,7 @@ export default function HODProjectApprovals() {
       {/* Header */}
       <div className="pb-5 border-b border-rule flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-serif text-3xl font-bold text-ink">BE Project Confirmation &amp; Approvals</h1>
+          <h1 className="font-serif text-3xl font-bold text-ink">BE Project Approvals</h1>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button
@@ -182,7 +200,8 @@ export default function HODProjectApprovals() {
             <thead>
               <tr>
                 <th>Group Code</th>
-                <th>Project Title &amp; Domain</th>
+                <th>Project Domain &amp; 3 Topics</th>
+                <th>Students in Group</th>
                 <th>Proposed Guide</th>
                 <th>Requested By</th>
                 <th className="text-right">HOD Confirmation Action</th>
@@ -191,7 +210,7 @@ export default function HODProjectApprovals() {
             <tbody>
               {pendingGuides.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="text-center py-8 text-xs text-draft italic">
+                  <td colSpan="6" className="text-center py-8 text-xs text-draft italic">
                     ✓ No pending guide assignments requiring HOD confirmation.
                   </td>
                 </tr>
@@ -199,9 +218,28 @@ export default function HODProjectApprovals() {
                 pendingGuides.map((g) => (
                   <tr key={g.id}>
                     <td className="font-mono text-sm font-bold text-navy">{g.group_code}</td>
-                    <td className="max-w-xs">
-                      <div className="font-semibold text-ink text-sm">{g.title}</div>
-                      <div className="text-xs text-draft">{g.domain}</div>
+                    <td className="max-w-xs space-y-1">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-900 border border-indigo-200 inline-block">
+                        Domain: {g.domain || 'Not Specified'}
+                      </span>
+                      <div className="text-xs space-y-0.5">
+                        <div className="font-semibold text-ink">1. {g.title || 'Not specified'}</div>
+                        {g.title_2 && <div className="text-draft text-[11px]">2. {g.title_2}</div>}
+                        {g.title_3 && <div className="text-draft text-[11px]">3. {g.title_3}</div>}
+                      </div>
+                    </td>
+                    <td className="text-xs max-w-xs">
+                      {g.members && g.members.length > 0 ? (
+                        <div className="space-y-0.5">
+                          {g.members.map((m, mIdx) => (
+                            <div key={mIdx} className="text-ink text-[11px]">
+                              {mIdx + 1}. {m.name} {m.is_leader && <strong className="text-amber-800 text-[10px]">(Leader)</strong>}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-draft italic">No roster</span>
+                      )}
                     </td>
                     <td>
                       {g.proposed_guide_name ? (
@@ -248,9 +286,18 @@ export default function HODProjectApprovals() {
           <div>
             <h3 className="font-serif text-lg font-bold text-ink">2. Pending Score Release Requests</h3>
           </div>
-          <span className="px-2.5 py-1 text-xs font-bold font-mono rounded bg-amber-100 text-amber-900 border border-amber-300">
-            {pendingScoreReleases.length} Pending
-          </span>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleExportScoreExcel}
+              className="px-3 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded flex items-center gap-1.5 shadow-xs transition-colors"
+            >
+              <span>📊</span> Export Score Excel ↓
+            </button>
+            <span className="px-2.5 py-1 text-xs font-bold font-mono rounded bg-amber-100 text-amber-900 border border-amber-300">
+              {pendingScoreReleases.length} Pending
+            </span>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="result-table">

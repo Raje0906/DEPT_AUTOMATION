@@ -255,6 +255,143 @@ function addGuideAssignmentsWorksheet(workbook, groups) {
 }
 
 /**
+ * Add Score Report Worksheet with Matrix Layout & Merged Cells (Similar to Guide Assignments)
+ */
+function addScoreReportWorksheet(workbook, groups, stages = []) {
+  const sheet = workbook.addWorksheet('Score Report');
+
+  const columns = [
+    { header: 'Group No', key: 'gno', width: 12 },
+    { header: 'Name of Student', key: 'sname', width: 30 },
+    { header: 'College PRN', key: 'prn', width: 16 },
+    { header: 'Domain Name', key: 'domain', width: 30 },
+    { header: 'Guide Name', key: 'guide', width: 28 },
+    { header: '3 Project Topics', key: 'topics', width: 70 }
+  ];
+
+  stages.forEach((st) => {
+    columns.push({
+      header: `${st.name} (${st.max_marks_total || 50})`,
+      key: `stage_${st.id}`,
+      width: 18
+    });
+  });
+
+  columns.push({ header: 'Total Aggregate', key: 'total_aggregate', width: 18 });
+
+  sheet.columns = columns;
+
+  const headerRow = sheet.getRow(1);
+  headerRow.height = 28;
+  headerRow.eachCell((cell) => {
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE8F5E9' }
+    };
+    cell.font = {
+      name: 'Calibri',
+      size: 11,
+      bold: true,
+      color: { argb: 'FF1B5E20' }
+    };
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FFA5D6A7' } },
+      bottom: { style: 'medium', color: { argb: 'FF2E7D32' } },
+      left: { style: 'thin', color: { argb: 'FFA5D6A7' } },
+      right: { style: 'thin', color: { argb: 'FFA5D6A7' } }
+    };
+  });
+
+  let currentRow = 2;
+
+  groups.forEach((group, gIdx) => {
+    const members = group.members || [];
+    const groupNum = group.group_code ? (parseInt(group.group_code.split('-').pop(), 10) || (gIdx + 1)) : (gIdx + 1);
+    const guideName = group.guide_name || group.proposed_guide_name || 'Unassigned';
+    const domainName = group.domain || '';
+
+    const maxRows = Math.max(members.length, 3);
+    const groupStartRow = currentRow;
+
+    for (let r = 0; r < maxRows; r++) {
+      const m = members[r] || {};
+      let topicText = '';
+      if (r === 0 && group.title) topicText = `1. ${group.title}`;
+      else if (r === 1 && group.title_2) topicText = `2. ${group.title_2}`;
+      else if (r === 2 && group.title_3) topicText = `3. ${group.title_3}`;
+
+      const rowValues = [
+        r === 0 ? groupNum : '',
+        m.name || m.student_name || '',
+        m.roll_no || m.prn || '',
+        r === 0 ? domainName : '',
+        r === 0 ? guideName : '',
+        topicText
+      ];
+
+      if (m.name || m.student_name || m.id) {
+        let studentTotal = 0;
+        let hasAnyMarks = false;
+
+        stages.forEach((st) => {
+          const scoreVal = m.stage_scores?.[st.id];
+          if (scoreVal !== undefined && scoreVal !== null && scoreVal !== 'N/A') {
+            const numVal = Number(scoreVal);
+            if (!isNaN(numVal)) {
+              rowValues.push(numVal);
+              studentTotal += numVal;
+              hasAnyMarks = true;
+            } else {
+              rowValues.push(scoreVal);
+            }
+          } else {
+            rowValues.push('N/A');
+          }
+        });
+
+        rowValues.push(hasAnyMarks ? Number(studentTotal.toFixed(2)) : 'N/A');
+      } else {
+        stages.forEach(() => rowValues.push(''));
+        rowValues.push('');
+      }
+
+      const row = sheet.addRow(rowValues);
+      row.height = 20;
+
+      row.eachCell((cell, colNum) => {
+        cell.font = { name: 'Calibri', size: 10 };
+        const isNumericCol = colNum > 6;
+        cell.alignment = {
+          vertical: 'middle',
+          horizontal: isNumericCol ? 'center' : ((colNum === 2 || colNum === 6) ? 'left' : 'center'),
+          wrapText: colNum === 6
+        };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFD0D0D0' } },
+          bottom: { style: 'thin', color: { argb: 'FFD0D0D0' } },
+          left: { style: 'thin', color: { argb: 'FFD0D0D0' } },
+          right: { style: 'thin', color: { argb: 'FFD0D0D0' } }
+        };
+      });
+
+      currentRow++;
+    }
+
+    if (maxRows > 1) {
+      sheet.mergeCells(`A${groupStartRow}:A${currentRow - 1}`);
+      sheet.mergeCells(`D${groupStartRow}:D${currentRow - 1}`);
+      sheet.mergeCells(`E${groupStartRow}:E${currentRow - 1}`);
+    }
+
+    const emptyRow = sheet.addRow(new Array(columns.length).fill(''));
+    emptyRow.height = 12;
+    currentRow++;
+  });
+}
+
+/**
  * Build Form Responses Workbook with Form Responses 1 as Tab 1
  */
 async function buildFormResponsesWorkbook(groups, academicYear = '2026-27') {
@@ -274,9 +411,23 @@ async function buildGuideAssignmentsWorkbook(groups, academicYear = '2026-27') {
   return await workbook.xlsx.writeBuffer();
 }
 
+/**
+ * Build Score Report Workbook with Score Report as Tab 1
+ */
+async function buildScoreReportWorkbook(groups, stages, academicYear = '2026-27') {
+  const workbook = new ExcelJS.Workbook();
+  addScoreReportWorksheet(workbook, groups, stages);
+  addGuideAssignmentsWorksheet(workbook, groups);
+  addFormResponsesWorksheet(workbook, groups);
+  return await workbook.xlsx.writeBuffer();
+}
+
 module.exports = {
   buildFormResponsesWorkbook,
   buildGuideAssignmentsWorkbook,
+  buildScoreReportWorkbook,
   addFormResponsesWorksheet,
-  addGuideAssignmentsWorksheet
+  addGuideAssignmentsWorksheet,
+  addScoreReportWorksheet
 };
+

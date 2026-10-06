@@ -1,7 +1,7 @@
 const express = require('express');
 const pool = require('../db/pool');
 const { verifyToken, requireRole } = require('../middleware/auth');
-const { buildFormResponsesWorkbook, buildGuideAssignmentsWorkbook, buildExaminerAssignmentsWorkbook } = require('../services/projectExporter');
+const { buildFormResponsesWorkbook, buildGuideAssignmentsWorkbook, buildExaminerAssignmentsWorkbook, buildScoreReportWorkbook } = require('../services/projectExporter');
 const router = express.Router();
 
 // Helper: Get faculty ID for logged in user
@@ -50,16 +50,24 @@ router.get('/student/my-group', verifyToken, requireRole('student'), async (req,
     const student = await getStudentId(req.user.id);
     if (!student) return res.status(404).json({ error: 'Student record not found' });
 
-    // Find student's active/current group
+    // Find student's active/current group (matches student_id, case-insensitive email, or roll_no / enrollment_no)
     const groupRes = await pool.query(
-      `SELECT g.*, f.id as guide_faculty_id, u.name as guide_name, f.designation as guide_designation, u.email as guide_email
+      `SELECT g.*, f.id as guide_faculty_id, u.name as guide_name, f.designation as guide_designation, u.email as guide_email,
+              gm.id as member_record_id, gm.student_id as member_student_id
        FROM project_groups g
        JOIN project_group_members gm ON g.id = gm.group_id
        LEFT JOIN faculty f ON g.guide_id = f.id
        LEFT JOIN users u ON f.user_id = u.id
-       WHERE (gm.student_id = $1 OR gm.email = $2) AND g.status != 'WITHDRAWN'
+       WHERE (
+         gm.student_id = $1
+         OR (gm.email IS NOT NULL AND gm.email != '' AND LOWER(TRIM(gm.email)) = LOWER(TRIM($2)))
+         OR (gm.roll_no IS NOT NULL AND gm.roll_no != '' AND (
+              LOWER(TRIM(gm.roll_no)) = LOWER(TRIM($3))
+              OR LOWER(TRIM(gm.roll_no)) = LOWER(TRIM($4))
+            ))
+       ) AND g.status != 'WITHDRAWN'
        ORDER BY g.created_at DESC LIMIT 1`,
-      [student.id, req.user.email]
+      [student.id, req.user.email || '', student.roll_no || '', student.enrollment_no || '']
     );
 
     if (groupRes.rows.length === 0) {
@@ -67,6 +75,14 @@ router.get('/student/my-group', verifyToken, requireRole('student'), async (req,
     }
 
     const group = groupRes.rows[0];
+
+    // Auto-link student_id if missing in project_group_members
+    if (!group.member_student_id && group.member_record_id) {
+      await pool.query(
+        `UPDATE project_group_members SET student_id = $1 WHERE id = $2`,
+        [student.id, group.member_record_id]
+      );
+    }
 
     // Fetch team members
     const membersRes = await pool.query(
@@ -169,13 +185,22 @@ router.get('/student/my-group', verifyToken, requireRole('student'), async (req,
       });
     }
 
+    const isLeader = membersRes.rows.some(m =>
+      (m.student_id === student.id ||
+       (m.email && m.email.trim().toLowerCase() === (req.user.email || '').trim().toLowerCase()) ||
+       (m.roll_no && (
+         m.roll_no.trim().toLowerCase() === (student.roll_no || '').trim().toLowerCase() ||
+         m.roll_no.trim().toLowerCase() === (student.enrollment_no || '').trim().toLowerCase()
+       ))) && m.is_leader
+    );
+
     res.json({
       hasGroup: true,
       group,
       members: membersRes.rows,
       guideRequests: guideReqRes.rows,
       stages: stagesWithScores,
-      isLeader: membersRes.rows.some(m => (m.student_id === student.id || m.email === req.user.email) && m.is_leader)
+      isLeader
     });
   } catch (err) {
     console.error('[Projects Student API Error]', err);
@@ -210,13 +235,42 @@ router.post('/student/groups', verifyToken, requireRole('student'), async (req, 
     const acadYear = academic_year || '2026-27';
     const studentBatch = batch || members[0]?.division || student.batch || 'BE-CE-A';
 
+    // Check registration form open status and due date
+    const regSettingsRes = await pool.query(
+      `SELECT is_registration_open, due_date FROM project_registration_settings WHERE academic_year = $1`,
+      [acadYear]
+    );
+    if (regSettingsRes.rows.length > 0) {
+      const { is_registration_open, due_date } = regSettingsRes.rows[0];
+      if (is_registration_open === false) {
+        return res.status(400).json({
+          error: 'Project group registration is currently closed by the BE Project Coordinator.'
+        });
+      }
+      if (due_date && new Date() > new Date(due_date)) {
+        const formattedDueDate = new Date(due_date).toLocaleString('en-IN', {
+          dateStyle: 'medium',
+          timeStyle: 'short'
+        });
+        return res.status(400).json({
+          error: `Project group registration deadline has passed (${formattedDueDate}). Registration is closed.`
+        });
+      }
+    }
+
     // Check if leader or any member in the list is already in an active group
     const existingGroup = await pool.query(
       `SELECT g.id, g.group_code FROM project_groups g
        JOIN project_group_members gm ON g.id = gm.group_id
-       WHERE (gm.student_id = $1 OR gm.email = $2 OR gm.roll_no = $3)
-         AND g.academic_year = $4 AND g.status != 'WITHDRAWN'`,
-      [student.id, req.user.email, student.roll_no, acadYear]
+       WHERE (
+         gm.student_id = $1
+         OR (gm.email IS NOT NULL AND gm.email != '' AND LOWER(TRIM(gm.email)) = LOWER(TRIM($2)))
+         OR (gm.roll_no IS NOT NULL AND gm.roll_no != '' AND (
+              LOWER(TRIM(gm.roll_no)) = LOWER(TRIM($3))
+              OR LOWER(TRIM(gm.roll_no)) = LOWER(TRIM($4))
+            ))
+       ) AND g.academic_year = $5 AND g.status != 'WITHDRAWN'`,
+      [student.id, req.user.email || '', student.roll_no || '', student.enrollment_no || '', acadYear]
     );
 
     if (existingGroup.rows.length > 0) {
@@ -253,15 +307,27 @@ router.post('/student/groups', verifyToken, requireRole('student'), async (req, 
         const isLeader = i === 0 || !!m.is_leader;
         
         let matchedStudentId = isLeader ? student.id : null;
-        if (!matchedStudentId && (m.email || m.roll_no)) {
-          const matchRes = await client.query(
-            `SELECT s.id FROM students s
-             JOIN users u ON s.user_id = u.id
-             WHERE u.email = $1 OR s.roll_no = $2 LIMIT 1`,
-            [m.email || '', m.roll_no || '']
-          );
-          if (matchRes.rows.length > 0) {
-            matchedStudentId = matchRes.rows[0].id;
+        if (!matchedStudentId) {
+          const mEmail = (m.email || '').trim();
+          const mRollNo = (m.roll_no || m.prn || '').trim();
+
+          if (mEmail || mRollNo) {
+            const matchRes = await client.query(
+              `SELECT s.id, u.name, u.email, s.roll_no, s.enrollment_no
+               FROM students s
+               JOIN users u ON s.user_id = u.id
+               WHERE (
+                 ($1 != '' AND LOWER(TRIM(u.email)) = LOWER($1))
+                 OR ($2 != '' AND (LOWER(TRIM(s.roll_no)) = LOWER($2) OR LOWER(TRIM(s.enrollment_no)) = LOWER($2)))
+               ) LIMIT 1`,
+              [mEmail.toLowerCase(), mRollNo.toLowerCase()]
+            );
+            if (matchRes.rows.length > 0) {
+              matchedStudentId = matchRes.rows[0].id;
+              if (!m.email && matchRes.rows[0].email) m.email = matchRes.rows[0].email;
+              if (!m.roll_no && matchRes.rows[0].roll_no) m.roll_no = matchRes.rows[0].roll_no;
+              if (!m.name && matchRes.rows[0].name) m.name = matchRes.rows[0].name;
+            }
           }
         }
 
@@ -382,6 +448,115 @@ router.get('/student/available-guides', verifyToken, async (req, res) => {
   }
 });
 
+/**
+ * GET /api/projects/registration-settings
+ * Get project registration form controls (open/closed status, due date) for an academic year.
+ */
+router.get('/registration-settings', verifyToken, async (req, res) => {
+  try {
+    const acadYear = req.query.academic_year || '2026-27';
+    const settingsRes = await pool.query(
+      `SELECT * FROM project_registration_settings WHERE academic_year = $1`,
+      [acadYear]
+    );
+
+    if (settingsRes.rows.length === 0) {
+      return res.json({
+        academic_year: acadYear,
+        is_registration_open: true,
+        due_date: null,
+        is_open: true
+      });
+    }
+
+    const row = settingsRes.rows[0];
+    const now = new Date();
+    const isPastDueDate = row.due_date ? now > new Date(row.due_date) : false;
+    const isOpen = Boolean(row.is_registration_open) && !isPastDueDate;
+
+    res.json({
+      ...row,
+      is_past_due_date: isPastDueDate,
+      is_open: isOpen
+    });
+  } catch (err) {
+    console.error('[Get Registration Settings Error]', err);
+    res.status(500).json({ error: 'Failed to fetch registration settings' });
+  }
+});
+
+/**
+ * PATCH /api/projects/registration-settings
+ * Update project registration form controls (toggle open/closed, set due date).
+ * Accessible by BE Project Coordinator or HOD.
+ */
+router.patch('/registration-settings', verifyToken, requireProjectCoordinatorOrHOD, async (req, res) => {
+  try {
+    const { academic_year, is_registration_open, due_date } = req.body;
+    const acadYear = academic_year || '2026-27';
+    const isOpen = is_registration_open !== undefined ? Boolean(is_registration_open) : true;
+    const dueDateVal = due_date ? new Date(due_date).toISOString() : null;
+
+    const result = await pool.query(
+      `INSERT INTO project_registration_settings (academic_year, is_registration_open, due_date, updated_by, updated_at)
+       VALUES ($1, $2, $3, $4, NOW())
+       ON CONFLICT (academic_year) DO UPDATE
+       SET is_registration_open = EXCLUDED.is_registration_open,
+           due_date = EXCLUDED.due_date,
+           updated_by = EXCLUDED.updated_by,
+           updated_at = NOW()
+       RETURNING *`,
+      [acadYear, isOpen, dueDateVal, req.user.id]
+    );
+
+    const row = result.rows[0];
+    const now = new Date();
+    const isPastDueDate = row.due_date ? now > new Date(row.due_date) : false;
+
+    res.json({
+      message: 'Project registration form settings updated successfully',
+      settings: {
+        ...row,
+        is_past_due_date: isPastDueDate,
+        is_open: Boolean(row.is_registration_open) && !isPastDueDate
+      }
+    });
+  } catch (err) {
+    console.error('[Update Registration Settings Error]', err);
+    res.status(500).json({ error: 'Failed to update registration settings' });
+  }
+});
+
+/**
+ * DELETE /api/projects/hod/groups/purge
+ * Delete all registered project group forms for an academic year.
+ * Accessible by BE Project Coordinator or HOD.
+ */
+router.delete('/hod/groups/purge', verifyToken, requireProjectCoordinatorOrHOD, async (req, res) => {
+  try {
+    const acadYear = req.query.academic_year || '2026-27';
+
+    const countRes = await pool.query(
+      `SELECT COUNT(*) FROM project_groups WHERE academic_year = $1 AND status != 'WITHDRAWN'`,
+      [acadYear]
+    );
+    const count = parseInt(countRes.rows[0].count, 10);
+
+    await pool.query(
+      `DELETE FROM project_groups WHERE academic_year = $1`,
+      [acadYear]
+    );
+
+    res.json({
+      message: `Successfully deleted all ${count} registered project group forms for academic year ${acadYear}.`,
+      deletedCount: count
+    });
+  } catch (err) {
+    console.error('[Purge Registered Groups Error]', err);
+    res.status(500).json({ error: 'Failed to delete registered forms' });
+  }
+});
+
 
 // ============================================================================
 // 2. FACULTY / GUIDE ENDPOINTS
@@ -424,11 +599,13 @@ router.get('/guide/my-groups', verifyToken, requireRole('faculty','hod'), async 
 
     for (const group of groupsRes.rows) {
       const membersRes = await pool.query(
-        `SELECT gm.roll_no, gm.is_leader, u.name, u.email
+        `SELECT gm.roll_no, gm.is_leader, gm.division, gm.mobile_no,
+                COALESCE(u.name, gm.student_name, 'Student') as name,
+                COALESCE(u.email, gm.email, '') as email
          FROM project_group_members gm
-         JOIN students s ON gm.student_id = s.id
-         JOIN users u ON s.user_id = u.id
-         WHERE gm.group_id = $1 ORDER BY gm.is_leader DESC`,
+         LEFT JOIN students s ON gm.student_id = s.id
+         LEFT JOIN users u ON s.user_id = u.id
+         WHERE gm.group_id = $1 ORDER BY gm.is_leader DESC, gm.id ASC`,
         [group.id]
       );
       group.members = membersRes.rows;
@@ -474,10 +651,10 @@ router.get('/evaluator/assignments', verifyToken, requireRole('faculty','hod'), 
 
     for (const row of assignmentsRes.rows) {
       const membersRes = await pool.query(
-        `SELECT gm.roll_no, u.name FROM project_group_members gm
-         JOIN students st ON gm.student_id = st.id
-         JOIN users u ON st.user_id = u.id
-         WHERE gm.group_id = $1`,
+        `SELECT gm.roll_no, COALESCE(u.name, gm.student_name, 'Student') as name FROM project_group_members gm
+         LEFT JOIN students st ON gm.student_id = st.id
+         LEFT JOIN users u ON st.user_id = u.id
+         WHERE gm.group_id = $1 ORDER BY gm.is_leader DESC, gm.id ASC`,
         [row.group_id]
       );
       row.members = membersRes.rows;
@@ -853,11 +1030,13 @@ router.get('/hod/groups', verifyToken, requireProjectCoordinatorOrHOD, async (re
 
     for (const g of groupsRes.rows) {
       const membersRes = await pool.query(
-        `SELECT gm.roll_no, gm.is_leader, u.name, u.email
+        `SELECT gm.roll_no, gm.is_leader, gm.division, gm.mobile_no,
+                COALESCE(u.name, gm.student_name, 'Student') as name,
+                COALESCE(u.email, gm.email, '') as email
          FROM project_group_members gm
-         JOIN students st ON gm.student_id = st.id
-         JOIN users u ON st.user_id = u.id
-         WHERE gm.group_id = $1 ORDER BY gm.is_leader DESC`,
+         LEFT JOIN students st ON gm.student_id = st.id
+         LEFT JOIN users u ON st.user_id = u.id
+         WHERE gm.group_id = $1 ORDER BY gm.is_leader DESC, gm.id ASC`,
         [g.id]
       );
       g.members = membersRes.rows;
@@ -1550,7 +1729,7 @@ router.get('/hod/pending-approvals', verifyToken, requireProjectCoordinatorOrHOD
     const acadYear = req.query.academic_year || '2026-27';
 
     const pendingGuides = await pool.query(
-      `SELECT g.id, g.group_code, g.title, g.domain, g.proposed_guide_id,
+      `SELECT g.id, g.group_code, g.title, g.title_2, g.title_3, g.domain, g.proposed_guide_id,
               f.id as proposed_guide_faculty_id, u.name as proposed_guide_name, f.designation as proposed_guide_designation,
               req_u.name as requested_by_name
        FROM project_groups g
@@ -1561,6 +1740,19 @@ router.get('/hod/pending-approvals', verifyToken, requireProjectCoordinatorOrHOD
        ORDER BY g.group_code ASC`,
       [acadYear]
     );
+
+    for (const g of pendingGuides.rows) {
+      const membersRes = await pool.query(
+        `SELECT gm.roll_no, gm.is_leader, gm.division, gm.mobile_no,
+                COALESCE(u.name, gm.student_name, 'Student') as name
+         FROM project_group_members gm
+         LEFT JOIN students st ON gm.student_id = st.id
+         LEFT JOIN users u ON st.user_id = u.id
+         WHERE gm.group_id = $1 ORDER BY gm.is_leader DESC, gm.id ASC`,
+        [g.id]
+      );
+      g.members = membersRes.rows;
+    }
 
     const pendingScoreReleases = await pool.query(
       `SELECT sr.id as release_id, sr.stage_id, s.name as stage_name, sr.group_id, g.group_code,
@@ -1613,10 +1805,10 @@ router.get('/hod/reports/export', verifyToken, requireProjectCoordinatorOrHOD, a
 
     for (const group of groupsRes.rows) {
       const membersRes = await pool.query(
-        `SELECT gm.roll_no, u.name FROM project_group_members gm
-         JOIN students st ON gm.student_id = st.id
-         JOIN users u ON st.user_id = u.id
-         WHERE gm.group_id = $1`,
+        `SELECT gm.roll_no, COALESCE(u.name, gm.student_name, 'Student') as name FROM project_group_members gm
+         LEFT JOIN students st ON gm.student_id = st.id
+         LEFT JOIN users u ON st.user_id = u.id
+         WHERE gm.group_id = $1 ORDER BY gm.is_leader DESC, gm.id ASC`,
         [group.id]
       );
       const membersStr = membersRes.rows.map(m => `${m.name} (${m.roll_no})`).join(', ');
@@ -1863,6 +2055,140 @@ router.get('/export/examiner-assignments', verifyToken, requireProjectCoordinato
   } catch (err) {
     console.error('[Export Examiner Assignments Error]', err);
     res.status(500).json({ error: 'Failed to export examiner assignments Excel' });
+  }
+});
+
+/**
+ * GET /api/projects/export/score-excel
+ * Export Excel sheet for BE Project Stage Scores & Student Marks
+ */
+router.get('/export/score-excel', verifyToken, requireProjectCoordinatorOrHOD, async (req, res) => {
+  try {
+    const acadYear = req.query.academic_year || '2026-27';
+
+    // Fetch active evaluation stages
+    const stagesRes = await pool.query(
+      `SELECT id, name, sequence_order, max_marks_total, aggregation_rule
+       FROM project_evaluation_stages
+       WHERE academic_year = $1 AND is_active = true
+       ORDER BY sequence_order ASC`,
+      [acadYear]
+    );
+    const stages = stagesRes.rows;
+
+    // Fetch project groups
+    const groupsRes = await pool.query(
+      `SELECT g.*, u_creator.email as created_by_email,
+              u.name as guide_name, f.designation as guide_designation,
+              pu.name as proposed_guide_name, pf.designation as proposed_guide_designation
+       FROM project_groups g
+       LEFT JOIN users u_creator ON g.created_by = u_creator.id
+       LEFT JOIN faculty f ON g.guide_id = f.id
+       LEFT JOIN users u ON f.user_id = u.id
+       LEFT JOIN faculty pf ON g.proposed_guide_id = pf.id
+       LEFT JOIN users pu ON pf.user_id = pu.id
+       WHERE g.academic_year = $1 AND g.status != 'WITHDRAWN'
+       ORDER BY g.group_code ASC`,
+      [acadYear]
+    );
+
+    const groups = groupsRes.rows;
+
+    for (const g of groups) {
+      // Fetch members
+      const membersRes = await pool.query(
+        `SELECT gm.id, gm.roll_no, gm.student_name, gm.division, gm.mobile_no, gm.email, gm.is_leader, gm.student_id,
+                u.name, u.email as user_email
+         FROM project_group_members gm
+         LEFT JOIN students st ON gm.student_id = st.id
+         LEFT JOIN users u ON st.user_id = u.id
+         WHERE gm.group_id = $1 ORDER BY gm.is_leader DESC, gm.id ASC`,
+        [g.id]
+      );
+
+      const members = membersRes.rows.map(m => ({
+        ...m,
+        student_name: m.student_name || m.name || 'Student',
+        email: m.email || m.user_email || ''
+      }));
+
+      // Calculate stage scores for each member
+      for (const m of members) {
+        m.stage_scores = {};
+
+        for (const st of stages) {
+          // Fetch submitted or locked evaluations for this group & stage
+          const evalsRes = await pool.query(
+            `SELECT pe.id as evaluation_id
+             FROM project_panel_assignments pa
+             JOIN project_evaluations pe ON pa.id = pe.panel_assignment_id
+             WHERE pa.group_id = $1 AND pa.stage_id = $2 AND pe.status IN ('SUBMITTED','LOCKED')`,
+            [g.id, st.id]
+          );
+
+          if (evalsRes.rows.length === 0) {
+            m.stage_scores[st.id] = 'N/A';
+          } else {
+            const evalTotals = [];
+            for (const ev of evalsRes.rows) {
+              // Try member-specific score sum first
+              const memSumRes = await pool.query(
+                `SELECT SUM(marks_awarded) as total, COUNT(*) as cnt
+                 FROM project_evaluation_scores
+                 WHERE evaluation_id = $1 AND member_id = $2`,
+                [ev.evaluation_id, m.id]
+              );
+
+              let totalScore = null;
+              if (memSumRes.rows[0] && Number(memSumRes.rows[0].cnt) > 0 && memSumRes.rows[0].total !== null) {
+                totalScore = Number(memSumRes.rows[0].total);
+              } else {
+                // Fallback to group-wide score sum (where member_id is NULL)
+                const grpSumRes = await pool.query(
+                  `SELECT SUM(marks_awarded) as total, COUNT(*) as cnt
+                   FROM project_evaluation_scores
+                   WHERE evaluation_id = $1 AND member_id IS NULL`,
+                  [ev.evaluation_id]
+                );
+                if (grpSumRes.rows[0] && Number(grpSumRes.rows[0].cnt) > 0 && grpSumRes.rows[0].total !== null) {
+                  totalScore = Number(grpSumRes.rows[0].total);
+                }
+              }
+
+              if (totalScore !== null) {
+                evalTotals.push(totalScore);
+              }
+            }
+
+            if (evalTotals.length === 0) {
+              m.stage_scores[st.id] = 'N/A';
+            } else {
+              let aggregate = 0;
+              if (st.aggregation_rule === 'SUM') {
+                aggregate = evalTotals.reduce((a, b) => a + b, 0);
+              } else if (st.aggregation_rule === 'MAX') {
+                aggregate = Math.max(...evalTotals);
+              } else {
+                aggregate = evalTotals.reduce((a, b) => a + b, 0) / evalTotals.length;
+              }
+              m.stage_scores[st.id] = Number(aggregate.toFixed(2));
+            }
+          }
+        }
+      }
+
+      g.members = members;
+    }
+
+    const fileBuffer = await buildScoreReportWorkbook(groups, stages, acadYear);
+    const filename = `BE Project Score Report (AY ${acadYear}).xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.send(fileBuffer);
+  } catch (err) {
+    console.error('[Export Score Excel Error]', err);
+    res.status(500).json({ error: 'Failed to export score report Excel' });
   }
 });
 
