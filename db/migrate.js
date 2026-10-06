@@ -301,6 +301,17 @@ async function runMigrations() {
       )
     `);
 
+    // ─── PROJECT REGISTRATION SETTINGS ───────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS project_registration_settings (
+        academic_year        VARCHAR(20) PRIMARY KEY,
+        is_registration_open BOOLEAN DEFAULT TRUE,
+        due_date             TIMESTAMPTZ,
+        updated_by           INTEGER REFERENCES users(id),
+        updated_at           TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
     // ─── PROJECT SCORE RELEASES ───────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS project_score_releases (

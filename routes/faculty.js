@@ -407,10 +407,10 @@ router.get('/dashboard', async (req, res) => {
     const panelAssignments = panelAssignmentsRes.rows;
     for (const row of panelAssignments) {
       const membersRes = await pool.query(
-        `SELECT gm.roll_no, u.name FROM project_group_members gm
-         JOIN students st ON gm.student_id = st.id
-         JOIN users u ON st.user_id = u.id
-         WHERE gm.group_id = $1`,
+        `SELECT gm.roll_no, COALESCE(u.name, gm.student_name, 'Student') as name FROM project_group_members gm
+         LEFT JOIN students st ON gm.student_id = st.id
+         LEFT JOIN users u ON st.user_id = u.id
+         WHERE gm.group_id = $1 ORDER BY gm.is_leader DESC, gm.id ASC`,
         [row.group_id]
       );
       row.members = membersRes.rows;
