@@ -577,7 +577,7 @@ export default function StudentProject() {
                       <div key={ev.evaluation_id} className="border border-rule rounded p-5 bg-white shadow-xs">
                         <div className="flex items-center justify-between border-b border-rule pb-3 mb-4">
                           <div>
-                            <span className="text-xs text-draft uppercase tracking-wider font-semibold">Panel Examiner #{idx + 1}</span>
+                            <span className="text-xs text-draft uppercase tracking-wider font-semibold">Panel Mentor #{idx + 1}</span>
                             <p className="font-bold text-ink text-sm">{ev.evaluator_name} ({ev.evaluator_designation})</p>
                           </div>
                           <span className="font-serif text-lg font-bold text-navy">

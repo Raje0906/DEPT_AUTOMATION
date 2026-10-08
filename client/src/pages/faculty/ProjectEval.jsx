@@ -434,9 +434,9 @@ export default function ProjectEval() {
                 })}
               </div>
 
-              {/* Overall Examiner Remarks */}
+              {/* Overall Mentor Remarks */}
               <div>
-                <label className="input-label font-bold text-ink">Overall Examiner Remarks &amp; Observations</label>
+                <label className="input-label font-bold text-ink">Overall Mentor Remarks &amp; Observations</label>
                 <textarea
                   rows={3}
                   placeholder="Record overall team performance remarks, demonstration feedback, or Viva notes..."

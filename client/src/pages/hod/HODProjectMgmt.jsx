@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
@@ -10,7 +10,7 @@ export default function HODProjectMgmt() {
   const isCoordinator = user?.role === 'faculty' && user?.is_project_coordinator;
 
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'approvals' | 'groups' | 'stages' | 'panels' | 'governance' | 'reports'
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'approvals' | 'groups' | 'stages' | 'panels' | 'governance'
   const [academicYear, setAcademicYear] = useState('2026-27');
 
   // Backend state
@@ -18,7 +18,6 @@ export default function HODProjectMgmt() {
   const [groups, setGroups] = useState([]);
   const [stages, setStages] = useState([]);
   const [availableGuides, setAvailableGuides] = useState([]);
-  const [reportData, setReportData] = useState(null);
   const [pendingApprovals, setPendingApprovals] = useState(null);
 
   // Panel Matrix & Auto-Assign state
@@ -60,6 +59,18 @@ export default function HODProjectMgmt() {
   const [selectedGroupId, setSelectedGroupId] = useState('');
   const [selectedPanelistIds, setSelectedPanelistIds] = useState([]);
 
+  // Range & Domain Panel Assignment State
+  const [rangeAssignModal, setRangeAssignModal] = useState(false);
+  const [rangeTargetMode, setRangeTargetMode] = useState('RANGE'); // 'RANGE' | 'DOMAIN'
+  const [rangeStageId, setRangeStageId] = useState('');
+  const [rangeStartGroupId, setRangeStartGroupId] = useState('');
+  const [rangeEndGroupId, setRangeEndGroupId] = useState('');
+  const [rangeFilterDomain, setRangeFilterDomain] = useState('ALL');
+  const [rangeSelectedDomain, setRangeSelectedDomain] = useState('');
+  const [domainSelectedGroupIds, setDomainSelectedGroupIds] = useState([]);
+  const [rangePanelistIds, setRangePanelistIds] = useState([]);
+  const [rangeSkipGuideConflict, setRangeSkipGuideConflict] = useState(true);
+
   const [unlockModalEval, setUnlockModalEval] = useState(null);
   const [unlockReason, setUnlockReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -79,25 +90,109 @@ export default function HODProjectMgmt() {
   const [dueDateInput, setDueDateInput] = useState('');
   const [submittingRegSettings, setSubmittingRegSettings] = useState(false);
 
+  // Groups Tab Filtering & Excel Import State
+  const fileInputRef = useRef(null);
+  const [importingExcel, setImportingExcel] = useState(false);
+  const [groupSearch, setGroupSearch] = useState('');
+  const [selectedDivision, setSelectedDivision] = useState('ALL');
+  const [expandedGroupId, setExpandedGroupId] = useState(null);
+
+  // Live Activity Updates State
+  const [activityUpdates, setActivityUpdates] = useState([]);
+  const [loadingUpdates, setLoadingUpdates] = useState(false);
+  const [updateFilter, setUpdateFilter] = useState('ALL');
+
+  const handleImportExcel = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    setImportingExcel(true);
+    const toastId = toast.loading('Importing BE Project Groups from Excel...');
+    try {
+      const res = await api.post(`/projects/hod/groups/import-excel?academic_year=${academicYear}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      toast.success(res.data.message || 'BE Project Groups imported successfully!', { id: toastId });
+      fetchHODData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to import Excel file', { id: toastId });
+    } finally {
+      setImportingExcel(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const fetchActivityUpdates = async () => {
+    setLoadingUpdates(true);
+    try {
+      const res = await api.get(`/projects/hod/activity-updates?academic_year=${academicYear}`);
+      setActivityUpdates(res.data || []);
+      toast.success('Activity updates refreshed');
+    } catch (err) {
+      console.error('Failed to load activity updates:', err);
+      toast.error('Failed to refresh updates');
+    } finally {
+      setLoadingUpdates(false);
+    }
+  };
+
+  const filteredUpdates = useMemo(() => {
+    if (updateFilter === 'ALL') return activityUpdates;
+    return activityUpdates.filter((u) => {
+      if (updateFilter === 'GUIDES') return u.type === 'GUIDE_ASSIGNED' || u.type === 'PROJECT_GUIDE_ASSIGNED' || u.type === 'PROJECT_GUIDE_UNASSIGNED';
+      if (updateFilter === 'EVALUATIONS') return u.type === 'EVALUATION_SUBMITTED';
+      if (updateFilter === 'SCORES') return u.type === 'SCORE_RELEASED' || u.type === 'PROJECT_SCORE_RELEASED';
+      if (updateFilter === 'GROUPS') return u.type === 'GROUP_REGISTERED';
+      return true;
+    });
+  }, [activityUpdates, updateFilter]);
+
+  const filteredGroups = useMemo(() => {
+    return groups.filter((g) => {
+      if (selectedDivision !== 'ALL') {
+        const matchesBatch = g.batch?.toLowerCase() === selectedDivision.toLowerCase();
+        const matchesMemberDiv = g.members?.some(m => m.division?.toLowerCase() === selectedDivision.toLowerCase());
+        if (!matchesBatch && !matchesMemberDiv) return false;
+      }
+      if (groupSearch.trim()) {
+        const q = groupSearch.toLowerCase().trim();
+        const codeMatch = g.group_code?.toLowerCase().includes(q);
+        const titleMatch = g.title?.toLowerCase().includes(q) || g.title_2?.toLowerCase().includes(q) || g.title_3?.toLowerCase().includes(q);
+        const domainMatch = g.domain?.toLowerCase().includes(q);
+        const guideMatch = g.guide_name?.toLowerCase().includes(q);
+        const memberMatch = g.members?.some(m =>
+          m.name?.toLowerCase().includes(q) ||
+          m.roll_no?.toLowerCase().includes(q) ||
+          m.email?.toLowerCase().includes(q)
+        );
+        if (!codeMatch && !titleMatch && !domainMatch && !guideMatch && !memberMatch) return false;
+      }
+      return true;
+    });
+  }, [groups, selectedDivision, groupSearch]);
+
   const fetchHODData = async () => {
     setLoading(true);
     try {
-      const [dashRes, groupsRes, stagesRes, guidesRes, repRes, pendingRes, settingsRes] = await Promise.all([
+      const [dashRes, groupsRes, stagesRes, guidesRes, pendingRes, settingsRes, updatesRes] = await Promise.all([
         api.get(`/projects/hod/dashboard?academic_year=${academicYear}`),
         api.get(`/projects/hod/groups?academic_year=${academicYear}`),
         api.get(`/projects/hod/stages?academic_year=${academicYear}`),
         api.get('/projects/student/available-guides'),
-        api.get(`/projects/hod/reports/export?academic_year=${academicYear}`),
         api.get(`/projects/hod/pending-approvals?academic_year=${academicYear}`).catch(() => ({ data: { pendingGuides: [], pendingScoreReleases: [], totalPending: 0 } })),
         api.get(`/projects/registration-settings?academic_year=${academicYear}`).catch(() => ({ data: { is_registration_open: true, due_date: null, is_open: true } })),
+        api.get(`/projects/hod/activity-updates?academic_year=${academicYear}`).catch(() => ({ data: [] })),
       ]);
       setDashboardData(dashRes.data);
       setGroups(groupsRes.data);
       setStages(stagesRes.data);
       setAvailableGuides(guidesRes.data);
-      setReportData(repRes.data);
       setPendingApprovals(pendingRes.data);
       setRegSettings(settingsRes.data);
+      setActivityUpdates(updatesRes.data || []);
       if (settingsRes.data?.due_date) {
         const d = new Date(settingsRes.data.due_date);
         const pad = (n) => String(n).padStart(2, '0');
@@ -238,6 +333,47 @@ export default function HODProjectMgmt() {
       if (panelMatrixStageId) fetchPanelMatrix(panelMatrixStageId);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Auto-assignment failed');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRangeAssignPanels = async (e) => {
+    e.preventDefault();
+    if (!rangeStageId) return toast.error('Please select an evaluation stage');
+    if (selectedGroupsToAssign.length === 0) {
+      return toast.error(
+        rangeTargetMode === 'DOMAIN'
+          ? 'Please select a domain and at least 1 group'
+          : 'Please select a valid start and end group range'
+      );
+    }
+    if (rangePanelistIds.length === 0) return toast.error('Please select at least 1 panel mentor');
+
+    setSubmitting(true);
+    try {
+      const res = await api.post('/projects/hod/panel-range-assign', {
+        stage_id: Number(rangeStageId),
+        group_ids: selectedGroupsToAssign.map((g) => g.id),
+        panel_member_ids: rangePanelistIds.map(Number),
+        skip_guide_conflict: rangeSkipGuideConflict,
+      });
+
+      toast.success(res.data.message);
+      if (res.data.warnings && res.data.warnings.length > 0) {
+        toast((t) => (
+          <div className="text-xs">
+            <p className="font-bold">⚠️ COI Protection Applied:</p>
+            <p>{res.data.warnings.length} guide conflict(s) safely bypassed.</p>
+          </div>
+        ), { duration: 5000, icon: '🛡️' });
+      }
+
+      setRangeAssignModal(false);
+      fetchHODData();
+      if (panelMatrixStageId) fetchPanelMatrix(panelMatrixStageId);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Assignment failed');
     } finally {
       setSubmitting(false);
     }
@@ -441,6 +577,109 @@ export default function HODProjectMgmt() {
 
 
 
+  // Memoized sorted groups & range/domain selection calculations
+  const sortedGroups = useMemo(() => {
+    return [...groups].sort((a, b) =>
+      (a.group_code || '').localeCompare(b.group_code || '', undefined, { numeric: true })
+    );
+  }, [groups]);
+
+  // Distinct available domains with group counts
+  const availableDomains = useMemo(() => {
+    const map = new Map();
+    groups.forEach((g) => {
+      const d = (g.domain || 'Unspecified').trim();
+      if (!map.has(d)) {
+        map.set(d, []);
+      }
+      map.get(d).push(g);
+    });
+    return Array.from(map.entries())
+      .map(([domain, grps]) => ({
+        domain,
+        count: grps.length,
+        groups: grps,
+      }))
+      .sort((a, b) => b.count - a.count || a.domain.localeCompare(b.domain));
+  }, [groups]);
+
+  // Handle domain selection in modal
+  const handleSelectDomain = (domain) => {
+    setRangeSelectedDomain(domain);
+    if (!domain) {
+      setDomainSelectedGroupIds([]);
+      return;
+    }
+    const matching = sortedGroups
+      .filter((g) => (g.domain || '').trim().toLowerCase() === domain.trim().toLowerCase())
+      .map((g) => String(g.id));
+    setDomainSelectedGroupIds(matching);
+  };
+
+  const toggleDomainGroup = (idStr) => {
+    if (domainSelectedGroupIds.includes(idStr)) {
+      setDomainSelectedGroupIds(domainSelectedGroupIds.filter((x) => x !== idStr));
+    } else {
+      setDomainSelectedGroupIds([...domainSelectedGroupIds, idStr]);
+    }
+  };
+
+  const selectAllDomainGroups = () => {
+    if (!rangeSelectedDomain) return;
+    const matching = sortedGroups
+      .filter((g) => (g.domain || '').trim().toLowerCase() === rangeSelectedDomain.trim().toLowerCase())
+      .map((g) => String(g.id));
+    setDomainSelectedGroupIds(matching);
+  };
+
+  const deselectAllDomainGroups = () => {
+    setDomainSelectedGroupIds([]);
+  };
+
+  const selectedGroupsToAssign = useMemo(() => {
+    if (rangeTargetMode === 'RANGE') {
+      if (!rangeStartGroupId || !rangeEndGroupId || sortedGroups.length === 0) return [];
+      const startIdx = sortedGroups.findIndex((g) => String(g.id) === String(rangeStartGroupId));
+      const endIdx = sortedGroups.findIndex((g) => String(g.id) === String(rangeEndGroupId));
+      if (startIdx === -1 || endIdx === -1) return [];
+      const min = Math.min(startIdx, endIdx);
+      const max = Math.max(startIdx, endIdx);
+      let slice = sortedGroups.slice(min, max + 1);
+      if (rangeFilterDomain && rangeFilterDomain !== 'ALL') {
+        slice = slice.filter((g) => (g.domain || '').trim().toLowerCase() === rangeFilterDomain.trim().toLowerCase());
+      }
+      return slice;
+    } else {
+      // DOMAIN mode
+      if (!rangeSelectedDomain) return [];
+      const domainGroups = sortedGroups.filter(
+        (g) => (g.domain || '').trim().toLowerCase() === rangeSelectedDomain.trim().toLowerCase()
+      );
+      if (domainSelectedGroupIds.length === 0) {
+        return domainGroups;
+      }
+      return domainGroups.filter((g) => domainSelectedGroupIds.includes(String(g.id)));
+    }
+  }, [rangeTargetMode, rangeStartGroupId, rangeEndGroupId, sortedGroups, rangeFilterDomain, rangeSelectedDomain, domainSelectedGroupIds]);
+
+  const selectedGroupsInRange = selectedGroupsToAssign;
+
+  const coiWarningsPreview = useMemo(() => {
+    if (!rangeSkipGuideConflict || rangePanelistIds.length === 0 || selectedGroupsToAssign.length === 0) return [];
+    const warnings = [];
+    selectedGroupsToAssign.forEach((g) => {
+      const guideId = g.guide_id || g.proposed_guide_id;
+      if (guideId && rangePanelistIds.includes(String(guideId))) {
+        const guideObj = availableGuides.find((f) => String(f.faculty_id) === String(guideId));
+        warnings.push({
+          group_code: g.group_code,
+          guideName: guideObj ? guideObj.name : (g.guide_name || 'Guide'),
+        });
+      }
+    });
+    return warnings;
+  }, [rangeSkipGuideConflict, rangePanelistIds, selectedGroupsToAssign, availableGuides]);
+
   if (loading) {
     return (
       <div className="p-8 max-w-7xl mx-auto flex items-center justify-center min-h-[400px]">
@@ -490,22 +729,22 @@ export default function HODProjectMgmt() {
 
       {/* Role Banner */}
       {isHOD && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-semibold shadow-xs">
-          <div className="flex items-center gap-2">
-            <span className="text-base">🏛️</span>
-            <span>
-              Logged in as <strong>Head of Department (HOD)</strong>. The system is managed by the BE Project Coordinator.
-              Final guide assignments &amp; score release decisions require your confirmation below.
-            </span>
+        <div className="bg-blue-50/70 border border-blue-200 text-blue-950 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-semibold shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <span className="text-xl">🏛️</span>
+            <div>
+              <p className="font-bold text-navy">Head of Department (HOD) Oversight Active</p>
+              <p className="text-[11px] text-draft font-normal mt-0.5">
+                Full direct oversight of BE Projects (AY {academicYear}). Guide assignments, continuous assessment stages, panel scoring, and live project activity updates are synced in real-time.
+              </p>
+            </div>
           </div>
-          {pendingApprovals?.totalPending > 0 && (
-            <button
-              onClick={() => setActiveTab('approvals')}
-              className="px-3 py-1.5 bg-amber-700 hover:bg-amber-800 text-white rounded text-xs font-bold transition-colors shadow-xs whitespace-nowrap"
-            >
-              Review {pendingApprovals.totalPending} Pending Approvals →
-            </button>
-          )}
+          <button
+            onClick={() => setActiveTab('updates')}
+            className="px-3.5 py-1.5 bg-navy hover:bg-navy/90 text-white rounded text-xs font-bold transition-colors shadow-xs whitespace-nowrap flex items-center gap-1.5"
+          >
+            <span>🔔</span> View Live Activity Feed ({activityUpdates.length}) →
+          </button>
         </div>
       )}
 
@@ -519,14 +758,14 @@ export default function HODProjectMgmt() {
           📊 Governance Overview
         </button>
         <button
-          onClick={() => setActiveTab('approvals')}
-          className={`px-4 py-2 text-xs font-semibold rounded flex items-center gap-1.5 ${activeTab === 'approvals' ? 'bg-navy text-white' : 'bg-paper text-draft hover:text-ink'
+          onClick={() => setActiveTab('updates')}
+          className={`px-4 py-2 text-xs font-semibold rounded flex items-center gap-1.5 ${activeTab === 'updates' ? 'bg-navy text-white' : 'bg-paper text-draft hover:text-ink'
             }`}
         >
-          <span>⚖️ HOD Approvals</span>
-          {pendingApprovals?.totalPending > 0 && (
-            <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-red-600 text-white animate-pulse">
-              {pendingApprovals.totalPending}
+          <span>🔔 Activity &amp; Live Updates</span>
+          {activityUpdates.length > 0 && (
+            <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+              {activityUpdates.length}
             </span>
           )}
         </button>
@@ -558,13 +797,6 @@ export default function HODProjectMgmt() {
         >
           🔓 Score Release &amp; Unlocks
         </button>
-        <button
-          onClick={() => setActiveTab('reports')}
-          className={`px-4 py-2 text-xs font-semibold rounded ${activeTab === 'reports' ? 'bg-navy text-white' : 'bg-paper text-draft hover:text-ink'
-            }`}
-        >
-          📋 Marksheet Reports
-        </button>
       </div>
 
       {/* TAB 1: OVERVIEW */}
@@ -583,10 +815,17 @@ export default function HODProjectMgmt() {
                 {dashboardData.stats?.guide_assigned_groups ?? (dashboardData.group_status_breakdown?.find((b) => b.status === 'ACTIVE')?.count || 0)}
               </p>
             </div>
-            <div className="panel p-5">
-              <span className="text-xs font-mono font-bold text-draft uppercase">Pending HOD Approvals</span>
-              <p className="font-serif text-3xl font-bold text-amber-700 mt-1">
-                {pendingApprovals?.totalPending ?? 0}
+            <div
+              className="panel p-5 cursor-pointer hover:border-blue-300 transition-colors"
+              onClick={() => setActiveTab('updates')}
+              title="Click to view full Activity & Updates Feed"
+            >
+              <div className="flex items-center justify-between text-xs font-mono font-bold text-draft uppercase">
+                <span>Recent Updates</span>
+                <span className="text-blue-600 text-[10px]">View Feed →</span>
+              </div>
+              <p className="font-serif text-3xl font-bold text-blue-700 mt-1">
+                {activityUpdates.length}
               </p>
             </div>
             <div className="panel p-5">
@@ -600,7 +839,7 @@ export default function HODProjectMgmt() {
           {/* Faculty Load Matrix */}
           <div className="panel">
             <div className="panel-header">
-              <h2 className="font-serif text-xl font-semibold">Faculty Workload Matrix (Guides &amp; Panel Examiners)</h2>
+              <h2 className="font-serif text-xl font-semibold">Faculty Workload Matrix (Guides &amp; Panel Mentors)</h2>
             </div>
             <div className="overflow-x-auto">
               <table className="result-table">
@@ -637,150 +876,172 @@ export default function HODProjectMgmt() {
               </table>
             </div>
           </div>
+
+          {/* Recent Activity Quick Preview Widget */}
+          <div className="panel">
+            <div className="panel-header flex items-center justify-between">
+              <div>
+                <h3 className="font-serif text-lg font-bold text-ink">Recent BE Project Activity Updates</h3>
+                <span className="text-xs text-draft font-mono">Live updates for AY {academicYear}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('updates')}
+                className="text-xs font-bold text-blue-700 hover:text-blue-900 transition-colors"
+              >
+                View Full Updates Feed ({activityUpdates.length}) →
+              </button>
+            </div>
+            <div className="p-4">
+              {activityUpdates.length === 0 ? (
+                <p className="text-xs text-draft italic py-4 text-center">No recent project activities recorded yet.</p>
+              ) : (
+                <div className="divide-y divide-rule text-xs">
+                  {activityUpdates.slice(0, 5).map((act, idx) => (
+                    <div key={idx} className="py-2.5 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-sm">
+                          {act.type === 'GUIDE_ASSIGNED' ? '🎓' : act.type === 'EVALUATION_SUBMITTED' ? '📝' : act.type === 'SCORE_RELEASED' ? '📢' : '👥'}
+                        </span>
+                        <div>
+                          <p className="font-semibold text-ink">{act.summary || act.action}</p>
+                          {act.actor_name && <p className="text-[10px] text-draft">Action by: {act.actor_name}</p>}
+                        </div>
+                      </div>
+                      <div className="text-[11px] font-mono text-draft whitespace-nowrap">
+                        {new Date(act.timestamp).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}{' '}
+                        {new Date(act.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
-      {/* TAB: HOD APPROVALS */}
-      {activeTab === 'approvals' && (
+      {/* TAB: LIVE ACTIVITY & UPDATES */}
+      {activeTab === 'updates' && (
         <div className="space-y-6">
-
-          {/* Section 1: Pending Guide Assignments */}
           <div className="panel">
-            <div className="panel-header flex items-center justify-between">
+            <div className="panel-header flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
-                <h3 className="font-serif text-lg font-bold text-ink">Pending Guide Assignment Confirmations</h3>
-                <span className="text-xs text-draft font-mono font-medium">Total Pending: {pendingApprovals?.pendingGuides?.length || 0}</span>
+                <h3 className="font-serif text-xl font-bold text-ink flex items-center gap-2">
+                  <span>🔔</span> BE Project Live Activity &amp; Updates Feed
+                </h3>
+                <p className="text-xs text-draft mt-0.5 font-medium">
+                  Real-time departmental updates of guide assignments, stage scores, panel evaluations, and student project actions for AY {academicYear}.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={loadingUpdates}
+                  onClick={fetchActivityUpdates}
+                  className="px-3.5 py-1.5 bg-navy hover:bg-navy/90 text-white rounded text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
+                >
+                  <span>🔄</span> {loadingUpdates ? 'Refreshing...' : 'Refresh Feed'}
+                </button>
               </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="result-table">
-                <thead>
-                  <tr>
-                    <th>Group Code</th>
-                    <th>Project Title &amp; Domain</th>
-                    <th>Proposed Guide</th>
-                    <th>Requested By</th>
-                    <th className="text-right">HOD Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {!pendingApprovals?.pendingGuides || pendingApprovals.pendingGuides.length === 0 ? (
-                    <tr>
-                      <td colSpan="5" className="text-center py-6 text-xs text-draft italic">
-                        No pending guide assignments requiring HOD confirmation.
-                      </td>
-                    </tr>
-                  ) : (
-                    pendingApprovals.pendingGuides.map((g) => (
-                      <tr key={g.id}>
-                        <td className="font-mono text-sm font-bold text-navy">{g.group_code}</td>
-                        <td className="max-w-xs">
-                          <div className="font-semibold text-ink text-sm">{g.title}</div>
-                          <div className="text-xs text-draft">{g.domain}</div>
-                        </td>
-                        <td>
-                          {g.proposed_guide_name ? (
-                            <div>
-                              <div className="font-bold text-emerald-800 text-xs">{g.proposed_guide_name}</div>
-                              <div className="text-[10px] text-draft">{g.proposed_guide_designation}</div>
-                            </div>
-                          ) : (
-                            <span className="text-xs font-semibold text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded">
-                              Unassign Guide Request
-                            </span>
-                          )}
-                        </td>
-                        <td className="text-xs text-draft">{g.requested_by_name || 'BE Project Coordinator'}</td>
-                        <td className="text-right">
-                          {isHOD ? (
-                            <div className="flex items-center justify-end gap-2">
-                              <button
-                                onClick={() => handleConfirmGuide(g.id, 'APPROVE')}
-                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold shadow-xs"
-                              >
-                                ✓ Confirm &amp; Activate
-                              </button>
-                              <button
-                                onClick={() => handleConfirmGuide(g.id, 'REJECT')}
-                                className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold shadow-xs"
-                              >
-                                ✕ Reject
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
-                              Awaiting HOD Action
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
 
-          {/* Section 2: Pending Score Releases */}
-          <div className="panel">
-            <div className="panel-header flex items-center justify-between">
-              <div>
-                <h3 className="font-serif text-lg font-bold text-ink">Pending Score Release Requests</h3>
-                <span className="text-xs text-draft font-mono font-medium">Total Pending: {pendingApprovals?.pendingScoreReleases?.length || 0}</span>
-              </div>
+            {/* Filter Pills */}
+            <div className="p-4 bg-paper/60 border-b border-rule flex items-center gap-2 flex-wrap text-xs">
+              <span className="font-bold text-draft uppercase tracking-wider text-[11px] mr-1">Filter Events:</span>
+              {[
+                { id: 'ALL', label: 'All Activities', icon: '📋' },
+                { id: 'GUIDES', label: 'Guide Assignments', icon: '🎓' },
+                { id: 'EVALUATIONS', label: 'Panel Evaluations', icon: '📝' },
+                { id: 'SCORES', label: 'Score Releases', icon: '📢' },
+                { id: 'GROUPS', label: 'Group Registrations', icon: '👥' },
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setUpdateFilter(f.id)}
+                  className={`px-3 py-1 rounded text-xs font-semibold transition-colors flex items-center gap-1 ${updateFilter === f.id
+                      ? 'bg-navy text-white shadow-xs'
+                      : 'bg-white hover:bg-gray-100 text-draft border border-rule'
+                    }`}
+                >
+                  <span>{f.icon}</span> {f.label}
+                </button>
+              ))}
+              <span className="ml-auto font-mono text-[11px] text-draft">
+                Showing {filteredUpdates.length} of {activityUpdates.length} events
+              </span>
             </div>
-            <div className="overflow-x-auto">
-              <table className="result-table">
-                <thead>
-                  <tr>
-                    <th>Stage Name</th>
-                    <th>Group Scope</th>
-                    <th>Requested By</th>
-                    <th>Requested Date</th>
-                    <th className="text-right">HOD Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {!pendingApprovals?.pendingScoreReleases || pendingApprovals.pendingScoreReleases.length === 0 ? (
-                    <tr>
-                      <td colSpan="5" className="text-center py-6 text-xs text-draft italic">
-                        No pending score release requests requiring HOD confirmation.
-                      </td>
-                    </tr>
-                  ) : (
-                    pendingApprovals.pendingScoreReleases.map((sr) => (
-                      <tr key={sr.release_id}>
-                        <td className="font-bold text-sm text-ink">{sr.stage_name}</td>
-                        <td className="font-mono text-xs font-bold text-navy">{sr.group_code || 'All Stage Groups (Stage-Wide)'}</td>
-                        <td className="text-xs text-draft">{sr.requested_by_name || 'BE Project Coordinator'}</td>
-                        <td className="text-xs text-draft">{new Date(sr.requested_at).toLocaleString()}</td>
-                        <td className="text-right">
-                          {isHOD ? (
-                            <div className="flex items-center justify-end gap-2">
-                              <button
-                                onClick={() => handleConfirmScoreRelease(sr.release_id, 'APPROVE')}
-                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold shadow-xs"
-                              >
-                                ✓ Confirm &amp; Release
-                              </button>
-                              <button
-                                onClick={() => handleConfirmScoreRelease(sr.release_id, 'REJECT')}
-                                className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold shadow-xs"
-                              >
-                                ✕ Reject
-                              </button>
+
+            {/* Timeline List */}
+            <div className="p-6">
+              {filteredUpdates.length === 0 ? (
+                <div className="text-center py-12 text-draft text-sm space-y-2">
+                  <p className="text-3xl">📭</p>
+                  <p className="font-semibold text-ink">No updates found for this filter.</p>
+                  <p className="text-xs">Events will show up here as guides are assigned, scores are published, or panel members evaluate.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {filteredUpdates.map((item, idx) => {
+                    const isGuide = item.type === 'GUIDE_ASSIGNED' || item.type === 'PROJECT_GUIDE_ASSIGNED' || item.type === 'PROJECT_GUIDE_UNASSIGNED';
+                    const isEval = item.type === 'EVALUATION_SUBMITTED';
+                    const isScore = item.type === 'SCORE_RELEASED' || item.type === 'PROJECT_SCORE_RELEASED';
+                    const isGroup = item.type === 'GROUP_REGISTERED';
+
+                    return (
+                      <div
+                        key={idx}
+                        className="p-4 rounded-lg border border-rule bg-white hover:border-blue-300 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs"
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className={`w-9 h-9 rounded-full flex items-center justify-center text-base shrink-0 ${isGuide ? 'bg-blue-100 text-blue-800' :
+                              isEval ? 'bg-emerald-100 text-emerald-800' :
+                                isScore ? 'bg-purple-100 text-purple-800' :
+                                  isGroup ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-800'
+                            }`}>
+                            {isGuide ? '🎓' : isEval ? '📝' : isScore ? '📢' : isGroup ? '👥' : 'ℹ️'}
+                          </span>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase ${isGuide ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                                  isEval ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                                    isScore ? 'bg-purple-50 text-purple-700 border border-purple-200' :
+                                      isGroup ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-gray-50 text-gray-700 border border-rule'
+                                }`}>
+                                {item.type.replace(/_/g, ' ')}
+                              </span>
+                              {item.group_code && (
+                                <span className="font-mono text-xs font-bold text-navy bg-paper px-2 py-0.5 rounded border border-rule">
+                                  {item.group_code}
+                                </span>
+                              )}
                             </div>
-                          ) : (
-                            <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
-                              Awaiting HOD Action
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                            <p className="text-sm font-semibold text-ink">{item.summary}</p>
+                            {item.actor_name && (
+                              <p className="text-xs text-draft">Recorded by: <strong className="text-ink">{item.actor_name}</strong></p>
+                            )}
+                            {item.overall_remarks && (
+                              <p className="text-xs text-draft italic bg-paper p-1.5 rounded border border-rule mt-1 max-w-xl">
+                                Remarks: &ldquo;{item.overall_remarks}&rdquo;
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <div className="text-xs font-mono font-semibold text-ink">
+                            {new Date(item.timestamp).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </div>
+                          <div className="text-[11px] font-mono text-draft">
+                            {new Date(item.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -901,12 +1162,30 @@ export default function HODProjectMgmt() {
           </div>
 
           <div className="panel">
-            <div className="panel-header flex items-center justify-between">
+            <div className="panel-header flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <h2 className="font-serif text-xl font-semibold">Department BE Project Groups</h2>
-                <span className="text-xs text-draft font-mono font-medium">Total: {groups.length} groups</span>
+                <span className="text-xs text-draft font-mono font-medium">
+                  Total: {groups.length} groups {groups.length > 0 && `(Showing ${filteredGroups.length})`}
+                </span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleImportExcel}
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  disabled={importingExcel}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-3.5 py-1.5 bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white rounded text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
+                  title="Upload BE Project Topic Preferences Form Excel"
+                >
+                  <span>📤</span> {importingExcel ? 'Importing...' : 'Import Preferences (Excel)'}
+                </button>
                 <button
                   type="button"
                   onClick={handleExportFormResponses}
@@ -930,11 +1209,52 @@ export default function HODProjectMgmt() {
                 </button>
               </div>
             </div>
+
+            {/* Filter and Search Toolbar */}
+            <div className="p-4 bg-paper/60 border-b border-rule flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex-1 max-w-md relative">
+                <input
+                  type="text"
+                  placeholder="Search by code, title, domain, student name, or PRN..."
+                  value={groupSearch}
+                  onChange={(e) => setGroupSearch(e.target.value)}
+                  className="input-field text-xs py-1.5 pl-8 pr-8 w-full"
+                />
+                <span className="absolute left-2.5 top-2 text-draft text-xs">🔍</span>
+                {groupSearch && (
+                  <button
+                    onClick={() => setGroupSearch('')}
+                    className="absolute right-2.5 top-1.5 text-draft hover:text-ink text-xs font-bold"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] font-bold text-draft uppercase tracking-wider mr-1">Division:</span>
+                {['ALL', 'BE-1', 'BE-2', 'BE-3', 'BE-4'].map((div) => (
+                  <button
+                    key={div}
+                    type="button"
+                    onClick={() => setSelectedDivision(div)}
+                    className={`px-2.5 py-1 text-xs font-semibold rounded transition-colors ${selectedDivision === div
+                        ? 'bg-navy text-white shadow-xs'
+                        : 'bg-white hover:bg-gray-100 text-draft border border-rule'
+                      }`}
+                  >
+                    {div === 'ALL' ? 'All Divisions' : div}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="overflow-x-auto">
               <table className="result-table">
                 <thead>
                   <tr>
                     <th>Group Code</th>
+                    <th>Division</th>
                     <th>Title &amp; Domain</th>
                     <th>Roster</th>
                     <th>Guide Status</th>
@@ -943,61 +1263,163 @@ export default function HODProjectMgmt() {
                   </tr>
                 </thead>
                 <tbody>
-                  {groups.map((g) => (
-                    <tr key={g.id}>
-                      <td className="font-mono text-sm font-bold text-navy">{g.group_code}</td>
-                      <td className="max-w-xs">
-                        <div className="font-semibold text-ink text-sm">{g.title}</div>
-                        <div className="text-xs text-draft">{g.domain}</div>
-                      </td>
-                      <td>
-                        <div className="text-xs text-ink">{g.members_count || g.members?.length || 0} members</div>
-                        <div className="text-[10px] text-draft truncate max-w-[180px]">
-                          {g.leader_name || g.members?.find(m => m.is_leader)?.name || 'Leader'} (Leader)
-                        </div>
-                      </td>
-                      <td>
-                        {g.guide_approval_status === 'PENDING_HOD_APPROVAL' ? (
-                          <div>
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
-                              Proposed: {g.proposed_guide_name || 'Clear Guide'} (Pending HOD Confirmation)
-                            </span>
-                            {g.guide_name && (
-                              <div className="text-[10px] text-draft mt-0.5">Current Active: {g.guide_name}</div>
-                            )}
-                          </div>
-                        ) : g.guide_name ? (
-                          <div>
-                            <div className="font-bold text-emerald-800 text-xs">{g.guide_name}</div>
-                            <div className="text-[10px] text-draft">{g.guide_designation}</div>
-                            <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              Confirmed by HOD
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
-                            Unassigned
-                          </span>
-                        )}
-                      </td>
-                      <td>
-                        <span className={`badge ${g.status === 'ACTIVE' ? 'badge-published' : 'badge-draft'}`}>
-                          {g.status}
-                        </span>
-                      </td>
-                      <td className="text-right">
-                        <button
-                          onClick={() => {
-                            setGuideModalGroup(g);
-                            setSelectedGuideId(g.proposed_guide_faculty_id || g.guide_faculty_id ? String(g.proposed_guide_faculty_id || g.guide_faculty_id) : '');
-                          }}
-                          className="btn-secondary py-1 px-3 text-xs"
-                        >
-                          {g.guide_name ? 'Change Guide' : 'Assign Guide'}
-                        </button>
+                  {filteredGroups.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="text-center py-8 text-draft text-sm">
+                        No BE project groups matched the search or filter criteria.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    filteredGroups.map((g) => {
+                      const isExpanded = expandedGroupId === g.id;
+                      return (
+                        <React.Fragment key={g.id}>
+                          <tr className={isExpanded ? 'bg-blue-50/30' : ''}>
+                            <td>
+                              <div className="font-mono text-sm font-bold text-navy flex items-center gap-1.5">
+                                <span>{g.group_code}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedGroupId(isExpanded ? null : g.id)}
+                                  className="text-[11px] text-draft hover:text-navy px-1 rounded bg-gray-100 hover:bg-blue-100 transition-colors"
+                                  title="View full topic choices and team roster"
+                                >
+                                  {isExpanded ? '▲' : '▼'}
+                                </button>
+                              </div>
+                            </td>
+                            <td>
+                              <span className="px-2 py-0.5 rounded text-xs font-bold font-mono bg-paper border border-rule text-ink">
+                                {g.batch || 'BE-1'}
+                              </span>
+                            </td>
+                            <td className="max-w-xs">
+                              <div className="font-semibold text-ink text-sm line-clamp-2" title={g.title}>{g.title}</div>
+                              <div className="text-xs text-draft mt-0.5 font-medium">{g.domain}</div>
+                            </td>
+                            <td>
+                              <div className="text-xs text-ink font-semibold">{g.members_count || g.members?.length || 0} members</div>
+                              <div className="text-[11px] text-draft truncate max-w-[180px]">
+                                {g.leader_name || g.members?.find(m => m.is_leader)?.name || 'Leader'} (Leader)
+                              </div>
+                            </td>
+                            <td>
+                              {g.guide_name ? (
+                                <div>
+                                  <div className="font-bold text-emerald-800 text-xs">{g.guide_name}</div>
+                                  <div className="text-[10px] text-draft">{g.guide_designation}</div>
+                                  <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    Assigned Guide
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+                                  Unassigned
+                                </span>
+                              )}
+                            </td>
+                            <td>
+                              <span className={`badge ${g.status === 'ACTIVE' ? 'badge-published' : 'badge-draft'}`}>
+                                {g.status}
+                              </span>
+                            </td>
+                            <td className="text-right space-x-1.5 whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={() => setExpandedGroupId(isExpanded ? null : g.id)}
+                                className="px-2 py-1 text-xs border border-rule rounded hover:bg-gray-100 text-draft hover:text-ink transition-colors"
+                              >
+                                {isExpanded ? 'Hide' : 'Topics & Team'}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setGuideModalGroup(g);
+                                  setSelectedGuideId(g.proposed_guide_faculty_id || g.guide_faculty_id ? String(g.proposed_guide_faculty_id || g.guide_faculty_id) : '');
+                                }}
+                                className="btn-secondary py-1 px-3 text-xs"
+                              >
+                                {g.guide_name ? 'Change Guide' : 'Assign Guide'}
+                              </button>
+                            </td>
+                          </tr>
+
+                          {/* Expanded Details Row */}
+                          {isExpanded && (
+                            <tr className="bg-blue-50/20 border-b-2 border-blue-200">
+                              <td colSpan={7} className="p-4">
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 bg-white p-4 rounded border border-blue-200 shadow-2xs">
+                                  {/* 3 Project Topic Choices */}
+                                  <div className="space-y-3">
+                                    <h4 className="text-xs font-bold uppercase tracking-wider text-navy flex items-center gap-1.5 border-b border-rule pb-2">
+                                      <span>📑</span> 3 Project Topic Preferences
+                                    </h4>
+                                    <div className="space-y-2 text-xs">
+                                      <div className="p-2.5 rounded bg-blue-50/60 border border-blue-200/60">
+                                        <span className="font-bold text-navy block text-[10px] uppercase">Preference 1 (Primary Topic):</span>
+                                        <p className="text-ink font-semibold mt-0.5">{g.title}</p>
+                                      </div>
+                                      {g.title_2 && (
+                                        <div className="p-2.5 rounded bg-paper border border-rule">
+                                          <span className="font-bold text-draft block text-[10px] uppercase">Preference 2 (Secondary Topic):</span>
+                                          <p className="text-ink mt-0.5">{g.title_2}</p>
+                                        </div>
+                                      )}
+                                      {g.title_3 && (
+                                        <div className="p-2.5 rounded bg-paper border border-rule">
+                                          <span className="font-bold text-draft block text-[10px] uppercase">Preference 3 (Tertiary Topic):</span>
+                                          <p className="text-ink mt-0.5">{g.title_3}</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Team Members Roster */}
+                                  <div className="space-y-3">
+                                    <h4 className="text-xs font-bold uppercase tracking-wider text-navy flex items-center gap-1.5 border-b border-rule pb-2">
+                                      <span>👥</span> Student Team Members ({g.members?.length || 0})
+                                    </h4>
+                                    <div className="overflow-x-auto">
+                                      <table className="w-full text-xs">
+                                        <thead>
+                                          <tr className="text-left text-[10px] text-draft uppercase border-b border-rule">
+                                            <th className="py-1">Role</th>
+                                            <th className="py-1">Student Name</th>
+                                            <th className="py-1">PRN</th>
+                                            <th className="py-1">Div</th>
+                                            <th className="py-1">Contact</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-rule/60">
+                                          {(g.members || []).map((m, mIdx) => (
+                                            <tr key={mIdx} className="hover:bg-gray-50/60">
+                                              <td className="py-1.5 font-medium">
+                                                {m.is_leader ? (
+                                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-navy text-white">Leader</span>
+                                                ) : (
+                                                  <span className="text-draft text-[11px]">Member</span>
+                                                )}
+                                              </td>
+                                              <td className="py-1.5 font-semibold text-ink">{m.name}</td>
+                                              <td className="py-1.5 font-mono text-draft">{m.roll_no}</td>
+                                              <td className="py-1.5 font-mono text-draft">{m.division || g.batch}</td>
+                                              <td className="py-1.5 text-draft text-[11px]">
+                                                <div>{m.email}</div>
+                                                {m.mobile_no && <div className="text-[10px] text-draft/80 font-mono">📱 {m.mobile_no}</div>}
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1123,6 +1545,22 @@ export default function HODProjectMgmt() {
                   type="button"
                   onClick={() => {
                     const selStage = panelMatrixStageId || (stages.length > 0 ? String(stages[0].id) : '');
+                    setRangeStageId(selStage);
+                    if (sortedGroups.length > 0) {
+                      setRangeStartGroupId(String(sortedGroups[0].id));
+                      setRangeEndGroupId(String(sortedGroups[Math.min(4, sortedGroups.length - 1)].id));
+                    }
+                    setRangePanelistIds([]);
+                    setRangeAssignModal(true);
+                  }}
+                  className="px-4 py-2.5 bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold rounded flex items-center gap-2 shadow-xs transition-colors"
+                >
+                  <span>🎯</span> Assign by Range / Domain
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const selStage = panelMatrixStageId || (stages.length > 0 ? String(stages[0].id) : '');
                     setAutoAssignStageId(selStage);
                     setAutoAssignModal(true);
                   }}
@@ -1214,7 +1652,7 @@ export default function HODProjectMgmt() {
                     <th className="p-3 w-28">Group Code</th>
                     <th className="p-3 min-w-[220px]">Project Title &amp; Domain</th>
                     <th className="p-3 min-w-[160px]">Assigned Guide</th>
-                    <th className="p-3 min-w-[240px]">Assigned Panel Examiners</th>
+                    <th className="p-3 min-w-[240px]">Assigned Panel Mentors</th>
                     <th className="p-3 text-right w-24">Action</th>
                   </tr>
                 </thead>
@@ -1260,7 +1698,7 @@ export default function HODProjectMgmt() {
                                 ))}
                               </div>
                             ) : (
-                              <span className="text-draft text-[11px] italic font-mono">No examiners assigned</span>
+                              <span className="text-draft text-[11px] italic font-mono">No mentors assigned</span>
                             )}
                           </td>
                           <td className="p-3 text-right whitespace-nowrap">
@@ -1314,14 +1752,14 @@ export default function HODProjectMgmt() {
               </div>
 
               <div>
-                <label className="input-label">Examiners per Panel Group *</label>
+                <label className="input-label">Mentors per Panel Group *</label>
                 <select
                   value={autoAssignPanelSize}
                   onChange={(e) => setAutoAssignPanelSize(Number(e.target.value))}
                   className="input-field text-sm font-mono"
                 >
-                  <option value={2}>2 Examiners per Panel</option>
-                  <option value={3}>3 Examiners per Panel</option>
+                  <option value={2}>2 Mentors per Panel</option>
+                  <option value={3}>3 Mentors per Panel</option>
                 </select>
               </div>
 
@@ -1400,7 +1838,7 @@ export default function HODProjectMgmt() {
               <div className="p-3 bg-blue-50 border border-blue-200 rounded text-xs text-navy">
                 <p className="font-bold">Instant Bulk Replication:</p>
                 <p className="mt-0.5 text-[11px] leading-relaxed">
-                  Copies panel examiners across all groups from the source stage to the target stage in one click.
+                  Copies panel mentors across all groups from the source stage to the target stage in one click.
                 </p>
               </div>
 
@@ -1414,6 +1852,424 @@ export default function HODProjectMgmt() {
                 </button>
                 <button type="submit" disabled={submitting} className="btn-primary py-2 px-5 text-xs font-bold">
                   {submitting ? 'Copying Panels...' : 'Confirm & Copy Panels'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* RANGE & DOMAIN PANEL ASSIGNMENT MODAL */}
+      {rangeAssignModal && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded border border-rule max-w-xl w-full p-6 shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto space-y-4">
+            <h3 className="font-serif text-xl font-bold text-ink border-b border-rule pb-3 flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <span className="text-indigo-700">🎯</span> Assign Mentors by Range or Domain
+              </span>
+              <button
+                type="button"
+                onClick={() => setRangeAssignModal(false)}
+                className="text-draft hover:text-ink font-bold text-base"
+              >
+                ✕
+              </button>
+            </h3>
+
+            <form onSubmit={handleRangeAssignPanels} className="space-y-4">
+              {/* 1. Stage Selection */}
+              <div>
+                <label className="input-label">Evaluation Stage *</label>
+                <select
+                  value={rangeStageId}
+                  onChange={(e) => setRangeStageId(e.target.value)}
+                  className="input-field text-xs font-semibold"
+                  required
+                >
+                  <option value="">Select Stage...</option>
+                  {stages.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} (Stage #{s.sequence_order})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 2. Group Targeting Container */}
+              <div className="bg-paper p-4 rounded-md border border-rule space-y-3">
+                {/* Mode Selector Tabs */}
+                <div className="flex border border-rule rounded-md p-1 bg-slate-100 gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setRangeTargetMode('RANGE')}
+                    className={`flex-1 py-1.5 px-3 rounded text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${rangeTargetMode === 'RANGE'
+                        ? 'bg-white text-navy shadow-xs border border-rule/60'
+                        : 'text-draft hover:text-ink'
+                      }`}
+                  >
+                    <span>🎯</span> By Group Range
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRangeTargetMode('DOMAIN');
+                      if (!rangeSelectedDomain && availableDomains.length > 0) {
+                        handleSelectDomain(availableDomains[0].domain);
+                      }
+                    }}
+                    className={`flex-1 py-1.5 px-3 rounded text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${rangeTargetMode === 'DOMAIN'
+                        ? 'bg-white text-indigo-900 shadow-xs border border-rule/60'
+                        : 'text-draft hover:text-ink'
+                      }`}
+                  >
+                    <span>🏷️</span> By Project Domain
+                  </button>
+                </div>
+
+                {/* MODE A: BY NUMERIC RANGE */}
+                {rangeTargetMode === 'RANGE' ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-ink uppercase tracking-wider">
+                        Numeric Group Range
+                      </label>
+                      <span className="text-[11px] font-semibold text-draft">
+                        Total {sortedGroups.length} groups available
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[11px] font-bold text-navy block mb-1">From Group (Start) *</label>
+                        <select
+                          value={rangeStartGroupId}
+                          onChange={(e) => setRangeStartGroupId(e.target.value)}
+                          className="input-field text-xs font-mono font-bold"
+                          required
+                        >
+                          <option value="">Select Start Group...</option>
+                          {sortedGroups.map((g, idx) => (
+                            <option key={g.id} value={g.id}>
+                              #{idx + 1} {g.group_code} — {g.title?.substring(0, 24)}...
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-bold text-navy block mb-1">To Group (End) *</label>
+                        <select
+                          value={rangeEndGroupId}
+                          onChange={(e) => setRangeEndGroupId(e.target.value)}
+                          className="input-field text-xs font-mono font-bold"
+                          required
+                        >
+                          <option value="">Select End Group...</option>
+                          {sortedGroups.map((g, idx) => (
+                            <option key={g.id} value={g.id}>
+                              #{idx + 1} {g.group_code} — {g.title?.substring(0, 24)}...
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Quick Range Presets */}
+                    {sortedGroups.length > 5 && (
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                        <span className="text-[10px] font-bold text-draft uppercase tracking-wider mr-1">Quick Sets:</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRangeStartGroupId(String(sortedGroups[0]?.id));
+                            setRangeEndGroupId(String(sortedGroups[sortedGroups.length - 1]?.id));
+                          }}
+                          className="px-2 py-0.5 rounded text-[10px] font-semibold bg-white border border-rule text-navy hover:bg-slate-100"
+                        >
+                          All Groups ({sortedGroups.length})
+                        </button>
+                        {Array.from({ length: Math.ceil(sortedGroups.length / 5) }).map((_, blockIdx) => {
+                          const startG = sortedGroups[blockIdx * 5];
+                          const endG = sortedGroups[Math.min((blockIdx + 1) * 5 - 1, sortedGroups.length - 1)];
+                          if (!startG || !endG) return null;
+                          return (
+                            <button
+                              key={blockIdx}
+                              type="button"
+                              onClick={() => {
+                                setRangeStartGroupId(String(startG.id));
+                                setRangeEndGroupId(String(endG.id));
+                              }}
+                              className="px-2 py-0.5 rounded text-[10px] font-semibold bg-white border border-rule text-draft hover:text-ink hover:bg-slate-100"
+                            >
+                              Groups {blockIdx * 5 + 1}–{Math.min((blockIdx + 1) * 5, sortedGroups.length)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Filter Within Range by Domain */}
+                    <div className="pt-2 border-t border-rule/70 flex items-center justify-between gap-2">
+                      <label className="text-[11px] font-semibold text-draft shrink-0">Filter within range by domain:</label>
+                      <select
+                        value={rangeFilterDomain}
+                        onChange={(e) => setRangeFilterDomain(e.target.value)}
+                        className="input-field py-1 text-xs"
+                      >
+                        <option value="ALL">All Domains in Range</option>
+                        {availableDomains.map((d) => (
+                          <option key={d.domain} value={d.domain}>
+                            {d.domain} ({d.count} groups)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                ) : (
+                  /* MODE B: BY PROJECT DOMAIN */
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-ink uppercase tracking-wider">
+                        Target Groups by Domain
+                      </label>
+                      <span className="text-[11px] font-semibold text-draft">
+                        {availableDomains.length} domains in AY {academicYear}
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-navy block mb-1">Select Project Domain *</label>
+                      <select
+                        value={rangeSelectedDomain}
+                        onChange={(e) => handleSelectDomain(e.target.value)}
+                        className="input-field text-xs font-semibold"
+                        required
+                      >
+                        <option value="">Select a Domain...</option>
+                        {availableDomains.map((d) => (
+                          <option key={d.domain} value={d.domain}>
+                            {d.domain} ({d.count} {d.count === 1 ? 'group' : 'groups'})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Quick Domain Chips */}
+                    {availableDomains.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                        <span className="text-[10px] font-bold text-draft uppercase tracking-wider mr-1">Popular:</span>
+                        {availableDomains.slice(0, 5).map((d) => {
+                          const isSelected = rangeSelectedDomain.trim().toLowerCase() === d.domain.trim().toLowerCase();
+                          return (
+                            <button
+                              key={d.domain}
+                              type="button"
+                              onClick={() => handleSelectDomain(d.domain)}
+                              className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-colors ${isSelected
+                                  ? 'bg-indigo-100 border-indigo-400 text-indigo-950 font-bold'
+                                  : 'bg-white border-rule text-draft hover:text-ink hover:bg-slate-50'
+                                }`}
+                            >
+                              {d.domain} ({d.count})
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Domain Group Checklist Header */}
+                    {rangeSelectedDomain && (
+                      <div className="flex items-center justify-between pt-2 border-t border-rule text-xs">
+                        <span className="font-bold text-ink">
+                          {domainSelectedGroupIds.length} of {
+                            sortedGroups.filter((g) => (g.domain || '').trim().toLowerCase() === rangeSelectedDomain.trim().toLowerCase()).length
+                          } Groups Selected:
+                        </span>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={selectAllDomainGroups}
+                            className="text-[11px] text-navy font-semibold hover:underline"
+                          >
+                            Select All
+                          </button>
+                          <span className="text-draft">·</span>
+                          <button
+                            type="button"
+                            onClick={deselectAllDomainGroups}
+                            className="text-[11px] text-maroon font-semibold hover:underline"
+                          >
+                            Deselect All
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Live Preview of Groups Targeted */}
+                <div className="pt-2 border-t border-rule">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[11px] font-bold text-ink">
+                      Targeted Groups ({selectedGroupsToAssign.length} Groups):
+                    </span>
+                    {selectedGroupsToAssign.length > 0 && (
+                      <span className="text-[10px] font-mono px-2 py-0.5 bg-indigo-50 text-indigo-900 border border-indigo-200 rounded font-bold">
+                        {rangeTargetMode === 'DOMAIN' ? `Domain: ${rangeSelectedDomain}` : `${selectedGroupsToAssign[0]?.group_code} → ${selectedGroupsToAssign[selectedGroupsToAssign.length - 1]?.group_code}`}
+                      </span>
+                    )}
+                  </div>
+
+                  {selectedGroupsToAssign.length === 0 ? (
+                    <div className="text-xs text-draft italic py-2 text-center bg-white rounded border border-rule">
+                      {rangeTargetMode === 'DOMAIN'
+                        ? 'Please select a domain above to view and assign groups.'
+                        : 'Please select valid Start and End groups above.'}
+                    </div>
+                  ) : (
+                    <div className="max-h-36 overflow-y-auto space-y-1 p-2 bg-white rounded border border-rule divide-y divide-rule/60">
+                      {rangeTargetMode === 'DOMAIN' ? (
+                        sortedGroups
+                          .filter((g) => (g.domain || '').trim().toLowerCase() === rangeSelectedDomain.trim().toLowerCase())
+                          .map((g) => {
+                            const isChecked = domainSelectedGroupIds.includes(String(g.id));
+                            return (
+                              <label
+                                key={g.id}
+                                className={`flex items-center justify-between text-xs py-1.5 px-2 rounded cursor-pointer transition-colors ${isChecked ? 'bg-indigo-50/60 font-medium' : 'opacity-60 hover:opacity-100'
+                                  }`}
+                              >
+                                <div className="flex items-center gap-2 truncate pr-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={() => toggleDomainGroup(String(g.id))}
+                                    className="rounded"
+                                  />
+                                  <span className="font-mono font-bold text-navy text-[11px]">{g.group_code}</span>
+                                  <span className="truncate text-ink text-[11px]">{g.title}</span>
+                                </div>
+                                <span className="text-[10px] text-draft whitespace-nowrap">
+                                  Guide: <strong className="text-ink">{g.guide_name || 'Unassigned'}</strong>
+                                </span>
+                              </label>
+                            );
+                          })
+                      ) : (
+                        selectedGroupsToAssign.map((g) => (
+                          <div key={g.id} className="flex items-center justify-between text-xs py-1 first:pt-0 last:pb-0">
+                            <div className="flex items-center gap-2 truncate pr-2">
+                              <span className="font-mono font-bold text-navy text-[11px]">{g.group_code}</span>
+                              <span className="truncate text-ink text-[11px]">{g.title}</span>
+                            </div>
+                            <span className="text-[10px] text-draft whitespace-nowrap">
+                              Guide: <strong className="text-ink">{g.guide_name || 'Unassigned'}</strong>
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 3. Panel Mentors Selection */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="input-label">Select Panel Mentors for this Range (1 to 3) *</label>
+                  <span className="text-[11px] font-mono text-navy font-bold">
+                    {rangePanelistIds.length} selected
+                  </span>
+                </div>
+
+                <div className="space-y-1.5 max-h-48 overflow-y-auto p-3 border border-rule rounded bg-paper">
+                  {availableGuides.map((fac) => {
+                    const isChecked = rangePanelistIds.includes(String(fac.faculty_id));
+                    return (
+                      <label
+                        key={fac.faculty_id}
+                        className={`flex items-center justify-between p-2 rounded text-xs cursor-pointer border transition-colors ${isChecked ? 'bg-indigo-50 border-indigo-300 text-indigo-950 font-medium' : 'bg-white border-rule text-ink hover:bg-slate-50'
+                          }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              const idStr = String(fac.faculty_id);
+                              if (e.target.checked) {
+                                setRangePanelistIds([...rangePanelistIds, idStr]);
+                              } else {
+                                setRangePanelistIds(rangePanelistIds.filter((x) => x !== idStr));
+                              }
+                            }}
+                          />
+                          <span>{fac.name} ({fac.designation})</span>
+                        </div>
+                        <span className="text-[10px] font-mono text-draft">{fac.current_guided_groups} guided</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 4. Conflict of Interest (COI) Option & Live Warning Banner */}
+              <div className="space-y-2">
+                <label className="flex items-start gap-2 p-3 bg-amber-50/70 border border-amber-200 rounded text-xs cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={rangeSkipGuideConflict}
+                    onChange={(e) => setRangeSkipGuideConflict(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <div>
+                    <span className="font-bold text-amber-900 block">
+                      Enforce Conflict of Interest (COI) Protection (Recommended)
+                    </span>
+                    <span className="text-amber-800 text-[11px] block mt-0.5">
+                      Automatically excludes a mentor from evaluating their own guided group in this range.
+                    </span>
+                  </div>
+                </label>
+
+                {coiWarningsPreview.length > 0 && rangeSkipGuideConflict && (
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded text-xs text-navy space-y-1">
+                    <p className="font-bold flex items-center gap-1.5">
+                      <span>🛡️</span> Notice: {coiWarningsPreview.length} Group(s) with Guide Overlap
+                    </p>
+                    <p className="text-[11px] text-draft leading-relaxed">
+                      The following group(s) have their guide selected as a mentor. The guide will be automatically skipped for these groups to maintain academic evaluation integrity:
+                    </p>
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {coiWarningsPreview.map((w, idx) => (
+                        <span key={idx} className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-white border border-blue-200 text-navy">
+                          {w.group_code}: {w.guideName}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-3 pt-3 border-t border-rule">
+                <button
+                  type="button"
+                  onClick={() => setRangeAssignModal(false)}
+                  className="px-4 py-2 border border-rule rounded text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting || selectedGroupsInRange.length === 0 || rangePanelistIds.length === 0}
+                  className="btn-primary py-2 px-5 text-xs font-bold bg-indigo-700 hover:bg-indigo-800 disabled:opacity-50"
+                >
+                  {submitting
+                    ? 'Assigning Mentors...'
+                    : `Assign to ${selectedGroupsInRange.length} Groups →`}
                 </button>
               </div>
             </form>
@@ -1455,57 +2311,6 @@ export default function HODProjectMgmt() {
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 6: REPORTS & EXPORT */}
-      {activeTab === 'reports' && reportData && (
-        <div className="panel">
-          <div className="panel-header flex items-center justify-between gap-3 flex-wrap">
-            <h2 className="font-serif text-xl font-semibold">Consolidated BE Project Marksheet Report</h2>
-            <button
-              type="button"
-              onClick={handleExportScoreExcel}
-              className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
-            >
-              <span>📊</span> Export Score Excel ↓
-            </button>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="result-table">
-              <thead>
-                <tr>
-                  <th>Group Code</th>
-                  <th>Title &amp; Domain</th>
-                  <th>Guide</th>
-                  <th>Team Members</th>
-                  {reportData.stages.map((st, idx) => (
-                    <th key={idx} className="numeric">{st}</th>
-                  ))}
-                  <th className="numeric">Total Aggregate</th>
-                </tr>
-              </thead>
-              <tbody>
-                {reportData.report.map((r, idx) => (
-                  <tr key={idx}>
-                    <td className="font-mono text-sm font-bold text-navy">{r.group_code}</td>
-                    <td className="max-w-xs">
-                      <div className="font-semibold text-ink text-xs">{r.title}</div>
-                      <div className="text-[10px] text-draft">{r.domain}</div>
-                    </td>
-                    <td className="text-xs text-ink font-medium">{r.guide}</td>
-                    <td className="text-xs text-draft">{r.members}</td>
-                    {reportData.stages.map((st, sIdx) => (
-                      <td key={sIdx} className="numeric font-mono font-bold text-ink">
-                        {r[st]}
-                      </td>
-                    ))}
-                    <td className="numeric font-serif font-bold text-base text-navy">{r.total_aggregate}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
         </div>
       )}
@@ -1684,7 +2489,7 @@ export default function HODProjectMgmt() {
               )}
 
               <div>
-                <label className="input-label">Select Panel Examiners (1 to 3) *</label>
+                <label className="input-label">Select Panel Mentors (1 to 3) *</label>
                 <div className="space-y-2 mt-2 max-h-52 overflow-y-auto p-3 border border-rule rounded bg-paper">
                   {availableGuides.map((fac) => (
                     <label
