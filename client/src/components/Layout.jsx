@@ -142,7 +142,7 @@ const roleNav = {
         { to: '/hod',                 label: 'Executive Dashboard',     icon: Icons.dashboard },
         { to: '/hod/teachers',        label: 'Faculty Allocation',      icon: Icons.teachers },
         { to: '/hod/coordinators',    label: 'Coordinator Assignment',  icon: Icons.teachers },
-        { to: '/hod/projects',        label: 'BE Project Governance',   icon: Icons.project },
+        { to: '/hod/projects',        label: 'BE Project Groups',       icon: Icons.project },
         { to: '/hod/seminar-approvals', label: 'TE Seminar Governance', icon: Icons.seminar },
         { to: '/hod/approval',        label: 'Mark Approvals',          icon: Icons.approval },
         { to: '/hod/magazine-approvals', label: 'Magazine Approvals',   icon: Icons.magazines },

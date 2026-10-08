@@ -1,8 +1,13 @@
 const express = require('express');
+const multer = require('multer');
+const XLSX = require('xlsx');
 const pool = require('../db/pool');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { buildFormResponsesWorkbook, buildGuideAssignmentsWorkbook, buildExaminerAssignmentsWorkbook, buildScoreReportWorkbook } = require('../services/projectExporter');
+const { importBEProjectWorkbook } = require('../services/projectImporter');
 const router = express.Router();
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
 // Helper: Get faculty ID for logged in user
 async function getFacultyId(userId) {
@@ -557,6 +562,42 @@ router.delete('/hod/groups/purge', verifyToken, requireProjectCoordinatorOrHOD, 
   }
 });
 
+/**
+ * POST /api/projects/hod/groups/import-excel
+ * Import BE Project groups from Excel workbook (Sheet2 + Form Responses 1).
+ * Accessible by BE Project Coordinator or HOD.
+ */
+router.post('/hod/groups/import-excel', verifyToken, requireProjectCoordinatorOrHOD, upload.single('file'), async (req, res) => {
+  try {
+    const acadYear = req.query.academic_year || req.body.academic_year || '2026-27';
+    let wb = null;
+
+    if (req.file && req.file.buffer) {
+      wb = XLSX.read(req.file.buffer, { type: 'buffer' });
+    } else if (req.body && req.body.file_path) {
+      wb = XLSX.readFile(req.body.file_path);
+    } else {
+      const defaultPath = 'E:\\BE Project Topic Preferences form (AY 2026-27) (Responses).xlsx';
+      const fs = require('fs');
+      if (fs.existsSync(defaultPath)) {
+        wb = XLSX.readFile(defaultPath);
+      } else {
+        return res.status(400).json({ error: 'Please provide an Excel file (.xlsx) to import.' });
+      }
+    }
+
+    const result = await importBEProjectWorkbook(wb, acadYear);
+    res.json({
+      message: `Successfully imported ${result.groupsCount} BE project groups and ${result.membersCount} student members for academic year ${acadYear}!`,
+      groupsCount: result.groupsCount,
+      membersCount: result.membersCount
+    });
+  } catch (err) {
+    console.error('[Import BE Project Excel Error]', err);
+    res.status(500).json({ error: err.message || 'Failed to import BE Project Excel file' });
+  }
+});
+
 
 // ============================================================================
 // 2. FACULTY / GUIDE ENDPOINTS
@@ -973,17 +1014,18 @@ router.get('/hod/dashboard', verifyToken, requireProjectCoordinatorOrHOD, async 
       [acadYear]
     );
 
-    // Pending HOD Approvals count
-    const pendingGuidesRes = await pool.query(
-      `SELECT COUNT(*) FROM project_groups WHERE academic_year = $1 AND guide_approval_status = 'PENDING_HOD_APPROVAL'`,
+    // Recent updates for HOD overview
+    const recentActivityRes = await pool.query(
+      `SELECT g.id, g.group_code, g.title, u.name as guide_name, g.guide_decided_at as timestamp,
+              'GUIDE_ASSIGNED' as type,
+              CONCAT('Guide ', u.name, ' assigned to ', g.group_code) as summary
+       FROM project_groups g
+       JOIN faculty f ON g.guide_id = f.id
+       JOIN users u ON f.user_id = u.id
+       WHERE g.academic_year = $1 AND g.guide_decided_at IS NOT NULL
+       ORDER BY g.guide_decided_at DESC LIMIT 5`,
       [acadYear]
-    );
-    const pendingScoreReleasesRes = await pool.query(
-      `SELECT COUNT(*) FROM project_score_releases sr
-       JOIN project_evaluation_stages s ON sr.stage_id = s.id
-       WHERE s.academic_year = $1 AND sr.status = 'PENDING_HOD_APPROVAL'`,
-      [acadYear]
-    );
+    ).catch(() => ({ rows: [] }));
 
     res.json({
       academic_year: acadYear,
@@ -992,10 +1034,11 @@ router.get('/hod/dashboard', verifyToken, requireProjectCoordinatorOrHOD, async 
       evaluation_status_breakdown: totalAssignedEvals.rows,
       stages: stagesRes.rows,
       faculty_load: guideLoadRes.rows,
+      recent_updates: recentActivityRes.rows,
       pending_approvals: {
-        pending_guides_count: parseInt(pendingGuidesRes.rows[0].count, 10),
-        pending_scores_count: parseInt(pendingScoreReleasesRes.rows[0].count, 10),
-        total_pending: parseInt(pendingGuidesRes.rows[0].count, 10) + parseInt(pendingScoreReleasesRes.rows[0].count, 10)
+        pending_guides_count: 0,
+        pending_scores_count: 0,
+        total_pending: 0
       }
     });
   } catch (err) {
@@ -1064,63 +1107,78 @@ router.get('/hod/groups', verifyToken, requireProjectCoordinatorOrHOD, async (re
 
 /**
  * PATCH /api/projects/hod/groups/:id/guide
- * Assign/reassign project guide. If called by BE Project Coordinator, submits for HOD approval.
- * If called by HOD, directly assigns and confirms guide.
+ * Assign/reassign project guide directly (accessible by BE Project Coordinator or HOD).
+ * No approval bottleneck required; updates take effect immediately and log an activity update for HOD.
  */
 router.patch('/hod/groups/:id/guide', verifyToken, requireProjectCoordinatorOrHOD, async (req, res) => {
   try {
     const groupId = req.params.id;
     const { guide_id } = req.body; // faculty id or null
-    const isHOD = req.user.role === 'hod';
 
-    if (isHOD) {
-      // HOD direct assignment & confirmation
-      if (guide_id) {
-        await pool.query(
-          `UPDATE project_groups
-           SET guide_id = $1, proposed_guide_id = $1, guide_approval_status = 'APPROVED',
-               guide_requested_by = $2, guide_decided_at = NOW(), status = 'ACTIVE'
-           WHERE id = $3`,
-          [guide_id, req.user.id, groupId]
-        );
-        res.json({ message: 'Guide assigned and confirmed by HOD', approval_status: 'APPROVED' });
-      } else {
-        await pool.query(
-          `UPDATE project_groups
-           SET guide_id = NULL, proposed_guide_id = NULL, guide_approval_status = 'NONE',
-               guide_requested_by = NULL, guide_decided_at = NOW(), status = 'DRAFT'
-           WHERE id = $1`,
-          [groupId]
-        );
-        res.json({ message: 'Guide unassigned successfully', approval_status: 'NONE' });
-      }
+    if (guide_id) {
+      const guideRes = await pool.query(
+        `SELECT f.id, u.name, f.designation FROM faculty f JOIN users u ON f.user_id = u.id WHERE f.id = $1`,
+        [guide_id]
+      );
+      const guideName = guideRes.rows[0]?.name || 'Faculty';
+
+      const updateRes = await pool.query(
+        `UPDATE project_groups
+         SET guide_id = $1, proposed_guide_id = $1, guide_approval_status = 'APPROVED',
+             guide_requested_by = $2, guide_decided_at = NOW(), status = 'ACTIVE'
+         WHERE id = $3
+         RETURNING group_code`,
+        [guide_id, req.user.id, groupId]
+      );
+      const groupCode = updateRes.rows[0]?.group_code || `Group #${groupId}`;
+
+      await pool.query(
+        `INSERT INTO audit_log (table_name, record_id, changed_by, action, reason)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [
+          'project_groups',
+          groupId,
+          req.user.id,
+          'PROJECT_GUIDE_ASSIGNED',
+          `Guide ${guideName} assigned directly to group ${groupCode} by ${req.user.name || 'Coordinator'}`
+        ]
+      ).catch(() => {});
+
+      res.json({
+        message: `Guide "${guideName}" assigned to ${groupCode} successfully!`,
+        guide_id,
+        approval_status: 'APPROVED',
+        status: 'ACTIVE'
+      });
     } else {
-      // BE Project Coordinator proposal (Requires HOD Confirmation)
-      if (guide_id) {
-        await pool.query(
-          `UPDATE project_groups
-           SET proposed_guide_id = $1, guide_approval_status = 'PENDING_HOD_APPROVAL',
-               guide_requested_by = $2
-           WHERE id = $3`,
-          [guide_id, req.user.id, groupId]
-        );
-        res.json({
-          message: 'Guide selection submitted for HOD confirmation. Guide assignment will take effect once HOD confirms.',
-          approval_status: 'PENDING_HOD_APPROVAL'
-        });
-      } else {
-        await pool.query(
-          `UPDATE project_groups
-           SET proposed_guide_id = NULL, guide_approval_status = 'PENDING_HOD_APPROVAL',
-               guide_requested_by = $1
-           WHERE id = $2`,
-          [req.user.id, groupId]
-        );
-        res.json({
-          message: 'Guide unassignment request submitted for HOD confirmation.',
-          approval_status: 'PENDING_HOD_APPROVAL'
-        });
-      }
+      const updateRes = await pool.query(
+        `UPDATE project_groups
+         SET guide_id = NULL, proposed_guide_id = NULL, guide_approval_status = 'NONE',
+             guide_requested_by = $1, guide_decided_at = NOW(), status = 'DRAFT'
+         WHERE id = $2
+         RETURNING group_code`,
+        [req.user.id, groupId]
+      );
+      const groupCode = updateRes.rows[0]?.group_code || `Group #${groupId}`;
+
+      await pool.query(
+        `INSERT INTO audit_log (table_name, record_id, changed_by, action, reason)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [
+          'project_groups',
+          groupId,
+          req.user.id,
+          'PROJECT_GUIDE_UNASSIGNED',
+          `Guide unassigned from group ${groupCode} by ${req.user.name || 'Coordinator'}`
+        ]
+      ).catch(() => {});
+
+      res.json({
+        message: `Guide unassigned from ${groupCode}.`,
+        guide_id: null,
+        approval_status: 'NONE',
+        status: 'DRAFT'
+      });
     }
   } catch (err) {
     console.error('[Assign Guide Error]', err);
@@ -1201,23 +1259,27 @@ router.post('/hod/groups/clear-guides', verifyToken, requireProjectCoordinatorOr
     const { academic_year } = req.body;
     const acadYear = academic_year || '2026-27';
 
-    if (req.user.role === 'hod') {
-      const result = await pool.query(
-        `UPDATE project_groups
-         SET guide_id = NULL, proposed_guide_id = NULL, guide_approval_status = 'NONE', status = 'DRAFT'
-         WHERE academic_year = $1 RETURNING id`,
-        [acadYear]
-      );
-      res.json({ message: `Successfully reset/unassigned project guides for ${result.rowCount} groups!`, cleared_count: result.rowCount });
-    } else {
-      const result = await pool.query(
-        `UPDATE project_groups
-         SET proposed_guide_id = NULL, guide_approval_status = 'PENDING_HOD_APPROVAL', guide_requested_by = $1
-         WHERE academic_year = $2 RETURNING id`,
-        [req.user.id, acadYear]
-      );
-      res.json({ message: `Guide clear request submitted to HOD for ${result.rowCount} groups.`, cleared_count: result.rowCount });
-    }
+    const result = await pool.query(
+      `UPDATE project_groups
+       SET guide_id = NULL, proposed_guide_id = NULL, guide_approval_status = 'NONE', status = 'DRAFT',
+           guide_requested_by = $1, guide_decided_at = NOW()
+       WHERE academic_year = $2 RETURNING id`,
+      [req.user.id, acadYear]
+    );
+
+    await pool.query(
+      `INSERT INTO audit_log (table_name, record_id, changed_by, action, reason)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        'project_groups',
+        null,
+        req.user.id,
+        'PROJECT_GUIDES_BULK_CLEARED',
+        `All guides reset across ${result.rowCount} groups for AY ${acadYear}`
+      ]
+    ).catch(() => {});
+
+    res.json({ message: `Successfully reset/unassigned project guides for ${result.rowCount} groups!`, cleared_count: result.rowCount });
   } catch (err) {
     console.error('[Clear Guides Error]', err);
     res.status(500).json({ error: 'Failed to clear guide assignments' });
@@ -1390,6 +1452,94 @@ router.post('/hod/panel-assignments', verifyToken, requireProjectCoordinatorOrHO
   } catch (err) {
     console.error('[Panel Assignment Error]', err);
     res.status(500).json({ error: 'Failed to save panel assignment' });
+  }
+});
+
+/**
+ * POST /api/projects/hod/panel-range-assign
+ * Assign panel examiners to a range/list of project groups for a stage.
+ * Supports Conflict of Interest (COI) check (skipping the group's guide).
+ */
+router.post('/hod/panel-range-assign', verifyToken, requireProjectCoordinatorOrHOD, async (req, res) => {
+  try {
+    const { stage_id, group_ids, panel_member_ids, skip_guide_conflict = true } = req.body;
+    if (!stage_id || !Array.isArray(group_ids) || group_ids.length === 0 || !Array.isArray(panel_member_ids) || panel_member_ids.length === 0) {
+      return res.status(400).json({ error: 'stage_id, group_ids (non-empty array), and panel_member_ids (non-empty array) are required' });
+    }
+
+    const stageCheck = await pool.query('SELECT id, name FROM project_evaluation_stages WHERE id = $1', [stage_id]);
+    if (stageCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Evaluation stage not found' });
+    }
+
+    // Fetch the groups with guide details
+    const groupsRes = await pool.query(
+      `SELECT g.id, g.group_code, g.guide_id, g.proposed_guide_id, u.name as guide_name
+       FROM project_groups g
+       LEFT JOIN faculty f ON g.guide_id = f.id
+       LEFT JOIN users u ON f.user_id = u.id
+       WHERE g.id = ANY($1::int[]) AND g.status != 'WITHDRAWN'
+       ORDER BY g.group_code ASC`,
+      [group_ids.map(Number)]
+    );
+
+    if (groupsRes.rows.length === 0) {
+      return res.status(400).json({ error: 'No matching active project groups found in selected range' });
+    }
+
+    const client = await pool.connect();
+    const coiWarnings = [];
+    let assignedCount = 0;
+
+    try {
+      await client.query('BEGIN');
+
+      for (const grp of groupsRes.rows) {
+        const guideId = grp.guide_id || grp.proposed_guide_id;
+
+        // Filter out guide if skip_guide_conflict is active
+        let effectivePanelists = panel_member_ids.map(Number);
+        if (skip_guide_conflict && guideId) {
+          const hadConflict = effectivePanelists.includes(guideId);
+          if (hadConflict) {
+            effectivePanelists = effectivePanelists.filter((id) => id !== guideId);
+            coiWarnings.push(`Group ${grp.group_code}: Guide (${grp.guide_name || 'Guide'}) was excluded as mentor due to Conflict of Interest.`);
+          }
+        }
+
+        // Delete existing panel assignments for this stage and group
+        await client.query(
+          `DELETE FROM project_panel_assignments WHERE stage_id = $1 AND group_id = $2`,
+          [stage_id, grp.id]
+        );
+
+        // Insert new panel assignments
+        for (const facId of effectivePanelists) {
+          await client.query(
+            `INSERT INTO project_panel_assignments (stage_id, group_id, panel_member_id, assigned_by, status)
+             VALUES ($1, $2, $3, $4, 'ASSIGNED')`,
+            [stage_id, grp.id, facId, req.user.id]
+          );
+        }
+
+        assignedCount++;
+      }
+
+      await client.query('COMMIT');
+      res.json({
+        message: `Successfully assigned panel mentors to ${assignedCount} project groups!`,
+        assigned_count: assignedCount,
+        warnings: coiWarnings
+      });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error('[Panel Range Assign Error]', err);
+    res.status(500).json({ error: 'Failed to assign panels to range of groups' });
   }
 });
 
@@ -1653,35 +1803,40 @@ router.post('/hod/evaluations/:id/unlock', verifyToken, requireProjectCoordinato
 
 /**
  * POST /api/projects/hod/score-releases
- * Release scores for a stage.
- * If called by BE Project Coordinator, submits request for HOD confirmation.
- * If called by HOD, directly approves and releases scores.
+ * Directly release scores for an evaluation stage (accessible by BE Project Coordinator or HOD).
+ * Scores are published directly to students immediately without waiting for approval.
  */
 router.post('/hod/score-releases', verifyToken, requireProjectCoordinatorOrHOD, async (req, res) => {
   try {
     const { stage_id, group_id } = req.body;
     if (!stage_id) return res.status(400).json({ error: 'stage_id is required' });
 
-    const isHOD = req.user.role === 'hod';
-    const status = isHOD ? 'APPROVED' : 'PENDING_HOD_APPROVAL';
-    const approvedBy = isHOD ? req.user.id : null;
-    const approvedAt = isHOD ? new Date() : null;
-
     const result = await pool.query(
       `INSERT INTO project_score_releases (stage_id, group_id, released_by, status, requested_by, approved_by, approved_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [stage_id, group_id || null, req.user.id, status, req.user.id, approvedBy, approvedAt]
+       VALUES ($1, $2, $3, 'APPROVED', $3, $3, NOW()) RETURNING *`,
+      [stage_id, group_id || null, req.user.id]
     );
 
-    if (isHOD) {
-      res.json({ message: 'Scores confirmed and released to students successfully', release: result.rows[0], status: 'APPROVED' });
-    } else {
-      res.json({
-        message: 'Score release requested. Pending HOD confirmation before publishing to students.',
-        release: result.rows[0],
-        status: 'PENDING_HOD_APPROVAL'
-      });
-    }
+    const stageRes = await pool.query(`SELECT name FROM project_evaluation_stages WHERE id = $1`, [stage_id]);
+    const stageName = stageRes.rows[0]?.name || `Stage #${stage_id}`;
+
+    await pool.query(
+      `INSERT INTO audit_log (table_name, record_id, changed_by, action, reason)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        'project_score_releases',
+        result.rows[0]?.id,
+        req.user.id,
+        'PROJECT_SCORE_RELEASED',
+        `Scores directly released for stage "${stageName}" ${group_id ? `(Group #${group_id})` : '(All Groups)'}`
+      ]
+    ).catch(() => {});
+
+    res.json({
+      message: `Scores confirmed and released to students for "${stageName}" successfully!`,
+      release: result.rows[0],
+      status: 'APPROVED'
+    });
   } catch (err) {
     console.error('[Score Release Error]', err);
     res.status(500).json({ error: 'Failed to release scores' });
@@ -1774,6 +1929,104 @@ router.get('/hod/pending-approvals', verifyToken, requireProjectCoordinatorOrHOD
   } catch (err) {
     console.error('[Pending Approvals Error]', err);
     res.status(500).json({ error: 'Failed to fetch pending approvals' });
+  }
+});
+
+/**
+ * GET /api/projects/hod/activity-updates
+ * Real-time activity feed and status updates regarding BE Projects.
+ * Accessible by HOD and BE Project Coordinator.
+ */
+router.get('/hod/activity-updates', verifyToken, requireProjectCoordinatorOrHOD, async (req, res) => {
+  try {
+    const acadYear = req.query.academic_year || '2026-27';
+
+    // 1. Guide assignments & changes
+    const guideUpdates = await pool.query(
+      `SELECT g.id as record_id, g.group_code, g.title as group_title, g.domain,
+              u.name as guide_name, f.designation as guide_designation,
+              req_u.name as actor_name, g.guide_decided_at as timestamp,
+              'GUIDE_ASSIGNED' as type,
+              CONCAT('Guide ', u.name, ' assigned to group ', g.group_code) as summary
+       FROM project_groups g
+       JOIN faculty f ON g.guide_id = f.id
+       JOIN users u ON f.user_id = u.id
+       LEFT JOIN users req_u ON g.guide_requested_by = req_u.id
+       WHERE g.academic_year = $1 AND g.guide_decided_at IS NOT NULL
+       ORDER BY g.guide_decided_at DESC LIMIT 25`,
+      [acadYear]
+    );
+
+    // 2. Score releases
+    const scoreUpdates = await pool.query(
+      `SELECT sr.id as record_id, g.group_code, s.name as stage_name,
+              u.name as actor_name, sr.released_at as timestamp,
+              'SCORE_RELEASED' as type,
+              CONCAT('Scores released for stage "', s.name, '"', CASE WHEN g.group_code IS NOT NULL THEN CONCAT(' (', g.group_code, ')') ELSE ' (All Groups)' END) as summary
+       FROM project_score_releases sr
+       JOIN project_evaluation_stages s ON sr.stage_id = s.id
+       LEFT JOIN project_groups g ON sr.group_id = g.id
+       LEFT JOIN users u ON sr.released_by = u.id
+       WHERE s.academic_year = $1
+       ORDER BY sr.released_at DESC LIMIT 25`,
+      [acadYear]
+    );
+
+    // 3. Evaluations submitted by panel examiners
+    const evalUpdates = await pool.query(
+      `SELECT pe.id as record_id, g.group_code, s.name as stage_name,
+              u.name as actor_name, pe.submitted_at as timestamp,
+              'EVALUATION_SUBMITTED' as type,
+              CONCAT(u.name, ' submitted evaluation marks for ', g.group_code, ' in stage "', s.name, '"') as summary,
+              pe.overall_remarks
+       FROM project_evaluations pe
+       JOIN project_panel_assignments pa ON pe.panel_assignment_id = pa.id
+       JOIN project_groups g ON pa.group_id = g.id
+       JOIN project_evaluation_stages s ON pa.stage_id = s.id
+       JOIN faculty f ON pa.panel_member_id = f.id
+       JOIN users u ON f.user_id = u.id
+       WHERE s.academic_year = $1 AND pe.status IN ('SUBMITTED','LOCKED') AND pe.submitted_at IS NOT NULL
+       ORDER BY pe.submitted_at DESC LIMIT 25`,
+      [acadYear]
+    );
+
+    // 4. Group registrations / imports
+    const groupUpdates = await pool.query(
+      `SELECT g.id as record_id, g.group_code, g.batch, g.domain, g.created_at as timestamp,
+              'GROUP_REGISTERED' as type,
+              CONCAT('BE Project Group ', g.group_code, ' (', g.batch, ') registered in domain "', g.domain, '"') as summary
+       FROM project_groups g
+       WHERE g.academic_year = $1
+       ORDER BY g.created_at DESC, g.id DESC LIMIT 25`,
+      [acadYear]
+    );
+
+    // 5. Audit log updates for projects
+    const auditUpdates = await pool.query(
+      `SELECT a.id as record_id, a.action as type, a.reason as summary,
+              u.name as actor_name, a.created_at as timestamp
+       FROM audit_log a
+       LEFT JOIN users u ON a.changed_by = u.id
+       WHERE a.table_name LIKE 'project_%'
+       ORDER BY a.created_at DESC LIMIT 25`
+    ).catch(() => ({ rows: [] }));
+
+    // Merge and sort by timestamp DESC
+    const allUpdates = [
+      ...guideUpdates.rows,
+      ...scoreUpdates.rows,
+      ...evalUpdates.rows,
+      ...groupUpdates.rows,
+      ...auditUpdates.rows
+    ]
+      .filter(item => item.timestamp)
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+      .slice(0, 50);
+
+    res.json(allUpdates);
+  } catch (err) {
+    console.error('[Activity Updates Error]', err);
+    res.status(500).json({ error: 'Failed to fetch BE project activity updates' });
   }
 });
 

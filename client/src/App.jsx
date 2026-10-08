@@ -39,7 +39,7 @@ import MarksApproval  from './pages/hod/MarksApproval'
 import PublishResults from './pages/hod/PublishResults'
 import HODAnalytics   from './pages/hod/HODAnalytics'
 import HODProjectMgmt from './pages/hod/HODProjectMgmt'
-import HODProjectApprovals from './pages/hod/HODProjectApprovals'
+import HODProjectView from './pages/hod/HODProjectView'
 import AuditLog       from './pages/hod/AuditLog'
 import HODMagazineApprovals from './pages/hod/HODMagazineApprovals'
 import TermRollover   from './pages/hod/TermRollover'
@@ -143,7 +143,7 @@ export default function App() {
           <Route path="/hod/publish" element={<HODLayout><PublishResults /></HODLayout>} />
           <Route path="/hod/rollover" element={<HODLayout><TermRollover /></HODLayout>} />
           <Route path="/hod/analytics" element={<HODLayout><HODAnalytics /></HODLayout>} />
-          <Route path="/hod/projects" element={<HODLayout><HODProjectApprovals /></HODLayout>} />
+          <Route path="/hod/projects" element={<HODLayout><HODProjectView /></HODLayout>} />
           <Route path="/hod/audit" element={<HODLayout><AuditLog /></HODLayout>} />
 
           {/* Alumni */}
