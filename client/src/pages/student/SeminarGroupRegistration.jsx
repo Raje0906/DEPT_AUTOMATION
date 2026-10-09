@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import api from '../../api/axios';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 export default function SeminarGroupRegistration() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(null);
   const [hasSubmission, setHasSubmission] = useState(false);
@@ -18,13 +20,13 @@ export default function SeminarGroupRegistration() {
   const [standardDomains, setStandardDomains] = useState([]);
   const [hasDraftNotice, setHasDraftNotice] = useState(false);
 
-  // Form State
+  // Form State (Single Page)
   const [domain, setDomain] = useState('');
   const [customDomain, setCustomDomain] = useState('');
   const [isCustomDomain, setIsCustomDomain] = useState(false);
   const [showMember4, setShowMember4] = useState(false);
 
-  // Initial 3 members
+  // Initial 4 member slots
   const initialMembers = [
     { student_name: '', prn: '', division: '', mobile: '', email: '', topic1: '', topic2: '', topic3: '', is_leader: true },
     { student_name: '', prn: '', division: '', mobile: '', email: '', topic1: '', topic2: '', topic3: '', is_leader: false },
@@ -102,9 +104,9 @@ export default function SeminarGroupRegistration() {
     loadData();
   }, []);
 
-  // Autosave to localStorage on changes (debounced)
+  // Autosave to localStorage on changes
   useEffect(() => {
-    if (!draftKey || hasSubmission || loading || !isEditing && hasSubmission) return;
+    if (!draftKey || hasSubmission || loading || (!isEditing && hasSubmission)) return;
 
     const timer = setTimeout(() => {
       try {
@@ -120,38 +122,35 @@ export default function SeminarGroupRegistration() {
       } catch {
         // LocalStorage quota or access error
       }
-    }, 1000);
+    }, 800);
 
     return () => clearTimeout(timer);
   }, [domain, customDomain, isCustomDomain, showMember4, members, draftKey, hasSubmission, loading, isEditing]);
 
-  const handleRestoreDraft = () => {
-    if (!draftKey) return;
+  const restoreDraft = () => {
     try {
-      const savedDraft = localStorage.getItem(draftKey);
-      if (savedDraft) {
-        const parsed = JSON.parse(savedDraft);
-        if (parsed.domain) setDomain(parsed.domain);
-        if (parsed.customDomain) setCustomDomain(parsed.customDomain);
-        if (parsed.isCustomDomain !== undefined) setIsCustomDomain(parsed.isCustomDomain);
-        if (parsed.showMember4 !== undefined) setShowMember4(parsed.showMember4);
-        if (Array.isArray(parsed.members)) setMembers(parsed.members);
-        toast.success('Restored unsaved draft!');
-        setHasDraftNotice(false);
-      }
+      const saved = localStorage.getItem(draftKey);
+      if (!saved) return;
+      const parsed = JSON.parse(saved);
+      if (parsed.domain) setDomain(parsed.domain);
+      if (parsed.customDomain) setCustomDomain(parsed.customDomain);
+      if (parsed.isCustomDomain !== undefined) setIsCustomDomain(parsed.isCustomDomain);
+      if (parsed.showMember4 !== undefined) setShowMember4(parsed.showMember4);
+      if (parsed.members && Array.isArray(parsed.members)) setMembers(parsed.members);
+      setHasDraftNotice(false);
+      toast.success('Draft restored from your last visit');
     } catch {
       toast.error('Failed to restore draft');
     }
   };
 
-  const handleDiscardDraft = () => {
-    if (draftKey) {
-      localStorage.removeItem(draftKey);
-    }
+  const discardDraft = () => {
+    if (draftKey) localStorage.removeItem(draftKey);
     setHasDraftNotice(false);
-    toast('Draft discarded', { icon: '🗑️' });
+    toast.success('Saved draft discarded');
   };
 
+  // Member field updates
   const handleMemberChange = (index, field, value) => {
     setMembers(prev => {
       const copy = [...prev];
@@ -160,156 +159,119 @@ export default function SeminarGroupRegistration() {
     });
   };
 
+  // Start editing existing submission
   const handleStartEdit = () => {
     if (!groupData) return;
     setIsEditing(true);
 
-    const isStd = standardDomains.includes(groupData.domain);
-    if (isStd) {
-      setDomain(groupData.domain);
-      setIsCustomDomain(false);
-      setCustomDomain('');
-    } else {
-      setDomain('Other / Emerging Technologies');
+    const isCustom = !standardDomains.includes(groupData.domain);
+    if (isCustom) {
       setIsCustomDomain(true);
-      setCustomDomain(groupData.domain);
+      setDomain('Other');
+      setCustomDomain(groupData.domain || '');
+    } else {
+      setIsCustomDomain(false);
+      setDomain(groupData.domain || '');
     }
 
-    const newMembers = [...initialMembers];
-    membersData.forEach((m, idx) => {
-      if (idx < 4) {
-        newMembers[idx] = {
-          student_name: m.student_name || '',
-          prn: m.prn || '',
-          division: m.division || '',
-          mobile: m.mobile || '',
-          email: m.email || '',
-          topic1: m.topic1 || '',
-          topic2: m.topic2 || '',
-          topic3: m.topic3 || '',
+    if (membersData.length >= 4) {
+      setShowMember4(true);
+    }
+
+    const newMembers = initialMembers.map((m, idx) => {
+      const existing = membersData[idx];
+      if (existing) {
+        return {
+          student_name: existing.student_name || '',
+          prn: existing.prn || '',
+          division: existing.division || '',
+          mobile: existing.mobile || '',
+          email: existing.email || '',
+          topic1: existing.topic1 || '',
+          topic2: existing.topic2 || '',
+          topic3: existing.topic3 || '',
           is_leader: idx === 0,
         };
       }
+      return m;
     });
-
-    if (membersData.length === 4) {
-      setShowMember4(true);
-    } else {
-      setShowMember4(false);
-    }
 
     setMembers(newMembers);
   };
 
   const handleCancelEdit = () => {
     setIsEditing(false);
+    loadData();
   };
 
-  // Find duplicate PRNs across current members in real-time
-  const getDuplicatePrns = () => {
+  // Soft Validation Check (Non-blocking: returns warnings instead of halting)
+  const getValidationWarnings = () => {
+    const warnings = [];
     const activeCount = showMember4 ? 4 : 3;
-    const seen = new Map();
-    const duplicates = new Set();
+    const finalDomain = isCustomDomain ? customDomain.trim() : domain;
 
+    if (!finalDomain) {
+      warnings.push('Domain of interest is not selected.');
+    }
+
+    // Check duplicate PRNs
+    const prnMap = new Map();
     for (let i = 0; i < activeCount; i++) {
-      const p = members[i].prn?.trim().toUpperCase();
-      if (p) {
-        if (seen.has(p)) {
-          duplicates.add(p);
+      const prn = (members[i].prn || '').trim().toUpperCase();
+      if (prn) {
+        if (prnMap.has(prn)) {
+          warnings.push(`PRN "${prn}" is entered multiple times (Student ${prnMap.get(prn) + 1} and Student ${i + 1}).`);
         } else {
-          seen.set(p, i);
+          prnMap.set(prn, i);
         }
       }
     }
-    return duplicates;
+
+    return warnings;
   };
 
-  const duplicatePrns = getDuplicatePrns();
-
+  // Submission handler with relaxed validation
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!session) {
-      return toast.error('No active seminar session found');
-    }
+    const finalDomain = isCustomDomain ? customDomain.trim() : domain;
+    const activeCount = showMember4 ? 4 : 3;
+    const membersToSubmit = members.slice(0, activeCount).map((m, idx) => ({
+      ...m,
+      student_name: m.student_name ? m.student_name.trim() : '',
+      prn: m.prn ? m.prn.trim().toUpperCase() : '',
+      division: m.division ? m.division.trim().toUpperCase() : '',
+      mobile: m.mobile ? m.mobile.trim() : '',
+      email: m.email ? m.email.trim().toLowerCase() : '',
+      topic1: m.topic1 ? m.topic1.trim() : '',
+      topic2: m.topic2 ? m.topic2.trim() : '',
+      topic3: m.topic3 ? m.topic3.trim() : '',
+      is_leader: idx === 0,
+    }));
 
-    const effectiveDomain = isCustomDomain ? customDomain.trim() : domain.trim();
-    if (!effectiveDomain) {
-      return toast.error('Please select or specify a Project Domain Name');
-    }
-
-    const activeMembersCount = showMember4 ? 4 : 3;
-    const activeMembers = members.slice(0, activeMembersCount);
-
-    // Client-side required field and format check
-    for (let i = 0; i < activeMembers.length; i++) {
-      const m = activeMembers[i];
-      const sNum = i + 1;
-      const sLabel = `Student ${sNum}${i === 0 ? ' (Leader)' : ''}`;
-
-      if (!m.student_name?.trim()) return toast.error(`${sLabel}: Please enter Student Name`);
-      if (!m.prn?.trim()) return toast.error(`${sLabel}: Please enter College PRN`);
-      if (!m.division?.trim()) return toast.error(`${sLabel}: Please select or enter Division`);
-      if (!m.mobile?.trim()) return toast.error(`${sLabel}: Please enter Mobile Number`);
-
-      const cleanMobile = m.mobile.replace(/\D/g, '');
-      if (cleanMobile.length !== 10 && !(cleanMobile.length === 12 && cleanMobile.startsWith('91'))) {
-        return toast.error(`${sLabel}: Mobile number must be a valid 10-digit number`);
-      }
-
-      if (!m.email?.trim() || !m.email.includes('@')) {
-        return toast.error(`${sLabel}: Please enter a valid Email Address`);
-      }
-
-      if (!m.topic1?.trim()) return toast.error(`${sLabel}: Please specify Proposed Topic 1`);
-      if (!m.topic2?.trim()) return toast.error(`${sLabel}: Please specify Proposed Topic 2`);
-      if (!m.topic3?.trim()) return toast.error(`${sLabel}: Please specify Proposed Topic 3`);
-    }
-
-    if (duplicatePrns.size > 0) {
-      return toast.error(`Duplicate PRN detected: ${Array.from(duplicatePrns).join(', ')}. Each student must have a unique PRN.`);
+    // Check if at least leader has a name
+    if (!membersToSubmit[0]?.student_name && !membersToSubmit[0]?.prn) {
+      toast.error('Please enter at least Student 1 name or PRN to register.');
+      return;
     }
 
     setSubmitting(true);
     try {
       const payload = {
-        session_id: session.id,
-        domain: effectiveDomain,
-        members: activeMembers.map((m, idx) => ({
-          student_name: m.student_name.trim(),
-          prn: m.prn.trim(),
-          division: m.division.trim(),
-          mobile: m.mobile.trim(),
-          email: m.email.trim(),
-          topic1: m.topic1.trim(),
-          topic2: m.topic2.trim(),
-          topic3: m.topic3.trim(),
-          is_leader: idx === 0,
-        })),
+        domain: finalDomain || 'General Computing',
+        members: membersToSubmit,
+        isEditing,
       };
 
       const res = await api.post('/seminar/register-group', payload);
-      toast.success(res.data.message || 'Seminar group registered successfully!');
-
-      if (res.data.warnings?.length > 0) {
-        res.data.warnings.forEach(w => toast(w, { icon: '⚠️', duration: 5000 }));
-      }
-
-      // Clear draft
+      toast.success(res.data?.message || 'TE Seminar group registered successfully!');
       if (draftKey) localStorage.removeItem(draftKey);
-
       setIsEditing(false);
       await loadData();
     } catch (err) {
-      console.error('Registration submission error:', err);
-      if (err.response?.data?.alreadyRegistered) {
-        toast.error(err.response.data.error, { duration: 6000 });
-        setIsEditing(false);
-        await loadData();
-        return;
-      }
-      const msg = err.response?.data?.error || 'Registration failed. Please check your inputs.';
-      toast.error(msg, { duration: 5000 });
+      console.error('Registration submit error:', err);
+      const msg = err.response?.data?.error || err.response?.data?.message || 'Failed to submit seminar registration.';
+      toast.error(msg);
     } finally {
       setSubmitting(false);
     }
@@ -317,450 +279,332 @@ export default function SeminarGroupRegistration() {
 
   if (loading) {
     return (
-      <div className="p-10 max-w-5xl mx-auto flex flex-col items-center justify-center min-h-[350px]">
-        <div className="w-8 h-8 border-3 border-[var(--navy)] border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-xs text-[var(--ink)]/60 font-medium mt-3">Loading TE Seminar registration portal...</p>
-      </div>
-    );
-  }
-
-  if (!session) {
-    return (
-      <div className="p-6 max-w-4xl mx-auto">
-        <div className="bg-white border border-[var(--rule)] rounded-xl p-8 text-center space-y-3 shadow-xs">
-          <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto text-xl">
-            📋
-          </div>
-          <h2 className="text-lg font-bold text-[var(--navy)]">No Active Seminar Session</h2>
-          <p className="text-xs text-[var(--ink)]/60 max-w-md mx-auto">
-            There is currently no active TE Seminar session open for group registration. Please contact your Seminar Coordinator or Department Administrator.
-          </p>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-3 border-[var(--navy)] border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-xs text-[var(--ink)]/60 font-medium">Loading TE Seminar registration details...</p>
         </div>
       </div>
     );
   }
 
-  // ─── VIEW MODE: GROUP ALREADY REGISTERED ────────────────────────────────────
+  // State: Registration is closed/locked and student has no submission
+  if (!hasSubmission && session && (session.status === 'PUBLISHED' || session.is_locked)) {
+    return (
+      <div className="max-w-3xl mx-auto py-8 px-4">
+        <div className="bg-white border border-[var(--rule)] rounded-xl p-8 shadow-xs text-center">
+          <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-amber-200">
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-serif font-bold text-[var(--ink)] mb-2">Group Allocation Finalized</h2>
+          <p className="text-xs sm:text-sm text-[var(--ink)]/70 max-w-lg mx-auto mb-6">
+            The seminar group formation and guide allocation for <strong>{session.academic_year || 'AY 2025-26'}</strong> has been published by the department coordinator.
+          </p>
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 max-w-md mx-auto text-left text-xs text-slate-700 space-y-2">
+            <p className="font-semibold text-slate-900">Next Steps:</p>
+            <ul className="list-disc pl-4 space-y-1 text-slate-600">
+              <li>If you formed a group, contact your Seminar Coordinator (Dr. S. S. Raskar) with your team details.</li>
+              <li>If your PRN needs correction, coordinator can resolve your membership in the system.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // State: Has Submission / Registered View (Read-Only)
   if (hasSubmission && !isEditing) {
-    const regByName = registrationData?.registered_by_name || groupData?.leader_name || 'Group Member';
-    const regDate = registrationData?.registered_at || groupData?.submitted_at || groupData?.created_at;
+    const guideName = groupData?.guide_name;
+    const guideAssigned = groupData?.guide_assigned || !!guideName;
 
     return (
-      <div className="p-6 max-w-5xl mx-auto space-y-6">
+      <div className="max-w-5xl mx-auto py-6 px-4 space-y-6">
         {/* Header Banner */}
         <div className="bg-white border border-[var(--rule)] rounded-xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1.5">
-              <span className="text-[10px] font-mono font-bold uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-300 px-2.5 py-0.5 rounded-full flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
-                Registered · Group #{groupData.group_no}
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                Registered
               </span>
-              <span className="text-[10px] font-mono text-[var(--ink)]/50">
-                {session.name} · {session.academic_year} (Batch {session.batch})
+              <span className="text-xs font-semibold text-[var(--ink)]/60">
+                Group #{groupData?.group_no || '—'}
               </span>
             </div>
-            <h1 className="text-2xl font-bold text-[var(--navy)]">Your Seminar Group Registration</h1>
-            <p className="text-xs text-[var(--ink)]/70 mt-1">
-              Registered by <span className="font-semibold text-[var(--navy)]">{regByName}</span>
-              {regDate && (
-                <span> on <span className="font-medium text-[var(--ink)]">{new Date(regDate).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</span></span>
-              )}
+            <h1 className="text-xl sm:text-2xl font-serif font-bold text-[var(--ink)] tracking-tight">
+              TE Seminar & Project Group Registration
+            </h1>
+            <p className="text-xs text-[var(--ink)]/60 mt-1">
+              Domain: <strong className="text-[var(--ink)]">{groupData?.domain || '—'}</strong>
             </p>
           </div>
 
           <div className="flex items-center gap-3">
-            {canEdit ? (
+            {canEdit && isLeader && (
               <button
-                id="btn-edit-submission"
+                type="button"
                 onClick={handleStartEdit}
-                className="flex items-center gap-1.5 px-4 py-2 bg-[var(--navy)] text-white text-xs font-semibold rounded-md hover:bg-[#2a3d7a] transition-colors shadow-xs"
+                className="px-4 py-2 bg-[var(--navy)] text-white text-xs font-semibold rounded-md hover:bg-[#2a3d7a] transition-colors shadow-xs flex items-center gap-1.5"
               >
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
                 </svg>
                 Edit Group Details
               </button>
-            ) : (
-              <div className="text-right">
-                <span className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 border border-gray-300 text-gray-700 text-xs font-semibold rounded">
-                  🔒 Registration Locked
-                </span>
-                <p className="text-[10px] text-[var(--ink)]/50 mt-1">Read-only view</p>
-              </div>
             )}
           </div>
         </div>
 
-        {/* Group Registration Summary Bar */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="bg-white border border-[var(--rule)] rounded-lg p-3 shadow-xs">
-            <p className="text-[10px] text-[var(--ink)]/60 font-semibold uppercase">Registration Status</p>
-            <p className="text-sm font-bold text-emerald-700 mt-0.5 flex items-center gap-1">
-              ✓ Registered
-            </p>
-          </div>
-          <div className="bg-white border border-[var(--rule)] rounded-lg p-3 shadow-xs">
-            <p className="text-[10px] text-[var(--ink)]/60 font-semibold uppercase">Registered By</p>
-            <p className="text-sm font-bold text-[var(--navy)] mt-0.5 truncate" title={regByName}>
-              {regByName}
-            </p>
-          </div>
-          <div className="bg-white border border-[var(--rule)] rounded-lg p-3 shadow-xs">
-            <p className="text-[10px] text-[var(--ink)]/60 font-semibold uppercase">Domain</p>
-            <p className="text-sm font-bold text-[var(--ink)] mt-0.5 truncate" title={groupData.domain}>
-              {groupData.domain}
-            </p>
-          </div>
-          <div className="bg-white border border-[var(--rule)] rounded-lg p-3 shadow-xs">
-            <p className="text-[10px] text-[var(--ink)]/60 font-semibold uppercase">Group Members</p>
-            <p className="text-sm font-bold text-[var(--ink)] mt-0.5">
-              {membersData.length} Students
-            </p>
-          </div>
-        </div>
-
-        {/* Lock / Notice Banners */}
-        {session.is_locked && !groupData.allow_edit && (
-          <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-3">
-            <span className="text-base leading-none">ℹ️</span>
-            <div>
-              <p className="font-bold">Registration Closed by Coordinator</p>
-              <p className="mt-0.5 text-amber-800/80">
-                The registration deadline has passed and the list is frozen for faculty guide assignment. If your group requires a genuine correction, please request the coordinator to unlock your group.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {session.is_locked && groupData.allow_edit && (
-          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 flex items-start gap-3">
-            <span className="text-base leading-none">✨</span>
-            <div>
-              <p className="font-bold">Special Edit Exception Granted</p>
-              <p className="mt-0.5 text-emerald-800/80">
-                The coordinator has granted an individual edit exception for your group. You can edit your submission and save corrections.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {!isLeader && (
-          <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900">
-            ℹ️ You are listed as a team member in this group. Modifications can only be submitted by the group leader ({groupData.leader_name || 'Leader'}).
-          </div>
-        )}
-
-        {/* Guide Status & Marks Card */}
-        <div className="bg-white border border-[var(--rule)] rounded-xl overflow-hidden shadow-xs mt-6 mb-6">
-          <div className="px-6 py-4 border-b border-[var(--rule)] bg-[#F8FAFC]">
-            <h2 className="text-sm font-bold text-[var(--navy)]">Guide Assignment & Evaluation</h2>
-          </div>
-          <div className="p-6 space-y-4">
-            {groupData.status === 'APPROVED' ? (
-              <div className="flex flex-col gap-4">
-                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
-                  <p className="text-xs font-semibold text-emerald-800 uppercase tracking-wide">Assigned Guide</p>
-                  <p className="text-base font-bold text-[var(--navy)] mt-1">{groupData.guide_name || 'Assigned'}</p>
-                </div>
-                {groupData.myMarks ? (
-                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
-                    <p className="text-xs font-semibold text-blue-800 uppercase tracking-wide mb-3">Your Marks (Max 50.00)</p>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
-                      <div>
-                        <p className="text-[10px] text-[var(--ink)]/60 font-medium">Attendance (10)</p>
-                        <p className="text-sm font-bold text-[var(--navy)]">{Number(groupData.myMarks.attendance_marks ?? 0).toFixed(2)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-[var(--ink)]/60 font-medium">Presentation (10)</p>
-                        <p className="text-sm font-bold text-[var(--navy)]">{Number(groupData.myMarks.presentation_marks ?? 0).toFixed(2)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-[var(--ink)]/60 font-medium">Subject Understanding (10)</p>
-                        <p className="text-sm font-bold text-[var(--navy)]">{Number(groupData.myMarks.subject_understanding_marks ?? 0).toFixed(2)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-[var(--ink)]/60 font-medium">Publication (10)</p>
-                        <p className="text-sm font-bold text-[var(--navy)]">{Number(groupData.myMarks.publication_marks ?? 0).toFixed(2)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-[var(--ink)]/60 font-medium">Viva (10)</p>
-                        <p className="text-sm font-bold text-[var(--navy)]">{Number(groupData.myMarks.viva_marks ?? 0).toFixed(2)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-[var(--ink)]/60 font-medium">Total</p>
-                        <p className="text-base font-bold text-emerald-700">
-                          {Number(groupData.myMarks.total_marks ?? 0).toFixed(2)} / 50.00
-                        </p>
-                      </div>
-                    </div>
+        {/* Assigned Guide Card */}
+        <div className={`rounded-xl border p-5 shadow-xs ${
+          guideAssigned ? 'bg-blue-50/70 border-blue-200' : 'bg-amber-50/70 border-amber-200'
+        }`}>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                guideAssigned ? 'bg-blue-600 text-white' : 'bg-amber-600 text-white'
+              }`}>
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                </svg>
+              </div>
+              <div>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  Assigned Faculty Guide
+                </span>
+                <h3 className="text-base font-bold text-slate-900 mt-0.5">
+                  {guideAssigned ? guideName : 'Guide not assigned yet'}
+                </h3>
+                {guideAssigned ? (
+                  <div className="flex flex-wrap items-center gap-3 mt-1 text-xs text-slate-600">
+                    {groupData?.guide_designation && (
+                      <span>{groupData.guide_designation}</span>
+                    )}
+                    {groupData?.guide_email && (
+                      <span className="font-mono text-[11px] text-blue-700">{groupData.guide_email}</span>
+                    )}
                   </div>
                 ) : (
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded text-xs text-slate-600">
-                    Marks have not been entered yet.
-                  </div>
+                  <p className="text-xs text-amber-800 mt-1">
+                    Your group is registered. Guide allocation will be assigned by the seminar coordinator soon.
+                  </p>
                 )}
               </div>
-            ) : (
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl text-center">
-                <p className="text-sm font-semibold text-blue-800">Guide assignment in progress...</p>
-                <p className="text-xs text-blue-600/80 mt-1">Your assigned guide will be displayed here once approved by the HOD.</p>
-              </div>
-            )}
+            </div>
+            <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold ${
+              guideAssigned ? 'bg-blue-100 text-blue-800 border border-blue-300' : 'bg-amber-100 text-amber-800 border border-amber-300'
+            }`}>
+              {guideAssigned ? 'Guide Allocated' : 'Pending Allocation'}
+            </span>
           </div>
         </div>
 
-        {/* Group Details Card */}
-        <div className="bg-white border border-[var(--rule)] rounded-xl overflow-hidden shadow-xs">
-          <div className="px-6 py-4 border-b border-[var(--rule)] bg-[#F8FAFC] flex items-center justify-between">
-            <h2 className="text-sm font-bold text-[var(--navy)]">Group Roster &amp; Topics</h2>
-            <span className="text-xs font-mono text-[var(--ink)]/50">
-              Submitted: {new Date(groupData.submitted_at || groupData.created_at).toLocaleString()}
-            </span>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
-              <thead>
-                <tr className="bg-[#EEF0F7] border-b border-[var(--rule)] font-semibold text-[var(--navy)]">
-                  <th className="p-3 w-16">Role</th>
-                  <th className="p-3">Student Name</th>
-                  <th className="p-3">College PRN</th>
-                  <th className="p-3">Div</th>
-                  <th className="p-3">Contact Details</th>
-                  <th className="p-3">Proposed Seminar Topics</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--rule)]">
-                {membersData.map((m, idx) => (
-                  <tr key={m.id || idx} className="hover:bg-slate-50">
-                    <td className="p-3 whitespace-nowrap">
-                      {m.is_leader ? (
-                        <span className="bg-amber-100 text-amber-800 border border-amber-300 font-bold px-2 py-0.5 rounded text-[10px]">
+        {/* Team Members & Topics Grid */}
+        <div className="bg-white border border-[var(--rule)] rounded-xl p-6 shadow-xs space-y-6">
+          <h2 className="text-base font-serif font-bold text-[var(--ink)]">Registered Team Members</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {membersData.map((m, idx) => (
+              <div key={idx} className="border border-slate-200 rounded-lg p-4 bg-slate-50/50 space-y-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-900">{m.student_name || '—'}</span>
+                      {m.is_leader && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
                           LEADER
                         </span>
-                      ) : (
-                        <span className="bg-slate-100 text-slate-700 border border-slate-200 font-medium px-2 py-0.5 rounded text-[10px]">
-                          Member #{m.member_index || idx + 1}
-                        </span>
                       )}
-                    </td>
-                    <td className="p-3 font-semibold text-[var(--ink)] whitespace-nowrap">
-                      {m.student_name}
-                    </td>
-                    <td className="p-3 font-mono text-[var(--navy)] font-semibold whitespace-nowrap">
-                      {m.prn}
-                    </td>
-                    <td className="p-3 font-mono whitespace-nowrap">{m.division}</td>
-                    <td className="p-3 whitespace-nowrap">
-                      <div className="font-mono text-[11px] text-[var(--ink)]">{m.mobile}</div>
-                      <div className="text-[10px] text-[var(--ink)]/60 truncate max-w-[180px]">{m.email}</div>
-                    </td>
-                    <td className="p-3 min-w-[260px] space-y-1">
-                      <div className="flex items-start gap-1">
-                        <span className="text-[9px] font-mono font-bold bg-blue-50 text-blue-700 px-1 rounded border border-blue-200 shrink-0">T1</span>
-                        <span className="text-xs text-[var(--ink)]">{m.topic1}</span>
-                      </div>
-                      <div className="flex items-start gap-1">
-                        <span className="text-[9px] font-mono font-bold bg-slate-100 text-slate-700 px-1 rounded border border-slate-200 shrink-0">T2</span>
-                        <span className="text-xs text-[var(--ink)]/80">{m.topic2}</span>
-                      </div>
-                      <div className="flex items-start gap-1">
-                        <span className="text-[9px] font-mono font-bold bg-slate-100 text-slate-700 px-1 rounded border border-slate-200 shrink-0">T3</span>
-                        <span className="text-xs text-[var(--ink)]/80">{m.topic3}</span>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </div>
+                    <p className="text-xs font-mono text-slate-600 mt-0.5">
+                      PRN: <strong>{m.prn || '—'}</strong> | Div: <strong>{m.division || '—'}</strong>
+                    </p>
+                  </div>
+                  <span className="text-[11px] font-bold text-slate-400">Member {idx + 1}</span>
+                </div>
+
+                <div className="text-xs text-slate-600 space-y-0.5 border-t border-slate-200/60 pt-2">
+                  <p>Email: <span className="font-mono text-[11px] text-slate-800">{m.email || '—'}</span></p>
+                  <p>Mobile: <span className="font-mono text-[11px] text-slate-800">{m.mobile || '—'}</span></p>
+                </div>
+
+                {/* Topics */}
+                <div className="bg-white border border-slate-200 rounded p-2.5 text-xs space-y-1.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Proposed Topics:</p>
+                  <p className="text-slate-800"><strong className="text-blue-700">1.</strong> {m.topic1 || '—'}</p>
+                  <p className="text-slate-800"><strong className="text-slate-600">2.</strong> {m.topic2 || '—'}</p>
+                  <p className="text-slate-800"><strong className="text-slate-600">3.</strong> {m.topic3 || '—'}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
     );
   }
 
-  // ─── FORM MODE: NEW REGISTRATION OR EDITING ──────────────────────────────────
+  // State: Single-Page Registration / Editing Form
+  const warnings = getValidationWarnings();
+
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
-      {/* Draft Recovery Banner */}
-      {hasDraftNotice && !isEditing && (
-        <div className="p-4 bg-amber-50 border border-amber-300 rounded-xl flex items-center justify-between gap-4 text-xs text-amber-900 shadow-xs">
-          <div className="flex items-center gap-2">
-            <span className="text-lg">📝</span>
-            <span>You have an unsaved registration draft from a previous session.</span>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={handleRestoreDraft}
-              className="px-3 py-1 bg-amber-600 text-white font-semibold rounded hover:bg-amber-700 transition-colors"
-            >
-              Restore Draft
-            </button>
-            <button
-              onClick={handleDiscardDraft}
-              className="px-3 py-1 border border-amber-300 text-amber-800 font-semibold rounded hover:bg-amber-100 transition-colors"
-            >
-              Discard
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Header Banner */}
-      <div className="bg-white border border-[var(--rule)] rounded-xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-[10px] font-mono font-bold uppercase tracking-wider bg-blue-50 text-blue-800 border border-blue-200 px-2 py-0.5 rounded">
-              TE Seminar Registration
-            </span>
-            <span className="text-[10px] font-mono text-[var(--ink)]/50">
-              {session.academic_year} · Batch {session.batch}
-            </span>
-          </div>
-          <h1 className="text-2xl font-bold text-[var(--navy)]">
-            {isEditing ? `Edit Group #${groupData?.group_no}` : 'Group Formation & Registration'}
-          </h1>
-          <p className="text-xs text-[var(--ink)]/60 mt-0.5">
-            Group Leader submits on behalf of 3 to 4 team members. Data updates in real time.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {isEditing && (
-            <button
-              type="button"
-              onClick={handleCancelEdit}
-              className="px-4 py-2 border border-[var(--rule)] text-[var(--ink)]/70 text-xs font-semibold rounded-md hover:bg-slate-50 transition-colors"
-            >
-              Cancel Edit
-            </button>
-          )}
-          <span className="text-xs font-mono font-semibold px-2.5 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-            {session.is_locked ? 'Locked (Edit Override)' : 'Portal Open'}
-          </span>
-        </div>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* GROUP LEVEL: DOMAIN NAME */}
-        <div className="bg-white border border-[var(--rule)] rounded-xl p-6 space-y-4 shadow-xs">
-          <div className="border-b border-[var(--rule)] pb-3">
-            <h2 className="text-base font-bold text-[var(--navy)] flex items-center gap-2">
-              <span className="w-5 h-5 rounded-full bg-[var(--navy)] text-white text-[10px] flex items-center justify-center font-mono">1</span>
-              Project / Seminar Domain
-            </h2>
-            <p className="text-xs text-[var(--ink)]/60 mt-0.5">
-              Select the primary technical domain for your seminar group from the department list.
+    <div className="max-w-5xl mx-auto py-6 px-4 space-y-6">
+      {/* Page Title & Instructions */}
+      <div className="bg-white border border-[var(--rule)] rounded-xl p-6 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-serif font-bold text-[var(--ink)] tracking-tight">
+              {isEditing ? 'Edit TE Seminar Group Registration' : 'TE Seminar & Project Group Registration'}
+            </h1>
+            <p className="text-xs sm:text-sm text-[var(--ink)]/70 mt-1">
+              AY 2025-26 &bull; Department of Computer Engineering &bull; MES Wadia College of Engineering
             </p>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="input-label text-xs font-bold text-[var(--navy)]">
-                Domain Name <span className="text-red-500">*</span>
-              </label>
-              <select
-                required
-                value={domain}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setDomain(val);
-                  setIsCustomDomain(val === 'Other / Emerging Technologies');
-                }}
-                className="input-field text-sm"
-              >
-                <option value="">Select Domain...</option>
-                {standardDomains.map((d) => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
-              </select>
-            </div>
-
-            {isCustomDomain && (
-              <div>
-                <label className="input-label text-xs font-bold text-amber-800">
-                  Specify Custom Domain Name <span className="text-red-500">*</span>
-                  <span className="text-[10px] font-normal text-amber-700 ml-1.5">(Flagged for Coordinator Review)</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Quantum Computing, Embedded Robotics..."
-                  value={customDomain}
-                  onChange={(e) => setCustomDomain(e.target.value)}
-                  className="input-field text-sm border-amber-300 focus:border-amber-500"
-                />
-              </div>
-            )}
-          </div>
+          <span className="px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-800 border border-blue-200 self-start">
+            Single-Page Form
+          </span>
         </div>
 
-        {/* STUDENT BLOCKS (1..4) */}
-        <div className="bg-white border border-[var(--rule)] rounded-xl p-6 space-y-6 shadow-xs">
-          <div className="border-b border-[var(--rule)] pb-3 flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-bold text-[var(--navy)] flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-[var(--navy)] text-white text-[10px] flex items-center justify-center font-mono">2</span>
-                Student Team Members Roster
-              </h2>
-              <p className="text-xs text-[var(--ink)]/60 mt-0.5">
-                Students 1, 2, and 3 are mandatory. Student 4 is optional (groups must have 3–4 members).
-              </p>
-            </div>
-            <div className="text-right">
-              <span className="text-xs font-mono font-semibold text-[var(--navy)] bg-blue-50 px-2.5 py-1 rounded border border-blue-200">
-                {showMember4 ? '4 Members' : '3 Members'}
-              </span>
+        {/* Draft Notice */}
+        {hasDraftNotice && (
+          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between gap-3 text-xs text-blue-900">
+            <span>You have an unsaved draft from a previous session.</span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={restoreDraft}
+                className="px-2.5 py-1 bg-blue-600 text-white rounded font-semibold hover:bg-blue-700"
+              >
+                Restore
+              </button>
+              <button
+                type="button"
+                onClick={discardDraft}
+                className="px-2.5 py-1 border border-blue-300 text-blue-800 rounded font-semibold hover:bg-blue-100"
+              >
+                Discard
+              </button>
             </div>
           </div>
+        )}
+      </div>
 
-          <div className="space-y-6 divide-y divide-[var(--rule)]">
+      {/* Main Single Page Form */}
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Section 1: Domain Selection */}
+        <div className="bg-white border border-[var(--rule)] rounded-xl p-6 shadow-xs space-y-4">
+          <div className="flex items-center gap-2.5 border-b border-[var(--rule)] pb-3">
+            <span className="w-6 h-6 rounded-full bg-[var(--navy)] text-white text-xs font-bold flex items-center justify-center">
+              1
+            </span>
+            <h2 className="text-base font-serif font-bold text-[var(--ink)]">Domain / Area of Interest</h2>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {standardDomains.map((d) => (
+              <label
+                key={d}
+                className={`flex items-center gap-2.5 p-3 rounded-lg border text-xs font-medium cursor-pointer transition-colors ${
+                  domain === d && !isCustomDomain
+                    ? 'border-[var(--navy)] bg-blue-50/60 text-[var(--navy)] font-bold shadow-xs'
+                    : 'border-slate-200 hover:border-slate-300 bg-white text-slate-800'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="domain-choice"
+                  checked={domain === d && !isCustomDomain}
+                  onChange={() => {
+                    setDomain(d);
+                    setIsCustomDomain(false);
+                  }}
+                  className="accent-[var(--navy)]"
+                />
+                <span>{d}</span>
+              </label>
+            ))}
+
+            {/* Other / Custom Domain Option */}
+            <label
+              className={`flex items-center gap-2.5 p-3 rounded-lg border text-xs font-medium cursor-pointer transition-colors ${
+                isCustomDomain
+                  ? 'border-[var(--navy)] bg-blue-50/60 text-[var(--navy)] font-bold shadow-xs'
+                  : 'border-slate-200 hover:border-slate-300 bg-white text-slate-800'
+              }`}
+            >
+              <input
+                type="radio"
+                name="domain-choice"
+                checked={isCustomDomain}
+                onChange={() => {
+                  setIsCustomDomain(true);
+                  setDomain('Other');
+                }}
+                className="accent-[var(--navy)]"
+              />
+              <span>Other (Custom Domain)</span>
+            </label>
+          </div>
+
+          {isCustomDomain && (
+            <div className="pt-2">
+              <label className="input-label text-xs font-semibold">Specify Custom Domain</label>
+              <input
+                type="text"
+                placeholder="e.g. Quantum Computing, Bioinformatics, Edge AI"
+                value={customDomain}
+                onChange={(e) => setCustomDomain(e.target.value)}
+                className="input-field text-sm"
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Section 2: Team Members & Topic Preferences */}
+        <div className="bg-white border border-[var(--rule)] rounded-xl p-6 shadow-xs space-y-6">
+          <div className="flex items-center justify-between border-b border-[var(--rule)] pb-3">
+            <div className="flex items-center gap-2.5">
+              <span className="w-6 h-6 rounded-full bg-[var(--navy)] text-white text-xs font-bold flex items-center justify-center">
+                2
+              </span>
+              <h2 className="text-base font-serif font-bold text-[var(--ink)]">Team Members & Topic Preferences</h2>
+            </div>
+            <span className="text-xs text-slate-500 font-medium">
+              {showMember4 ? '4 Team Members' : '3 Team Members (Standard)'}
+            </span>
+          </div>
+
+          <div className="space-y-6">
             {members.slice(0, showMember4 ? 4 : 3).map((m, idx) => {
-              const sNum = idx + 1;
-              const isLeaderBlock = idx === 0;
-              const isRequired = idx < 3;
-              const isPrnDuplicate = m.prn && duplicatePrns.has(m.prn.trim().toUpperCase());
+              const isLeaderSlot = idx === 0;
 
               return (
-                <div key={idx} className={idx > 0 ? 'pt-6 space-y-4' : 'space-y-4'}>
-                  {/* Block Header */}
-                  <div className="flex items-center justify-between">
+                <div key={idx} className="border border-slate-200 rounded-xl p-5 bg-slate-50/40 space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
                     <div className="flex items-center gap-2">
-                      <span className={`px-2 py-0.5 rounded text-xs font-bold font-mono ${
-                        isLeaderBlock
-                          ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                          : 'bg-slate-100 text-slate-800 border border-slate-200'
-                      }`}>
-                        Student {sNum} {isLeaderBlock ? '(Group Leader / Submitter)' : ''}
-                      </span>
-                      {isRequired ? (
-                        <span className="text-[11px] text-red-600 font-semibold">* Mandatory</span>
-                      ) : (
-                        <span className="text-[11px] text-slate-500 font-medium">Optional Member</span>
+                      <span className="text-xs font-bold text-slate-900">Student {idx + 1}</span>
+                      {isLeaderSlot && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                          GROUP LEADER
+                        </span>
                       )}
                     </div>
-
-                    {sNum === 4 && (
+                    {idx === 3 && (
                       <button
                         type="button"
                         onClick={() => setShowMember4(false)}
-                        className="text-xs font-semibold text-red-600 hover:text-red-700 flex items-center gap-1"
+                        className="text-xs text-red-600 hover:underline font-semibold"
                       >
-                        ✕ Remove 4th Member
+                        Remove 4th Member
                       </button>
                     )}
                   </div>
 
-                  {/* Basic Details Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {/* Name */}
+                  {/* Student Details Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     <div>
-                      <label className="input-label text-xs font-semibold">
-                        Full Name <span className="text-red-500">*</span>
-                      </label>
+                      <label className="input-label text-xs font-semibold">Full Name</label>
                       <input
                         type="text"
-                        required
                         placeholder="Student full name"
                         value={m.student_name}
                         onChange={(e) => handleMemberChange(idx, 'student_name', e.target.value)}
@@ -768,52 +612,32 @@ export default function SeminarGroupRegistration() {
                       />
                     </div>
 
-                    {/* College PRN */}
                     <div>
-                      <label className="input-label text-xs font-semibold">
-                        College PRN <span className="text-red-500">*</span>
-                      </label>
+                      <label className="input-label text-xs font-semibold">College PRN</label>
                       <input
                         type="text"
-                        required
-                        placeholder="e.g. 2025TE0001"
+                        placeholder="e.g. F23113022"
                         value={m.prn}
                         onChange={(e) => handleMemberChange(idx, 'prn', e.target.value)}
-                        className={`input-field text-sm uppercase font-mono ${
-                          isPrnDuplicate ? 'border-red-500 bg-red-50 text-red-900' : ''
-                        }`}
+                        className="input-field text-sm uppercase font-mono"
                       />
-                      {isPrnDuplicate && (
-                        <p className="text-[10px] text-red-600 font-semibold mt-1">
-                          ⚠️ Duplicate PRN within this group!
-                        </p>
-                      )}
                     </div>
 
-                    {/* Division */}
                     <div>
-                      <label className="input-label text-xs font-semibold">
-                        Division <span className="text-red-500">*</span>
-                      </label>
+                      <label className="input-label text-xs font-semibold">Division</label>
                       <input
                         type="text"
-                        required
-                        placeholder="e.g. A or B"
+                        placeholder="e.g. TE1, TE2, TE3"
                         value={m.division}
                         onChange={(e) => handleMemberChange(idx, 'division', e.target.value)}
                         className="input-field text-sm uppercase"
                       />
                     </div>
 
-                    {/* Mobile No */}
                     <div>
-                      <label className="input-label text-xs font-semibold">
-                        Mobile Number <span className="text-red-500">*</span>
-                      </label>
+                      <label className="input-label text-xs font-semibold">Mobile Number</label>
                       <input
                         type="tel"
-                        required
-                        maxLength={13}
                         placeholder="10-digit mobile"
                         value={m.mobile}
                         onChange={(e) => handleMemberChange(idx, 'mobile', e.target.value)}
@@ -821,15 +645,11 @@ export default function SeminarGroupRegistration() {
                       />
                     </div>
 
-                    {/* Email ID */}
                     <div className="sm:col-span-2 lg:col-span-4">
-                      <label className="input-label text-xs font-semibold">
-                        Email Address <span className="text-red-500">*</span>
-                      </label>
+                      <label className="input-label text-xs font-semibold">College Email</label>
                       <input
                         type="email"
-                        required
-                        placeholder="college.email@meswadiacoe.edu"
+                        placeholder="f23113022@meswadiacoe.edu"
                         value={m.email}
                         onChange={(e) => handleMemberChange(idx, 'email', e.target.value)}
                         className="input-field text-sm"
@@ -838,14 +658,13 @@ export default function SeminarGroupRegistration() {
                   </div>
 
                   {/* 3 Topics Preferences */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1 border-t border-slate-200/60">
                     <div>
                       <label className="input-label text-[11px] font-semibold text-[var(--navy)]">
-                        Topic 1 (Primary Choice) <span className="text-red-500">*</span>
+                        Topic 1 (Primary Preference)
                       </label>
                       <input
                         type="text"
-                        required
                         placeholder="Proposed seminar topic 1"
                         value={m.topic1}
                         onChange={(e) => handleMemberChange(idx, 'topic1', e.target.value)}
@@ -853,12 +672,11 @@ export default function SeminarGroupRegistration() {
                       />
                     </div>
                     <div>
-                      <label className="input-label text-[11px] font-semibold text-[var(--ink)]/80">
-                        Topic 2 (Secondary Choice) <span className="text-red-500">*</span>
+                      <label className="input-label text-[11px] font-semibold text-slate-700">
+                        Topic 2 (Secondary Preference)
                       </label>
                       <input
                         type="text"
-                        required
                         placeholder="Proposed seminar topic 2"
                         value={m.topic2}
                         onChange={(e) => handleMemberChange(idx, 'topic2', e.target.value)}
@@ -866,12 +684,11 @@ export default function SeminarGroupRegistration() {
                       />
                     </div>
                     <div>
-                      <label className="input-label text-[11px] font-semibold text-[var(--ink)]/80">
-                        Topic 3 (Tertiary Choice) <span className="text-red-500">*</span>
+                      <label className="input-label text-[11px] font-semibold text-slate-700">
+                        Topic 3 (Tertiary Preference)
                       </label>
                       <input
                         type="text"
-                        required
                         placeholder="Proposed seminar topic 3"
                         value={m.topic3}
                         onChange={(e) => handleMemberChange(idx, 'topic3', e.target.value)}
@@ -884,49 +701,62 @@ export default function SeminarGroupRegistration() {
             })}
           </div>
 
-          {/* Add 4th Member Control */}
+          {/* Optional 4th Member Button */}
           {!showMember4 && (
-            <div className="pt-2 border-t border-dashed border-[var(--rule)]">
-              <button
-                type="button"
-                id="btn-add-member-4"
-                onClick={() => setShowMember4(true)}
-                className="w-full py-2.5 border-2 border-dashed border-blue-200 text-blue-700 bg-blue-50/50 hover:bg-blue-50 text-xs font-semibold rounded-lg flex items-center justify-center gap-2 transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
-                Add 4th Team Member (Optional)
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowMember4(true)}
+              className="w-full py-2.5 border-2 border-dashed border-blue-200 text-blue-700 bg-blue-50/40 hover:bg-blue-50 text-xs font-semibold rounded-lg flex items-center justify-center gap-2 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              Add 4th Team Member (Optional)
+            </button>
           )}
         </div>
+
+        {/* Soft Warnings Banner (If any) */}
+        {warnings.length > 0 && (
+          <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-1">
+            <p className="font-semibold flex items-center gap-1.5 text-amber-950">
+              <svg className="w-4 h-4 text-amber-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+              </svg>
+              Notice / Information:
+            </p>
+            <ul className="list-disc pl-5 space-y-0.5 text-amber-800">
+              {warnings.map((w, idx) => (
+                <li key={idx}>{w}</li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Submit Bar */}
         <div className="bg-white border border-[var(--rule)] rounded-xl p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="text-xs text-[var(--ink)]/60">
-            <span className="font-semibold text-[var(--ink)]">Submission note:</span> Only one submission is permitted per group. You can update your details until the coordinator locks registration.
+            <span className="font-semibold text-[var(--ink)]">Note:</span> One registration is shared across all members of your group.
           </div>
           <div className="flex items-center gap-3">
             {isEditing && (
               <button
                 type="button"
                 onClick={handleCancelEdit}
-                className="px-4 py-2 border border-[var(--rule)] text-[var(--ink)]/70 text-xs font-semibold rounded-md hover:bg-slate-50 transition-colors"
+                className="px-4 py-2 border border-slate-300 text-slate-700 text-xs font-semibold rounded-md hover:bg-slate-50 transition-colors"
               >
                 Cancel
               </button>
             )}
             <button
               type="submit"
-              id="btn-submit-registration"
-              disabled={submitting || duplicatePrns.size > 0}
+              disabled={submitting}
               className="px-6 py-2.5 bg-[var(--navy)] text-white text-xs font-bold rounded-md hover:bg-[#2a3d7a] disabled:opacity-50 transition-colors shadow-xs flex items-center gap-2"
             >
               {submitting && (
                 <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
               )}
-              {isEditing ? 'Save Registration Changes' : 'Submit Group Registration'}
+              {isEditing ? 'Save Changes' : 'Submit Group Registration'}
             </button>
           </div>
         </div>

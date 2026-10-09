@@ -2,7 +2,6 @@
 const express = require('express');
 const pool = require('../db/pool');
 const { verifyToken, requireRole } = require('../middleware/auth');
-const { auditRecord } = require('../middleware/auditLogger');
 
 const router = express.Router();
 
@@ -219,15 +218,6 @@ router.post('/assign', verifyToken, requireRole('hod'), async (req, res) => {
     };
     const roleLabel = roleLabels[roleType] || roleType;
 
-    await auditRecord({
-      tableName: 'coordinator_assignments',
-      recordId: insertRes.rows[0].id,
-      changedBy: req.user.id,
-      action: `APPOINT_${roleType}`,
-      oldValue: null,
-      newValue: { facultyId, name: faculty.name, roleType, academicYear },
-      reason: `HOD appointed ${faculty.name} as ${roleLabel} for AY ${academicYear}`,
-    });
 
     res.json({
       message: `${faculty.name} has been appointed as ${roleLabel} for AY ${academicYear}`,

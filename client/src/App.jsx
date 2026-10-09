@@ -42,7 +42,6 @@ import PublishResults from './pages/hod/PublishResults'
 import HODAnalytics   from './pages/hod/HODAnalytics'
 import HODProjectMgmt from './pages/hod/HODProjectMgmt'
 import HODProjectView from './pages/hod/HODProjectView'
-import AuditLog       from './pages/hod/AuditLog'
 import HODMagazineApprovals from './pages/hod/HODMagazineApprovals'
 import TermRollover   from './pages/hod/TermRollover'
 
@@ -52,7 +51,6 @@ import SeminarUpload        from './pages/seminar/SeminarUpload'
 import SeminarAssignment    from './pages/seminar/SeminarAssignment'
 import SeminarReview        from './pages/seminar/SeminarReview'
 import SeminarGuideView     from './pages/seminar/SeminarGuideView'
-import SeminarAuditLog      from './pages/seminar/SeminarAuditLog'
 import SeminarEvaluation    from './pages/seminar/SeminarEvaluation'
 import SeminarMarksOverview from './pages/seminar/SeminarMarksOverview'
 
@@ -128,7 +126,6 @@ export default function App() {
           <Route path="/faculty/seminar/:id/upload"         element={<CoordinatorLayout><SeminarUpload /></CoordinatorLayout>} />
           <Route path="/faculty/seminar/:id/assign"         element={<CoordinatorLayout><SeminarAssignment /></CoordinatorLayout>} />
           <Route path="/faculty/seminar/:id/review"         element={<CoordinatorLayout><SeminarReview /></CoordinatorLayout>} />
-          <Route path="/faculty/seminar/:id/audit"          element={<CoordinatorLayout><SeminarAuditLog /></CoordinatorLayout>} />
           <Route path="/faculty/seminar/:id/marks-overview" element={<CoordinatorLayout><SeminarMarksOverview /></CoordinatorLayout>} />
           {/* Seminar Tool — Guide view and Evaluation */}
           <Route path="/faculty/seminar/my-groups"          element={<FacultyLayout><SeminarGuideView /></FacultyLayout>} />
@@ -149,7 +146,6 @@ export default function App() {
           <Route path="/hod/rollover" element={<HODLayout><TermRollover /></HODLayout>} />
           <Route path="/hod/analytics" element={<HODLayout><HODAnalytics /></HODLayout>} />
           <Route path="/hod/projects" element={<HODLayout><HODProjectView /></HODLayout>} />
-          <Route path="/hod/audit" element={<HODLayout><AuditLog /></HODLayout>} />
 
           {/* Alumni */}
           <Route path="/alumni/feedback"      element={<AnyLayout><AlumniFeedback /></AnyLayout>} />

@@ -110,13 +110,6 @@ async function runTests() {
     console.log(`  ✓ Lab ${tw.code}: Att=${tw.attendance_marks}/5, A1=${tw.assignment_1_marks}/7, A2=${tw.assignment_2_marks}/7, Timely=${tw.timely_submission_marks}/6 -> Total=${tw.total_tw_marks}/25`);
   }
 
-  // Test 5: Audit Log Records
-  console.log('\n[Test 5] Verifying Audit Logging:');
-  const auditRes = await pool.query(
-    `SELECT action, table_name, reason, created_at FROM audit_log ORDER BY created_at DESC LIMIT 3`
-  );
-  console.log(`  ✓ Recent Audit Logs:`, auditRes.rows);
-
   console.log('\n=== ALL VERIFICATION TESTS PASSED SUCCESSFULLY! ===');
   process.exit(0);
 }

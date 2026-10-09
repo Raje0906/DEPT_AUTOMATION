@@ -2,7 +2,6 @@
 const express = require('express');
 const pool = require('../db/pool');
 const { verifyToken } = require('../middleware/auth');
-const { auditRecord } = require('../middleware/auditLogger');
 
 const router = express.Router();
 
@@ -268,15 +267,6 @@ router.post('/', verifyToken, async (req, res) => {
       website_or_link || null
     ]);
 
-    await auditRecord({
-      tableName: 'clubs',
-      recordId: insertRes.rows[0].id,
-      changedBy: req.user.id,
-      action: 'CREATE_CLUB',
-      oldValue: null,
-      newValue: insertRes.rows[0],
-      reason: `Registered new club: ${name} (${code})`
-    });
 
     res.status(201).json({ message: 'Club created successfully', club: insertRes.rows[0] });
   } catch (err) {
@@ -378,15 +368,6 @@ router.put('/:id', verifyToken, async (req, res) => {
       clubId
     ]);
 
-    await auditRecord({
-      tableName: 'clubs',
-      recordId: clubId,
-      changedBy: req.user.id,
-      action: 'UPDATE_CLUB',
-      oldValue: current,
-      newValue: updateRes.rows[0],
-      reason: `Updated club details for ${updateRes.rows[0].name}`
-    });
 
     res.json({ message: 'Club updated successfully', club: updateRes.rows[0] });
   } catch (err) {
@@ -428,15 +409,6 @@ router.put('/:id/assign-faculty', verifyToken, async (req, res) => {
       [faculty_id || null, clubId]
     );
 
-    await auditRecord({
-      tableName: 'clubs',
-      recordId: clubId,
-      changedBy: req.user.id,
-      action: 'ASSIGN_FACULTY_IN_CHARGE',
-      oldValue: { faculty_coordinator_id: currentClub.faculty_coordinator_id },
-      newValue: { faculty_coordinator_id: faculty_id, facultyName },
-      reason: `Assigned ${facultyName} as Faculty In-Charge for ${currentClub.name} (${currentClub.code})`
-    });
 
     res.json({
       message: `Assigned ${facultyName} as Faculty In-Charge for ${currentClub.name}`,
@@ -511,15 +483,6 @@ router.put('/:id/assign-mentor', verifyToken, async (req, res) => {
       clubId
     ]);
 
-    await auditRecord({
-      tableName: 'clubs',
-      recordId: clubId,
-      changedBy: req.user.id,
-      action: 'ASSIGN_CLUB_MENTOR',
-      oldValue: { mentor_name: currentClub.mentor_name, mentor_faculty_id: currentClub.mentor_faculty_id },
-      newValue: { mentor_name: finalMentorName, mentor_faculty_id, mentor_type },
-      reason: `Assigned ${finalMentorName || 'Mentor'} as ${mentor_type} for ${currentClub.name} (${currentClub.code})`
-    });
 
     res.json({
       message: `Assigned ${finalMentorName || 'Club Mentor'} successfully for ${currentClub.name}`,
@@ -547,15 +510,6 @@ router.delete('/:id', verifyToken, async (req, res) => {
 
     await pool.query('DELETE FROM clubs WHERE id = $1', [clubId]);
 
-    await auditRecord({
-      tableName: 'clubs',
-      recordId: clubId,
-      changedBy: req.user.id,
-      action: 'DELETE_CLUB',
-      oldValue: currentRes.rows[0],
-      newValue: null,
-      reason: `Removed club: ${currentRes.rows[0].name} (${currentRes.rows[0].code})`
-    });
 
     res.json({ message: 'Club deleted successfully' });
   } catch (err) {
@@ -758,15 +712,6 @@ router.post('/events', verifyToken, async (req, res) => {
       permissions.facultyId || null
     ]);
 
-    await auditRecord({
-      tableName: 'club_events',
-      recordId: insertRes.rows[0].id,
-      changedBy: req.user.id,
-      action: 'CREATE_CLUB_EVENT',
-      oldValue: null,
-      newValue: insertRes.rows[0],
-      reason: `Organized club event: ${title} (${event_type})`
-    });
 
     res.status(201).json({ message: 'Event recorded successfully', event: insertRes.rows[0] });
   } catch (err) {
@@ -844,15 +789,6 @@ router.put('/events/:id', verifyToken, async (req, res) => {
       eventId
     ]);
 
-    await auditRecord({
-      tableName: 'club_events',
-      recordId: eventId,
-      changedBy: req.user.id,
-      action: 'UPDATE_CLUB_EVENT',
-      oldValue: current,
-      newValue: updateRes.rows[0],
-      reason: `Updated event status/details for ${updateRes.rows[0].title}`
-    });
 
     res.json({ message: 'Event updated successfully', event: updateRes.rows[0] });
   } catch (err) {
@@ -871,15 +807,6 @@ router.delete('/events/:id', verifyToken, async (req, res) => {
     }
 
     await pool.query('DELETE FROM club_events WHERE id = $1', [eventId]);
-    await auditRecord({
-      tableName: 'club_events',
-      recordId: eventId,
-      changedBy: req.user.id,
-      action: 'DELETE_CLUB_EVENT',
-      oldValue: existingRes.rows[0],
-      newValue: null,
-      reason: `Deleted event: ${existingRes.rows[0].title}`
-    });
 
     res.json({ message: 'Event deleted successfully' });
   } catch (err) {

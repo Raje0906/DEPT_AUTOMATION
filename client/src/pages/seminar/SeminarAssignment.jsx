@@ -3,6 +3,33 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
 
+const StepBar = ({ current = 1 }) => {
+  const steps = ['1. Submissions & Validation', '2. Guide Assignment', '3. Review & Final Export'];
+  return (
+    <ol className="flex items-center gap-0 mb-6 select-none overflow-x-auto">
+      {steps.map((s, i) => {
+        const done = i < current;
+        const active = i === current;
+        return (
+          <li key={s} className="flex items-center shrink-0">
+            <div className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+              active ? 'bg-[var(--navy)] text-white shadow-xs' : done ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-[var(--ink)]/50'
+            }`}>
+              {done && (
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+              {s}
+            </div>
+            {i < steps.length - 1 && <div className="w-8 h-px bg-[var(--rule)] mx-2" />}
+          </li>
+        );
+      })}
+    </ol>
+  );
+};
+
 export default function SeminarAssignment() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -154,14 +181,31 @@ export default function SeminarAssignment() {
   if (loading) return <div className="p-8 text-sm text-[var(--ink)]/40">Loading…</div>;
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="flex items-center gap-2 mb-1 text-xs text-[var(--ink)]/40">
-        <Link to="/faculty/seminar" className="hover:text-[var(--navy)]">Sessions</Link>
-        <span>/</span>
-        <span className="text-[var(--ink)]/60 truncate">{session?.name}</span>
-        <span>/</span>
-        <span>Guide Assignment</span>
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
+      {/* Top-Left Back Button & Breadcrumb */}
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          id="btn-back-step"
+          onClick={() => navigate(`/faculty/seminar/${id}/upload`)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[var(--navy)] bg-white hover:bg-slate-100 border border-[var(--rule)] rounded-md transition-colors focus:outline-hidden focus:ring-2 focus:ring-[var(--navy)] shadow-xs"
+          aria-label="Back to Step 1: Submissions & Validation"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+          </svg>
+          <span>Back</span>
+        </button>
+        <div className="flex items-center gap-2 text-xs text-[var(--ink)]/50">
+          <Link to="/faculty/seminar" className="hover:text-[var(--navy)]">Sessions</Link>
+          <span>/</span>
+          <span className="text-[var(--ink)]/80 font-medium truncate">{session?.name}</span>
+          <span>/</span>
+          <span>Step 2: Guide Assignment</span>
+        </div>
       </div>
+
+      <StepBar current={1} />
       <div className="flex items-start justify-between mb-6">
         <h1 className="text-2xl font-bold text-[var(--navy)]">Guide Assignment</h1>
         <div className="flex gap-3">

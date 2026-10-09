@@ -61,7 +61,7 @@ export default function SeminarGuideView() {
             <span className="px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-[var(--navy)] text-white">Guide</span>
             <span className="text-xs text-[var(--ink)]/40">{user?.name}</span>
           </div>
-          <h1 className="text-2xl font-bold font-serif text-[var(--navy)]">My Assigned Seminar Groups</h1>
+          <h1 className="text-2xl font-bold font-serif text-[var(--navy)]">Seminar Assigned Groups</h1>
           <p className="text-sm text-[var(--ink)]/50 mt-1">
             Groups assigned to you by the Seminar Coordinator and approved by the HOD. Evaluate each group after conducting the seminar.
           </p>
