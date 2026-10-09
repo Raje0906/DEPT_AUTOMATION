@@ -324,6 +324,308 @@ async function runMigrations() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_proj_panel_group ON project_panel_assignments(group_id, stage_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_proj_panel_member ON project_panel_assignments(panel_member_id)`);
 
+    // ─── SEMINAR TOOL — Faculty coordinator flag ───────────────────────────────
+    await client.query(`ALTER TABLE faculty ADD COLUMN IF NOT EXISTS is_seminar_coordinator BOOLEAN DEFAULT FALSE`);
+
+    // ─── SEMINAR SESSIONS ─────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS seminar_sessions (
+        id            SERIAL PRIMARY KEY,
+        name          VARCHAR(150) NOT NULL,
+        academic_year VARCHAR(20)  NOT NULL,
+        batch         VARCHAR(20)  NOT NULL,
+        status        VARCHAR(20)  NOT NULL DEFAULT 'SETUP'
+                      CHECK (status IN ('SETUP','UPLOAD','VALIDATION','ASSIGNMENT','PUBLISHED')),
+        created_by    INTEGER NOT NULL REFERENCES users(id),
+        created_at    TIMESTAMPTZ DEFAULT NOW(),
+        published_at  TIMESTAMPTZ,
+        published_by  INTEGER REFERENCES users(id)
+      )
+    `);
+
+    // ─── SEMINAR UPLOADS ──────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS seminar_uploads (
+        id                SERIAL PRIMARY KEY,
+        session_id        INTEGER NOT NULL REFERENCES seminar_sessions(id) ON DELETE CASCADE,
+        original_filename VARCHAR(255) NOT NULL,
+        file_data         BYTEA NOT NULL,
+        uploaded_by       INTEGER NOT NULL REFERENCES users(id),
+        uploaded_at       TIMESTAMPTZ DEFAULT NOW(),
+        parse_status      VARCHAR(20) NOT NULL DEFAULT 'PENDING'
+                          CHECK (parse_status IN ('PENDING','PARSED','ERROR')),
+        parse_result      JSONB,
+        parse_error       TEXT
+      )
+    `);
+
+    // ─── SEMINAR GROUPS ───────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS seminar_groups (
+        id               SERIAL PRIMARY KEY,
+        session_id       INTEGER NOT NULL REFERENCES seminar_sessions(id) ON DELETE CASCADE,
+        group_no         INTEGER NOT NULL,
+        domain           VARCHAR(300) NOT NULL,
+        guide_id         INTEGER REFERENCES faculty(id) ON DELETE SET NULL,
+        source_row_index INTEGER,
+        created_at       TIMESTAMPTZ DEFAULT NOW(),
+        updated_at       TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(session_id, group_no)
+      )
+    `);
+
+    // ─── SEMINAR GROUP MEMBERS ────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS seminar_group_members (
+        id           SERIAL PRIMARY KEY,
+        group_id     INTEGER NOT NULL REFERENCES seminar_groups(id) ON DELETE CASCADE,
+        member_index INTEGER NOT NULL CHECK (member_index BETWEEN 1 AND 4),
+        student_name VARCHAR(200) NOT NULL,
+        prn          VARCHAR(60)  NOT NULL,
+        division     VARCHAR(20),
+        mobile       VARCHAR(30),
+        email        VARCHAR(200),
+        topic1       TEXT,
+        topic2       TEXT,
+        topic3       TEXT,
+        is_leader    BOOLEAN DEFAULT FALSE
+      )
+    `);
+
+    // ─── SEMINAR GUIDES ───────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS seminar_guides (
+        id            SERIAL PRIMARY KEY,
+        session_id    INTEGER NOT NULL REFERENCES seminar_sessions(id) ON DELETE CASCADE,
+        faculty_id    INTEGER NOT NULL REFERENCES faculty(id) ON DELETE CASCADE,
+        quota         INTEGER NOT NULL DEFAULT 4,
+        display_order INTEGER NOT NULL DEFAULT 1,
+        UNIQUE(session_id, faculty_id)
+      )
+    `);
+
+    // ─── SEMINAR VALIDATION OVERRIDES ─────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS seminar_issue_overrides (
+        id           SERIAL PRIMARY KEY,
+        session_id   INTEGER NOT NULL REFERENCES seminar_sessions(id) ON DELETE CASCADE,
+        issue_key    VARCHAR(200) NOT NULL,
+        acknowledged_by INTEGER NOT NULL REFERENCES users(id),
+        note         TEXT,
+        created_at   TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(session_id, issue_key)
+      )
+    `);
+
+    // ─── SEMINAR INDEXES ──────────────────────────────────────────────────────
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_sem_session_status ON seminar_sessions(status)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_sem_group_session  ON seminar_groups(session_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_sem_group_guide    ON seminar_groups(guide_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_sem_member_group   ON seminar_group_members(group_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_sem_member_prn     ON seminar_group_members(prn)`);
+    // ─── SEMINAR GUIDES & GROUPS ENHANCEMENTS (Direct guide names) ───────────
+    await client.query(`
+      ALTER TABLE seminar_guides ALTER COLUMN faculty_id DROP NOT NULL;
+      ALTER TABLE seminar_guides ADD COLUMN IF NOT EXISTS guide_name VARCHAR(200);
+      ALTER TABLE seminar_guides ADD COLUMN IF NOT EXISTS designation VARCHAR(100);
+      ALTER TABLE seminar_guides DROP CONSTRAINT IF EXISTS seminar_guides_session_id_faculty_id_key;
+
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS guide_name VARCHAR(200);
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS seminar_guide_id INTEGER REFERENCES seminar_guides(id) ON DELETE SET NULL;
+      CREATE INDEX IF NOT EXISTS idx_sem_group_sem_guide ON seminar_groups(seminar_guide_id);
+    `);
+
+    // ─── SEMINAR V2 ENHANCEMENTS (Student Direct Registration & Locking) ─────
+    await client.query(`
+      ALTER TABLE seminar_sessions ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT FALSE;
+      ALTER TABLE seminar_sessions ADD COLUMN IF NOT EXISTS locked_at TIMESTAMPTZ;
+      ALTER TABLE seminar_sessions ADD COLUMN IF NOT EXISTS locked_by INTEGER REFERENCES users(id);
+      ALTER TABLE seminar_sessions DROP CONSTRAINT IF EXISTS seminar_sessions_status_check;
+      ALTER TABLE seminar_sessions ADD CONSTRAINT seminar_sessions_status_check
+        CHECK (status IN ('SETUP','UPLOAD','VALIDATION','ASSIGNMENT','PUBLISHED','REGISTRATION_OPEN','LOCKED'));
+
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS leader_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS allow_edit BOOLEAN DEFAULT FALSE;
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ DEFAULT NOW();
+
+      CREATE INDEX IF NOT EXISTS idx_sem_groups_leader ON seminar_groups(leader_user_id);
+      CREATE INDEX IF NOT EXISTS idx_sem_groups_session_leader ON seminar_groups(session_id, leader_user_id);
+      CREATE INDEX IF NOT EXISTS idx_sem_member_email ON seminar_group_members(email);
+    `);
+
+    // ─── SEMINAR V3 ENHANCEMENTS (HOD Approval & State Machine) ──────────────
+    await client.query(`
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS status VARCHAR(30) NOT NULL DEFAULT 'PENDING_GUIDE_ASSIGNMENT'
+        CHECK (status IN ('PENDING_GUIDE_ASSIGNMENT','AWAITING_HOD_APPROVAL','APPROVED'));
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS assigned_by INTEGER REFERENCES users(id);
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS assigned_at TIMESTAMPTZ;
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS approved_by INTEGER REFERENCES users(id);
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ;
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS hod_remarks TEXT;
+    `);
+
+    // ─── SEMINAR MARKS ────────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS seminar_marks (
+        id SERIAL PRIMARY KEY,
+        session_id INTEGER NOT NULL REFERENCES seminar_sessions(id) ON DELETE CASCADE,
+        group_id INTEGER NOT NULL REFERENCES seminar_groups(id) ON DELETE CASCADE,
+        student_id INTEGER REFERENCES students(id) ON DELETE SET NULL,
+        prn VARCHAR(60) NOT NULL,
+        attendance_marks NUMERIC(5,2),
+        presentation_marks NUMERIC(5,2),
+        subject_understanding_marks NUMERIC(5,2),
+        publication_marks NUMERIC(5,2),
+        viva_marks NUMERIC(5,2),
+        report_marks NUMERIC(5,2),
+        qa_marks NUMERIC(5,2),
+        total_marks NUMERIC(5,2),
+        max_marks NUMERIC(5,2) DEFAULT 50,
+        entered_by INTEGER REFERENCES users(id),
+        entered_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(group_id, prn)
+      );
+
+      CREATE TABLE IF NOT EXISTS seminar_coordinator_history (
+        id           SERIAL PRIMARY KEY,
+        faculty_id   INTEGER REFERENCES faculty(id) ON DELETE SET NULL,
+        faculty_name VARCHAR(200),
+        action       VARCHAR(20) NOT NULL CHECK (action IN ('APPOINTED', 'REVOKED')),
+        performed_by INTEGER NOT NULL REFERENCES users(id),
+        notes        TEXT,
+        created_at   TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_sem_coord_hist_fac ON seminar_coordinator_history(faculty_id);
+      CREATE INDEX IF NOT EXISTS idx_sem_coord_hist_created ON seminar_coordinator_history(created_at DESC);
+
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS attendance_marks NUMERIC(5,2);
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS presentation_marks NUMERIC(5,2);
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS subject_understanding_marks NUMERIC(5,2);
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS publication_marks NUMERIC(5,2);
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS viva_marks NUMERIC(5,2);
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS report_marks NUMERIC(5,2);
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS qa_marks NUMERIC(5,2);
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'DRAFT'
+        CHECK (status IN ('DRAFT', 'SUBMITTED', 'FINALIZED'));
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ;
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS submitted_by INTEGER REFERENCES users(id);
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS unlocked_at TIMESTAMPTZ;
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS unlocked_by INTEGER REFERENCES users(id);
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS remarks TEXT;
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS evaluation_date DATE DEFAULT CURRENT_DATE;
+      CREATE INDEX IF NOT EXISTS idx_sem_marks_group ON seminar_marks(group_id);
+      CREATE INDEX IF NOT EXISTS idx_sem_marks_session ON seminar_marks(session_id);
+      CREATE INDEX IF NOT EXISTS idx_sem_marks_prn ON seminar_marks(prn);
+    `);
+
+    // ─── AUDIT LOG ENHANCEMENTS (Cybersecurity & Auth Events) ─────────────────
+    await client.query(`
+      ALTER TABLE audit_log ALTER COLUMN record_id DROP NOT NULL;
+      ALTER TABLE audit_log ALTER COLUMN changed_by DROP NOT NULL;
+      ALTER TABLE audit_log DROP CONSTRAINT IF EXISTS audit_log_action_check;
+      ALTER TABLE audit_log ALTER COLUMN action TYPE VARCHAR(50);
+      ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS ip_address VARCHAR(45);
+      ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS user_agent TEXT;
+      CREATE INDEX IF NOT EXISTS idx_audit_created_at ON audit_log(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action);
+    `);
+
+    // ─── EXAM TYPES & RESULT GENERATION SYSTEM ───────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS exam_types (
+        id                SERIAL PRIMARY KEY,
+        code              VARCHAR(50) UNIQUE NOT NULL,
+        name              VARCHAR(100) NOT NULL,
+        category          VARCHAR(30) NOT NULL DEFAULT 'both' CHECK (category IN ('theory','practical','both')),
+        has_result_impact BOOLEAN DEFAULT TRUE,
+        default_max_marks NUMERIC(5,2) NOT NULL DEFAULT 100,
+        display_order     INTEGER NOT NULL DEFAULT 1
+      );
+
+      CREATE TABLE IF NOT EXISTS student_exam_marks (
+        id                SERIAL PRIMARY KEY,
+        student_id        INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+        subject_id        INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+        exam_type_id      INTEGER NOT NULL REFERENCES exam_types(id) ON DELETE CASCADE,
+        semester          INTEGER NOT NULL,
+        academic_year     VARCHAR(20) NOT NULL,
+        marks_obtained    NUMERIC(5,2),
+        is_absent         BOOLEAN DEFAULT FALSE,
+        status            VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','submitted','approved','published')),
+        entered_by        INTEGER REFERENCES faculty(id),
+        last_modified_at  TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(student_id, subject_id, exam_type_id, semester, academic_year)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_student_exam_marks_lookup 
+        ON student_exam_marks(student_id, subject_id, semester, academic_year);
+      CREATE INDEX IF NOT EXISTS idx_student_exam_marks_subject_exam 
+        ON student_exam_marks(subject_id, exam_type_id, semester, academic_year);
+
+      CREATE TABLE IF NOT EXISTS student_term_work_details (
+        id                      SERIAL PRIMARY KEY,
+        student_id              INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+        subject_id              INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+        semester                INTEGER NOT NULL,
+        academic_year           VARCHAR(20) NOT NULL,
+        attendance_marks        NUMERIC(5,2) DEFAULT 0,
+        assignment_1_marks      NUMERIC(5,2) DEFAULT 0,
+        assignment_2_marks      NUMERIC(5,2) DEFAULT 0,
+        timely_submission_marks NUMERIC(5,2) DEFAULT 0,
+        total_tw_marks          NUMERIC(5,2) DEFAULT 0,
+        entered_by              INTEGER REFERENCES faculty(id),
+        last_modified_at        TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(student_id, subject_id, semester, academic_year)
+      );
+
+      INSERT INTO exam_types (code, name, category, has_result_impact, default_max_marks, display_order)
+      VALUES 
+        ('unit_test_1', 'Unit Test 1', 'theory', FALSE, 30, 1),
+        ('unit_test_2', 'Unit Test 2', 'theory', FALSE, 30, 2),
+        ('insem', 'Insem Exam', 'theory', TRUE, 30, 3),
+        ('mock_theory', 'Mock Theory Exam', 'theory', FALSE, 70, 4),
+        ('mock_practical', 'Mock Practical Exam', 'practical', FALSE, 25, 5),
+        ('term_work', 'Term Work', 'practical', TRUE, 25, 6),
+        ('final_practical', 'Final Practical/Oral Exam', 'practical', TRUE, 25, 7),
+        ('endsem', 'Endsem Exam', 'theory', TRUE, 70, 8)
+      ON CONFLICT (code) DO UPDATE SET 
+        name = EXCLUDED.name,
+        category = EXCLUDED.category,
+        has_result_impact = EXCLUDED.has_result_impact,
+        default_max_marks = EXCLUDED.default_max_marks,
+        display_order = EXCLUDED.display_order;
+    `);
+
+    // ─── MAGAZINES ────────────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS magazines (
+        id            VARCHAR(100) PRIMARY KEY,
+        title         VARCHAR(255) NOT NULL,
+        issue_number  INTEGER NOT NULL,
+        academic_year VARCHAR(50) NOT NULL,
+        semester      VARCHAR(50) DEFAULT 'Annual',
+        department    VARCHAR(200) DEFAULT 'Department of Computer Engineering',
+        period        VARCHAR(150),
+        description   TEXT,
+        status        VARCHAR(50) NOT NULL DEFAULT 'Draft',
+        template      VARCHAR(100) DEFAULT 'modern-academic',
+        published_date DATE,
+        cover_color   VARCHAR(50) DEFAULT '#1E2D5A',
+        cover_image   TEXT,
+        total_pages   INTEGER DEFAULT 0,
+        tagline       TEXT,
+        sections      JSONB DEFAULT '{}'::jsonb,
+        section_data  JSONB DEFAULT '{}'::jsonb,
+        review_comment TEXT,
+        created_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at    TIMESTAMPTZ DEFAULT NOW(),
+        updated_at    TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_magazines_status ON magazines(status);
+      CREATE INDEX IF NOT EXISTS idx_magazines_academic_year ON magazines(academic_year);
+    `);
+
     await client.query('COMMIT');
     console.log('[Migration] All tables created successfully');
   } catch (err) {
@@ -336,3 +638,15 @@ async function runMigrations() {
 }
 
 module.exports = { runMigrations };
+
+if (require.main === module) {
+  runMigrations()
+    .then(() => {
+      console.log('[Migration] Done.');
+      process.exit(0);
+    })
+    .catch((err) => {
+      console.error('[Migration] Failed:', err);
+      process.exit(1);
+    });
+}
