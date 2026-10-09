@@ -5,15 +5,14 @@ import toast from 'react-hot-toast';
 export default function StudentProject() {
   const [loading, setLoading] = useState(true);
   const [groupData, setGroupData] = useState(null);
-  const [availableGuides, setAvailableGuides] = useState([]);
-  
+
   // Registration form state matching PDF sheet layout
   const [domain, setDomain] = useState('');
   const [title1, setTitle1] = useState('');
   const [title2, setTitle2] = useState('');
   const [title3, setTitle3] = useState('');
   const [abstract, setAbstract] = useState('');
-  
+
   const [members, setMembers] = useState([
     { name: '', roll_no: '', division: 'BE-1', mobile_no: '', email: '', is_leader: true },
     { name: '', roll_no: '', division: 'BE-1', mobile_no: '', email: '', is_leader: false },
@@ -21,21 +20,18 @@ export default function StudentProject() {
     { name: '', roll_no: '', division: 'BE-1', mobile_no: '', email: '', is_leader: false },
   ]);
 
-  const [selectedGuideId, setSelectedGuideId] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [regSettings, setRegSettings] = useState({ is_open: true });
 
   const fetchProjectData = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/projects/student/my-group');
-      setGroupData(res.data);
-      if (!res.data.hasGroup) {
-        const gRes = await api.get('/projects/student/available-guides');
-        setAvailableGuides(gRes.data);
-      } else if (!res.data.group.guide_id && res.data.isLeader) {
-        const gRes = await api.get('/projects/student/available-guides');
-        setAvailableGuides(gRes.data);
-      }
+      const [resGroup, resSettings] = await Promise.all([
+        api.get('/projects/student/my-group'),
+        api.get('/projects/registration-settings?academic_year=2026-27').catch(() => ({ data: { is_open: true } }))
+      ]);
+      setGroupData(resGroup.data);
+      setRegSettings(resSettings.data);
     } catch (err) {
       toast.error('Failed to load project group data');
     } finally {
@@ -61,9 +57,9 @@ export default function StudentProject() {
     if (!title2.trim()) return toast.error('Please specify Project Title 2');
     if (!title3.trim()) return toast.error('Please specify Project Title 3');
 
-    // Filter active members (Student 1 and 2 mandatory, Student 3 & 4 optional unless filled)
+    // Filter active members (Student 1, 2, and 3 mandatory, Student 4 optional unless filled)
     const validMembers = members.filter((m, idx) => {
-      if (idx < 2) return true;
+      if (idx < 3) return true;
       return m.name.trim() !== '' || m.roll_no.trim() !== '' || m.email.trim() !== '';
     });
 
@@ -98,30 +94,14 @@ export default function StudentProject() {
     }
   };
 
-  const handleRequestGuide = async (e) => {
-    e.preventDefault();
-    if (!selectedGuideId) return toast.error('Please select a faculty guide');
-    setSubmitting(true);
-    try {
-      const res = await api.post('/projects/student/guide-requests', {
-        group_id: groupData.group.id,
-        requested_guide_id: Number(selectedGuideId),
-      });
-      toast.success(res.data.message);
-      fetchProjectData();
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to submit guide request');
-    } finally {
-      setSubmitting(false);
-    }
-  };
+
 
   if (loading) {
     return (
       <div className="p-8 max-w-7xl mx-auto flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-4 border-navy border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-sm font-medium text-draft">Loading BE Capstone Project details...</p>
+          <p className="text-sm font-medium text-draft">Loading BE Project details...</p>
         </div>
       </div>
     );
@@ -135,232 +115,255 @@ export default function StudentProject() {
         <div className="bg-white p-6 border border-rule rounded shadow-xs">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-200 text-navy font-mono text-xs font-bold rounded mb-2">
-                BE CAPSTONE PROJECT REGISTRATION
-              </div>
               <h1 className="font-serif text-2xl lg:text-3xl font-bold text-ink">Project Group Registration Form</h1>
               <p className="text-sm text-draft mt-1 font-medium">
                 Submit team member details and 3 project domain choices (matching departmental PDF sheet format).
               </p>
             </div>
             <div className="text-right hidden md:block">
-              <span className="text-xs text-draft font-mono block">Academic Year 2025-26</span>
-              <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded inline-block mt-1">
-                Portal Open for Registration
-              </span>
+              <span className="text-xs text-draft font-mono block">Academic Year 2026-27</span>
+              {regSettings.is_open ? (
+                <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded inline-block mt-1">
+                  ✓ Portal Open for Registration
+                  {regSettings.due_date && (
+                    <span className="block text-[10px] font-mono text-emerald-800 font-bold mt-0.5">
+                      📅 Date: {new Date(regSettings.due_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} | ⏰ Time: {new Date(regSettings.due_date).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                    </span>
+                  )}
+                </span>
+              ) : (
+                <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded inline-block mt-1">
+                  🔒 Registration Closed
+                </span>
+              )}
             </div>
           </div>
         </div>
 
+        {/* Short Registration Warning Strip */}
+        {!regSettings.is_open && (
+          <div className="bg-red-50 border border-red-200 text-red-900 rounded-lg p-5 shadow-xs space-y-2">
+            <div className="flex items-center gap-2 font-bold text-base text-red-800">
+              <span>🔒</span> Registration Portal Closed
+            </div>
+            <p className="text-xs text-red-700 leading-relaxed font-medium font-mono">
+              {regSettings.is_past_due_date
+                ? `Registration deadline expired on Date: ${new Date(regSettings.due_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} at Time: ${new Date(regSettings.due_date).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}.`
+                : 'Project group registration has been closed by the BE Project Coordinator. Students cannot fill or submit this form at this time.'}
+            </p>
+          </div>
+        )}
+
         {/* Full PDF Sheet Format Registration Form */}
         <form onSubmit={handleRegisterGroup} className="space-y-6">
-          {/* PART A: STUDENT TEAM MEMBERS DETAILS */}
-          <div className="bg-white border border-rule rounded shadow-sm p-6 space-y-6">
-            <div className="border-b border-rule pb-3 flex items-center justify-between">
-              <div>
+          <fieldset disabled={!regSettings.is_open || submitting} className="space-y-6 disabled:opacity-70">
+            {/* PART A: STUDENT TEAM MEMBERS DETAILS */}
+            <div className="bg-white border border-rule rounded shadow-sm p-6 space-y-6">
+              <div className="border-b border-rule pb-3">
+                <div>
+                  <h2 className="font-serif text-xl font-bold text-ink flex items-center gap-2">
+                    <span className="w-6 h-6 rounded bg-navy text-white text-xs flex items-center justify-center font-sans font-bold">1</span>
+                    Student Team Members Details
+                  </h2>
+                  <p className="text-xs text-draft mt-0.5">Minimum 3 students · Maximum 4 students per group</p>
+                </div>
+              </div>
+
+              <div className="space-y-6 divide-y divide-rule">
+                {members.map((m, idx) => {
+                  const sNum = idx + 1;
+                  const isRequired = idx < 3;
+                  return (
+                    <div key={idx} className={idx > 0 ? 'pt-6' : ''}>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="font-serif text-base font-bold text-ink flex items-center gap-2">
+                          <span className={`px-2.5 py-0.5 rounded text-xs font-bold font-mono ${isRequired ? 'bg-navy/10 text-navy border border-navy/20' : 'bg-gray-100 text-draft border border-rule'
+                            }`}>
+                            Student-{sNum} {idx === 0 && '(Group Leader)'}
+                          </span>
+                          {isRequired ? (
+                            <span className="text-xs text-red-600 font-semibold">* Mandatory</span>
+                          ) : (
+                            <span className="text-xs text-draft italic">(Optional Member {sNum})</span>
+                          )}
+                        </h3>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                        {/* Name of Student */}
+                        <div className="md:col-span-1 lg:col-span-1">
+                          <label className="input-label text-xs font-semibold">
+                            Name of Student-{sNum} {isRequired && '*'}
+                          </label>
+                          <input
+                            type="text"
+                            required={isRequired}
+                            placeholder={`Full Name of Student ${sNum}`}
+                            value={m.name}
+                            onChange={(e) => handleMemberChange(idx, 'name', e.target.value)}
+                            className="input-field text-sm"
+                          />
+                        </div>
+
+                        {/* College PRN */}
+                        <div>
+                          <label className="input-label text-xs font-semibold">
+                            PRN No (College PRN) {isRequired && '*'}
+                          </label>
+                          <input
+                            type="text"
+                            required={isRequired}
+                            placeholder="e.g. F23111031"
+                            value={m.roll_no}
+                            onChange={(e) => handleMemberChange(idx, 'roll_no', e.target.value)}
+                            className="input-field text-sm uppercase font-mono"
+                          />
+                        </div>
+
+                        {/* Division */}
+                        <div>
+                          <label className="input-label text-xs font-semibold">
+                            Student-{sNum} Division {isRequired && '*'}
+                          </label>
+                          <select
+                            value={m.division}
+                            onChange={(e) => handleMemberChange(idx, 'division', e.target.value)}
+                            className="input-field text-sm"
+                            required={isRequired}
+                          >
+                            <option value="BE-1">BE-1</option>
+                            <option value="BE-2">BE-2</option>
+                            <option value="BE-3">BE-3</option>
+                            <option value="BE-4">BE-4</option>
+                          </select>
+                        </div>
+
+                        {/* Mobile No */}
+                        <div>
+                          <label className="input-label text-xs font-semibold">
+                            Student-{sNum} Mobile No {isRequired && '*'}
+                          </label>
+                          <input
+                            type="tel"
+                            required={isRequired}
+                            placeholder="10-digit mobile"
+                            value={m.mobile_no}
+                            onChange={(e) => handleMemberChange(idx, 'mobile_no', e.target.value)}
+                            className="input-field text-sm font-mono"
+                          />
+                        </div>
+
+                        {/* Email Address */}
+                        <div>
+                          <label className="input-label text-xs font-semibold">
+                            Student-{sNum} Email ID {isRequired && '*'}
+                          </label>
+                          <input
+                            type="email"
+                            required={isRequired}
+                            placeholder="student@gmail.com"
+                            value={m.email}
+                            onChange={(e) => handleMemberChange(idx, 'email', e.target.value)}
+                            className="input-field text-sm font-mono"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* PART B: PROJECT DOMAIN & TITLE PREFERENCES */}
+            <div className="bg-white border border-rule rounded shadow-sm p-6 space-y-6">
+              <div className="border-b border-rule pb-3">
                 <h2 className="font-serif text-xl font-bold text-ink flex items-center gap-2">
-                  <span className="w-6 h-6 rounded bg-navy text-white text-xs flex items-center justify-center font-sans font-bold">1</span>
-                  Student Team Members Details
+                  <span className="w-6 h-6 rounded bg-navy text-white text-xs flex items-center justify-center font-sans font-bold">2</span>
+                  Project Domain &amp; Topic Preferences
                 </h2>
-                <p className="text-xs text-draft mt-0.5">Minimum 2 students · Maximum 4 students per group</p>
+                <p className="text-xs text-draft mt-0.5">Specify your project domain and 3 distinct project title choices in order of preference.</p>
               </div>
-              <span className="text-xs font-mono text-draft bg-paper px-3 py-1 border border-rule rounded">
-                Table Format (Sheet Upload)
-              </span>
-            </div>
 
-            <div className="space-y-6 divide-y divide-rule">
-              {members.map((m, idx) => {
-                const sNum = idx + 1;
-                const isRequired = idx < 2;
-                return (
-                  <div key={idx} className={idx > 0 ? 'pt-6' : ''}>
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="font-serif text-base font-bold text-ink flex items-center gap-2">
-                        <span className={`px-2.5 py-0.5 rounded text-xs font-bold font-mono ${
-                          isRequired ? 'bg-navy/10 text-navy border border-navy/20' : 'bg-gray-100 text-draft border border-rule'
-                        }`}>
-                          Student-{sNum} {idx === 0 && '(Group Leader)'}
-                        </span>
-                        {isRequired ? (
-                          <span className="text-xs text-red-600 font-semibold">* Mandatory</span>
-                        ) : (
-                          <span className="text-xs text-draft italic">(Optional Member {sNum})</span>
-                        )}
-                      </h3>
-                    </div>
+              <div className="space-y-4">
+                {/* Domain Name */}
+                <div>
+                  <label className="input-label font-bold text-ink">
+                    Project Domain *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Enter Project Domain"
+                    value={domain}
+                    onChange={(e) => setDomain(e.target.value)}
+                    className="input-field"
+                  />
+                  <p className="text-[11px] text-draft mt-1">
+                    Suggestions: AIML, Cyber Security, Web Development, Cloud &amp; DevOps, Data Science
+                  </p>
+                </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                      {/* Name of Student */}
-                      <div className="md:col-span-1 lg:col-span-1">
-                        <label className="input-label text-xs font-semibold">
-                          Name of Student-{sNum} {isRequired && '*'}
-                        </label>
-                        <input
-                          type="text"
-                          required={isRequired}
-                          placeholder={`Full Name of Student ${sNum}`}
-                          value={m.name}
-                          onChange={(e) => handleMemberChange(idx, 'name', e.target.value)}
-                          className="input-field text-sm"
-                        />
-                      </div>
-
-                      {/* College PRN */}
-                      <div>
-                        <label className="input-label text-xs font-semibold">
-                          PRN No (College PRN) {isRequired && '*'}
-                        </label>
-                        <input
-                          type="text"
-                          required={isRequired}
-                          placeholder="e.g. F23111031"
-                          value={m.roll_no}
-                          onChange={(e) => handleMemberChange(idx, 'roll_no', e.target.value)}
-                          className="input-field text-sm uppercase font-mono"
-                        />
-                      </div>
-
-                      {/* Division */}
-                      <div>
-                        <label className="input-label text-xs font-semibold">
-                          Student-{sNum} Division {isRequired && '*'}
-                        </label>
-                        <select
-                          value={m.division}
-                          onChange={(e) => handleMemberChange(idx, 'division', e.target.value)}
-                          className="input-field text-sm"
-                          required={isRequired}
-                        >
-                          <option value="BE-1">BE-1</option>
-                          <option value="BE-2">BE-2</option>
-                          <option value="BE-3">BE-3</option>
-                        </select>
-                      </div>
-
-                      {/* Mobile No */}
-                      <div>
-                        <label className="input-label text-xs font-semibold">
-                          Student-{sNum} Mobile No {isRequired && '*'}
-                        </label>
-                        <input
-                          type="tel"
-                          required={isRequired}
-                          placeholder="10-digit mobile"
-                          value={m.mobile_no}
-                          onChange={(e) => handleMemberChange(idx, 'mobile_no', e.target.value)}
-                          className="input-field text-sm font-mono"
-                        />
-                      </div>
-
-                      {/* Email Address */}
-                      <div>
-                        <label className="input-label text-xs font-semibold">
-                          Student-{sNum} Email ID {isRequired && '*'}
-                        </label>
-                        <input
-                          type="email"
-                          required={isRequired}
-                          placeholder="student@gmail.com"
-                          value={m.email}
-                          onChange={(e) => handleMemberChange(idx, 'email', e.target.value)}
-                          className="input-field text-sm font-mono"
-                        />
-                      </div>
-                    </div>
+                {/* 3 Project Titles */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                  <div>
+                    <label className="input-label font-bold text-ink">Project Title 1 (Preference 1) *</label>
+                    <textarea
+                      rows={3}
+                      required
+                      placeholder="Enter Primary Project Title Topic..."
+                      value={title1}
+                      onChange={(e) => setTitle1(e.target.value)}
+                      className="input-field text-sm"
+                    />
                   </div>
-                );
-              })}
-            </div>
-          </div>
 
-          {/* PART B: PROJECT DOMAIN & TITLE PREFERENCES */}
-          <div className="bg-white border border-rule rounded shadow-sm p-6 space-y-6">
-            <div className="border-b border-rule pb-3">
-              <h2 className="font-serif text-xl font-bold text-ink flex items-center gap-2">
-                <span className="w-6 h-6 rounded bg-navy text-white text-xs flex items-center justify-center font-sans font-bold">2</span>
-                Project Domain &amp; Topic Preferences
-              </h2>
-              <p className="text-xs text-draft mt-0.5">Specify your project domain and 3 distinct project title choices in order of preference.</p>
-            </div>
+                  <div>
+                    <label className="input-label font-bold text-ink">Project Title 2 (Preference 2) *</label>
+                    <textarea
+                      rows={3}
+                      required
+                      placeholder="Enter Secondary Project Title Topic..."
+                      value={title2}
+                      onChange={(e) => setTitle2(e.target.value)}
+                      className="input-field text-sm"
+                    />
+                  </div>
 
-            <div className="space-y-4">
-              {/* Domain Name */}
-              <div>
-                <label className="input-label font-bold text-ink">
-                  Project Domain (Write project Domain Name) *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Artificial Intelligence, AIML, Data Science, Cyber Security, Full Stack Web Development, Blockchain, Cloud Computing, AIDS"
-                  value={domain}
-                  onChange={(e) => setDomain(e.target.value)}
-                  className="input-field"
-                />
-                <p className="text-[11px] text-draft mt-1">
-                  Suggestions: Artificial Intelligence &amp; Machine Learning (AIML), Cyber Security &amp; Cryptography, Full Stack Web Development, Cloud &amp; DevOps, Data Science &amp; Data Analytics.
-                </p>
-              </div>
-
-              {/* 3 Project Titles */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-                <div>
-                  <label className="input-label font-bold text-ink">Project Title 1 (Preference 1) *</label>
-                  <textarea
-                    rows={3}
-                    required
-                    placeholder="Enter Primary Project Title Topic..."
-                    value={title1}
-                    onChange={(e) => setTitle1(e.target.value)}
-                    className="input-field text-sm"
-                  />
-                </div>
-
-                <div>
-                  <label className="input-label font-bold text-ink">Project Title 2 (Preference 2) *</label>
-                  <textarea
-                    rows={3}
-                    required
-                    placeholder="Enter Secondary Project Title Topic..."
-                    value={title2}
-                    onChange={(e) => setTitle2(e.target.value)}
-                    className="input-field text-sm"
-                  />
-                </div>
-
-                <div>
-                  <label className="input-label font-bold text-ink">Project Title 3 (Preference 3) *</label>
-                  <textarea
-                    rows={3}
-                    required
-                    placeholder="Enter Tertiary Project Title Topic..."
-                    value={title3}
-                    onChange={(e) => setTitle3(e.target.value)}
-                    className="input-field text-sm"
-                  />
+                  <div>
+                    <label className="input-label font-bold text-ink">Project Title 3 (Preference 3) *</label>
+                    <textarea
+                      rows={3}
+                      required
+                      placeholder="Enter Tertiary Project Title Topic..."
+                      value={title3}
+                      onChange={(e) => setTitle3(e.target.value)}
+                      className="input-field text-sm"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Form Actions */}
-          <div className="flex items-center justify-end gap-4 p-4 bg-white border border-rule rounded shadow-xs">
-            <button
-              type="submit"
-              disabled={submitting}
-              className="btn-primary px-8 py-3 font-bold text-base flex items-center gap-2"
-            >
-              {submitting ? (
-                <>
-                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                  Registering Project Group...
-                </>
-              ) : (
-                <>Submit Project Registration →</>
-              )}
-            </button>
-          </div>
+            {/* Form Actions */}
+            <div className="flex items-center justify-end gap-4 p-4 bg-white border border-rule rounded shadow-xs">
+              <button
+                type="submit"
+                disabled={!regSettings.is_open || submitting}
+                className="btn-primary px-8 py-3 font-bold text-base flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {!regSettings.is_open ? (
+                  <>🔒 Registration Closed</>
+                ) : submitting ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    Registering Project Group...
+                  </>
+                ) : (
+                  <>Submit Project Registration →</>
+                )}
+              </button>
+            </div>
+          </fieldset>
         </form>
       </div>
     );
@@ -376,15 +379,11 @@ export default function StudentProject() {
       <div className="bg-white p-6 border border-rule rounded shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-3">
-            <span className="font-mono text-sm font-bold text-navy bg-blue-50 border border-blue-200 px-3 py-1 rounded">
-              {group.group_code}
-            </span>
             <span className="text-xs font-mono font-medium text-draft bg-white border border-rule px-2.5 py-1 rounded">
-              Academic Year: {group.academic_year} · {group.batch}
+              Academic Year: {group.academic_year}
             </span>
-            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-xs font-bold ${
-              group.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
-            }`}>
+            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-xs font-bold ${group.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+              }`}>
               Status: {group.status}
             </span>
           </div>
@@ -400,7 +399,7 @@ export default function StudentProject() {
       </div>
 
       {/* Grid Layout: Titles, Roster & Guide */}
-      <div className="grid lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left 2 Cols: 3 Project Titles & Team Roster */}
         <div className="lg:col-span-2 space-y-6">
           {/* Project Title Preferences */}
@@ -445,10 +444,6 @@ export default function StudentProject() {
 
           {/* Team Members Roster (PDF Sheet Table Format) */}
           <div className="panel">
-            <div className="panel-header flex items-center justify-between">
-              <h2 className="font-serif text-lg font-bold">Student Team Roster ({groupMembers.length}/4)</h2>
-              <span className="text-xs text-draft font-mono">Departmental Format</span>
-            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-left">
                 <thead>
@@ -508,46 +503,21 @@ export default function StudentProject() {
                     </div>
                   </div>
                   <div className="p-3 bg-emerald-50 border border-emerald-200 rounded text-xs text-emerald-800 font-medium">
-                    ✓ Approved Project Supervisor assigned.
+                    ✓ Approved Project Supervisor (Assigned by HOD).
                   </div>
                 </div>
-              ) : latestGuideReq && latestGuideReq.status === 'PENDING' ? (
+              ) : (
                 <div className="space-y-3">
                   <div className="p-3.5 bg-amber-50 border border-amber-200 rounded">
-                    <p className="text-xs font-bold text-amber-800 uppercase tracking-wider">Request Pending Approval</p>
-                    <p className="text-sm font-semibold text-ink mt-1">{latestGuideReq.requested_guide_name}</p>
-                    <p className="text-xs text-draft mt-0.5">{latestGuideReq.designation}</p>
+                    <p className="text-xs font-bold text-amber-900 uppercase tracking-wider">Pending HOD Allocation</p>
+                    <p className="text-xs text-amber-800 mt-1 font-medium leading-relaxed">
+                      Your project guide will be allocated directly by the Head of Department (HOD).
+                    </p>
                   </div>
                   <p className="text-xs text-draft italic">
-                    Awaiting confirmation from faculty. You will be notified once approved.
+                    No action is required from student group members for guide allocation.
                   </p>
                 </div>
-              ) : isLeader ? (
-                <form onSubmit={handleRequestGuide} className="space-y-4">
-                  <div>
-                    <label className="input-label">Select Faculty Guide *</label>
-                    <select
-                      value={selectedGuideId}
-                      onChange={(e) => setSelectedGuideId(e.target.value)}
-                      className="input-field"
-                      required
-                    >
-                      <option value="">Select Faculty Guide...</option>
-                      {availableGuides.map((g) => (
-                        <option key={g.faculty_id} value={g.faculty_id} disabled={g.current_guided_groups >= 5}>
-                          {g.name} ({g.designation}) — {g.current_guided_groups}/5 groups
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <button type="submit" disabled={submitting} className="btn-primary w-full text-center">
-                    {submitting ? 'Submitting...' : 'Request Guide Selection'}
-                  </button>
-                </form>
-              ) : (
-                <p className="text-xs text-draft italic">
-                  Guide request not yet initiated. Group leader must select a guide.
-                </p>
               )}
             </div>
           </div>
@@ -557,7 +527,7 @@ export default function StudentProject() {
       {/* Section: Stage Continuous Evaluations & Released Scores */}
       <div className="space-y-6">
         <div className="border-b border-rule pb-3">
-          <h2 className="font-serif text-2xl font-bold text-ink">Evaluation Stages &amp; Continuous Assessment Scores</h2>
+          <h2 className="font-serif text-2xl font-bold text-ink">Evaluation Scores</h2>
           <p className="text-xs text-draft mt-0.5">Continuous assessment scores are visible once officially released by HOD.</p>
         </div>
 
@@ -607,7 +577,7 @@ export default function StudentProject() {
                       <div key={ev.evaluation_id} className="border border-rule rounded p-5 bg-white shadow-xs">
                         <div className="flex items-center justify-between border-b border-rule pb-3 mb-4">
                           <div>
-                            <span className="text-xs text-draft uppercase tracking-wider font-semibold">Panel Examiner #{idx + 1}</span>
+                            <span className="text-xs text-draft uppercase tracking-wider font-semibold">Panel Mentor #{idx + 1}</span>
                             <p className="font-bold text-ink text-sm">{ev.evaluator_name} ({ev.evaluator_designation})</p>
                           </div>
                           <span className="font-serif text-lg font-bold text-navy">
@@ -619,10 +589,9 @@ export default function StudentProject() {
                         <table className="w-full text-xs mb-4">
                           <thead>
                             <tr className="border-b border-rule bg-paper text-draft text-left">
-                              <th className="p-2">Evaluation Rubric Criterion</th>
-                              <th className="p-2 text-right">Max</th>
-                              <th className="p-2 text-right">Awarded</th>
-                              <th className="p-2">Examiner Notes</th>
+                              <th className="p-2">Evaluation Criteria</th>
+                              <th className="p-2 text-right">Max Marks</th>
+                              <th className="p-2 text-right">Marks Awarded</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-rule">
@@ -631,7 +600,6 @@ export default function StudentProject() {
                                 <td className="p-2 font-medium text-ink">{sc.criterion_name}</td>
                                 <td className="p-2 text-right text-draft font-mono">{sc.max_marks}</td>
                                 <td className="p-2 text-right font-bold font-mono text-navy">{sc.marks_awarded}</td>
-                                <td className="p-2 text-draft italic">{sc.remark || '—'}</td>
                               </tr>
                             ))}
                           </tbody>

@@ -86,11 +86,31 @@ export default function AchievementsEditor() {
                 filtered.map(a => (
                   <tr key={a.id}>
                     <td>
-                      <div className="w-8 h-8 rounded-sm bg-paper border border-rule flex items-center justify-center cursor-pointer hover:border-navy transition-colors" title="Click to upload photo">
-                        <svg className="w-4 h-4 text-draft" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0" />
-                        </svg>
-                      </div>
+                      <label className="w-8 h-8 rounded-sm bg-paper border border-rule flex items-center justify-center cursor-pointer hover:border-navy transition-colors overflow-hidden relative block" title="Upload achievement photo">
+                        {a.photo ? (
+                          <img src={a.photo} alt="Achievement" className="w-full h-full object-cover" />
+                        ) : (
+                          <svg className="w-4 h-4 text-draft" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0" />
+                          </svg>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            const reader = new FileReader();
+                            reader.onload = (ev) => {
+                              update(a.id, 'photo', ev.target.result);
+                              toast.success('Photo uploaded.');
+                            };
+                            reader.readAsDataURL(file);
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
                     </td>
                     <td>
                       <input className="w-full bg-transparent border-none outline-none text-xs text-ink" value={a.name} onChange={e => update(a.id, 'name', e.target.value)} placeholder="Student name" />

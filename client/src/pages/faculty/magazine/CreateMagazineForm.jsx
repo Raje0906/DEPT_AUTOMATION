@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMagazine } from '../../../contexts/MagazineContext';
+import { TemplateSelectorGrid } from '../../../components/magazine/TemplateSelectorModal';
+import { getTemplate } from '../../../utils/magazineTemplates';
 import toast from 'react-hot-toast';
 
 const ACADEMIC_YEARS = ['2026–27', '2025–26', '2024–25', '2023–24', '2022–23'];
@@ -26,6 +28,7 @@ export default function CreateMagazineForm() {
     department: 'Computer Engineering',
     period: 'June – December 2026',
     description: '',
+    template: 'modern-academic',
   });
   const [saving, setSaving] = useState(false);
 
@@ -55,8 +58,10 @@ export default function CreateMagazineForm() {
     }, 600);
   };
 
+  const selectedTheme = getTemplate(form.template);
+
   return (
-    <div className="p-8 lg:p-10 w-full max-w-3xl mx-auto">
+    <div className="p-8 lg:p-10 w-full max-w-4xl mx-auto">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-2 text-xs text-draft mb-6">
         <button onClick={() => navigate('/faculty/magazines')} className="hover:text-navy font-medium transition-colors">Magazines</button>
@@ -147,20 +152,44 @@ export default function CreateMagazineForm() {
           />
         </div>
 
+        <div className="h-px bg-rule" />
+
+        {/* Feature 1 — Choose Magazine Design */}
+        <div className="space-y-3 pt-1">
+          <div>
+            <h2 className="font-serif text-2xl font-bold text-ink">Choose Magazine Design</h2>
+            <p className="text-xs text-draft mt-1">
+              Select a design theme for your magazine. You can change it later.
+            </p>
+          </div>
+
+          <TemplateSelectorGrid
+            selectedTemplate={form.template}
+            onSelectTemplate={(id) => set('template', id)}
+          />
+        </div>
+
+        <div className="h-px bg-rule" />
+
         {/* Preview card */}
         <div className="bg-paper border border-rule rounded-sm p-5 flex items-center gap-5">
           <div
-            className="w-16 h-20 rounded-sm flex-shrink-0 flex flex-col items-center justify-center text-white text-center"
-            style={{ backgroundColor: '#1E2D5A' }}
+            className="w-16 h-20 rounded-sm flex-shrink-0 flex flex-col items-center justify-center text-white text-center shadow-xs"
+            style={{ backgroundColor: selectedTheme.accentColor || '#1E2D5A' }}
           >
-            <p className="text-[7px] font-bold uppercase tracking-widest opacity-60 font-serif">Reflection</p>
+            <p className="text-[7px] font-bold uppercase tracking-widest opacity-70 font-serif">Reflection</p>
             <p className="text-base font-serif font-bold leading-none">#{form.issueNumber || '?'}</p>
           </div>
-          <div>
+          <div className="flex-1 min-w-0">
             <p className="text-base font-bold text-ink">{form.title || 'Untitled Magazine'}</p>
             <p className="text-xs text-draft">Issue {form.issueNumber || '?'} · {form.academicYear} · {form.semester}</p>
             <p className="text-xs text-draft">{form.department}</p>
-            {form.period && <p className="text-xs text-draft">{form.period}</p>}
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-[10px] font-semibold text-navy bg-white px-2 py-0.5 rounded border border-rule">
+                Theme: {selectedTheme.name}
+              </span>
+              {form.period && <span className="text-xs text-draft">{form.period}</span>}
+            </div>
           </div>
         </div>
 

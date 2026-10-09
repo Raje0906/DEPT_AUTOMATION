@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useMagazine } from '../contexts/MagazineContext';
 
 const Icons = {
   dashboard: (
@@ -16,11 +17,6 @@ const Icons = {
   resultGen: (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
-    </svg>
-  ),
-  reval: (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
     </svg>
   ),
   reports: (
@@ -63,9 +59,19 @@ const Icons = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
     </svg>
   ),
+  rollover: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+    </svg>
+  ),
   audit: (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
+  seminar: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
     </svg>
   ),
   logout: (
@@ -88,6 +94,11 @@ const Icons = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
     </svg>
   ),
+  clubs: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+    </svg>
+  ),
   chevronDown: (
     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -103,8 +114,15 @@ const roleNav = {
         { to: '/student',             label: 'Dashboard',             icon: Icons.dashboard },
         { to: '/student/results',     label: 'Results & Marks',       icon: Icons.results },
         { to: '/student/cgpa',        label: 'CGPA Overview',         icon: Icons.cgpa },
-        { to: '/student/revaluation', label: 'Revaluation Cell',      icon: Icons.reval },
-        { to: '/student/project',     label: 'BE Capstone Project',   icon: Icons.project },
+        { to: '/student/project',     label: 'BE Project',            icon: Icons.project },
+        { to: '/student/seminar',     label: 'TE Seminar Registration', icon: Icons.seminar },
+      ],
+    },
+    {
+      group: 'Clubs & Co-Curricular',
+      items: [
+        { to: '/student/clubs',       label: 'Club Activities',       icon: Icons.clubs },
+        { to: '/student/magazine',    label: 'Magazine',              icon: Icons.magazines },
       ],
     },
   ],
@@ -115,15 +133,17 @@ const roleNav = {
         { to: '/faculty',             label: 'Dashboard',             icon: Icons.dashboard },
         { to: '/faculty/subjects',    label: 'Result Generation',     icon: Icons.resultGen },
         { to: '/faculty/reports',     label: 'Class Reports',         icon: Icons.reports },
-        { to: '/faculty/revaluation', label: 'Revaluation Requests',  icon: Icons.reval },
       ],
     },
     {
       group: 'Department Administration',
       items: [
+        { to: '/faculty/clubs',           label: 'Manage Clubs',          icon: Icons.clubs },
         { to: '/faculty/lab-maintenance', label: 'Lab Maintenance',      icon: Icons.lab },
-        { to: '/faculty/project-eval',    label: 'Project Evaluation',   icon: Icons.project },
-        { to: '/faculty/magazines',       label: 'Magazines & Research', icon: Icons.magazines },
+        { to: '/faculty/project-eval',    label: 'BE Project Evaluation', icon: Icons.project },
+        { to: '/faculty/magazines',       label: 'Magazine',              icon: Icons.magazines },
+        { to: '/faculty/seminar',         label: 'TE Seminar Governance', icon: Icons.seminar },
+        { to: '/faculty/seminar/my-groups', label: 'My Assigned Groups', icon: Icons.teachers },
       ],
     },
   ],
@@ -131,19 +151,22 @@ const roleNav = {
     {
       group: 'Department Governance',
       items: [
-        { to: '/hod',                 label: 'Executive Dashboard',   icon: Icons.dashboard },
-        { to: '/hod/teachers',        label: 'Faculty Allocation',    icon: Icons.teachers },
-        { to: '/hod/projects',        label: 'BE Project Governance', icon: Icons.project },
-        { to: '/hod/approval',        label: 'Mark Approvals',        icon: Icons.approval },
-        { to: '/hod/publish',         label: 'Publish Results',       icon: Icons.publish },
-        { to: '/hod/analytics',       label: 'Academic Analytics',    icon: Icons.analytics },
+        { to: '/hod',                 label: 'Executive Dashboard',     icon: Icons.dashboard },
+        { to: '/hod/teachers',        label: 'Faculty Allocation',      icon: Icons.teachers },
+        { to: '/hod/coordinators',    label: 'Coordinator Assignment',  icon: Icons.teachers },
+        { to: '/hod/projects',        label: 'BE Project Groups',       icon: Icons.project },
+        { to: '/hod/seminar-approvals', label: 'TE Seminar Governance', icon: Icons.seminar },
+        { to: '/hod/approval',        label: 'Mark Approvals',          icon: Icons.approval },
+        { to: '/hod/magazine-approvals', label: 'Magazine Approvals',   icon: Icons.magazines },
+        { to: '/hod/publish',         label: 'Publish Results',         icon: Icons.publish },
+        { to: '/hod/rollover',        label: 'Term Rollover',           icon: Icons.rollover },
+        { to: '/hod/analytics',       label: 'Academic Analytics',      icon: Icons.analytics },
       ],
     },
     {
       group: 'Compliance & Audit',
       items: [
-        { to: '/hod/revaluation',     label: 'Revaluation Oversight', icon: Icons.reval },
-        { to: '/hod/audit',           label: 'Audit Log & History',   icon: Icons.audit },
+        { to: '/hod/audit',           label: 'Audit Log & History',     icon: Icons.audit },
       ],
     },
   ],
@@ -153,11 +176,69 @@ const roleLabels = { student: 'Student', faculty: 'Faculty', hod: 'Head of Depar
 
 export default function Layout({ children }) {
   const { user, logout } = useAuth();
+  const { magazines } = useMagazine();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [alumniOpen, setAlumniOpen] = useState(false);
 
-  const navGroups = roleNav[user?.role] || [];
+  const pendingMagazinesCount = magazines?.filter(m => m.status === 'Under Review').length || 0;
+
+  let navGroups = roleNav[user?.role] || [];
+  if (user?.role === 'faculty') {
+    if (!user?.is_seminar_coordinator) {
+      navGroups = navGroups.map(group => ({
+        ...group,
+        items: group.items.filter(item => item.to !== '/faculty/seminar')
+      }));
+    }
+    if (user?.is_project_coordinator) {
+      navGroups = navGroups.map(group => {
+        if (group.group === 'Department Administration') {
+          return {
+            ...group,
+            items: [
+              { to: '/faculty/project-coordination', label: 'BE Project Governance', icon: Icons.project },
+              ...group.items
+            ]
+          };
+        }
+        return group;
+      });
+    }
+    const isAssignedToClub = !!(user?.is_assigned_club_faculty || (user?.assigned_clubs_count > 0) || (user?.assigned_clubs && user.assigned_clubs.length > 0));
+    const isClubHead = !!user?.is_club_coordinator;
+
+    if (!isClubHead && !isAssignedToClub) {
+      navGroups = navGroups.map(group => ({
+        ...group,
+        items: group.items.filter(item => item.to !== '/faculty/clubs')
+      }));
+    } else {
+      navGroups = navGroups.map(group => {
+        if (group.group === 'Department Administration') {
+          return {
+            ...group,
+            items: group.items.map(item =>
+              item.to === '/faculty/clubs'
+                ? { ...item, label: isClubHead ? 'Assign Club Faculty' : 'Handle Club' }
+                : item
+            )
+          };
+        }
+        return group;
+      });
+    }
+  }
+  if (user?.role === 'hod' && pendingMagazinesCount > 0) {
+    navGroups = navGroups.map(group => ({
+      ...group,
+      items: group.items.map(item =>
+        item.to === '/hod/magazine-approvals'
+          ? { ...item, badge: pendingMagazinesCount }
+          : item
+      )
+    }));
+  }
 
   const handleLogout = () => {
     logout();
@@ -170,30 +251,32 @@ export default function Layout({ children }) {
       <aside
         className={`
           fixed inset-y-0 left-0 z-30 w-64 bg-[#141C38] flex flex-col border-r border-[#222E54]
-          transform transition-transform duration-200
+          transform transition-transform duration-200 print:hidden h-screen
           ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
-          lg:relative lg:translate-x-0 lg:flex
+          lg:sticky lg:top-0 lg:translate-x-0 lg:flex
         `}
       >
         {/* Institutional header */}
-        <div className="px-5 py-5 border-b border-white/10 flex items-center gap-3 bg-[#0F162E]">
-          <div className="w-9 h-9 rounded bg-white/10 border border-white/15 flex items-center justify-center flex-shrink-0">
-            <svg viewBox="0 0 24 24" className="w-5 h-5 text-blue-200" fill="none" stroke="currentColor" strokeWidth={1.75}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
-            </svg>
-          </div>
-          <div className="min-w-0">
-            <p className="text-white text-sm font-bold tracking-tight font-serif uppercase leading-snug">
-              MES Wadia COE
-            </p>
-            <p className="text-blue-300 text-[10px] font-semibold tracking-wider uppercase truncate">
-              Computer Engineering
-            </p>
+        <div className="px-4 py-4 border-b border-white/10 flex items-center justify-between gap-2 bg-[#0F162E] flex-shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded bg-white/10 border border-white/15 flex items-center justify-center flex-shrink-0">
+              <svg viewBox="0 0 24 24" className="w-5 h-5 text-blue-200" fill="none" stroke="currentColor" strokeWidth={1.75}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <p className="text-white text-sm font-bold tracking-tight font-serif uppercase leading-snug">
+                MES Wadia COE
+              </p>
+              <p className="text-blue-300 text-[10px] font-semibold tracking-wider uppercase truncate">
+                Computer Engineering
+              </p>
+            </div>
           </div>
         </div>
 
         {/* Navigation Sections */}
-        <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto">
+        <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto min-h-0">
           {navGroups.map((group, gIdx) => (
             <div key={gIdx} className="space-y-1">
               {group.group && (
@@ -219,6 +302,11 @@ export default function Layout({ children }) {
                     {item.icon}
                   </span>
                   <span className="truncate">{item.label}</span>
+                  {item.badge !== undefined && item.badge !== null && (
+                    <span className="ml-auto px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-amber-400 text-slate-950 leading-none">
+                      {item.badge}
+                    </span>
+                  )}
                 </NavLink>
               ))}
             </div>
@@ -289,8 +377,8 @@ export default function Layout({ children }) {
           </div>
         </nav>
 
-        {/* User Card */}
-        <div className="p-3.5 border-t border-white/10 bg-[#0F162E]">
+        {/* User Card (Pinned at bottom of sidebar) */}
+        <div className="p-3.5 border-t border-white/10 bg-[#0F162E] flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded bg-white/10 border border-white/15 flex items-center justify-center text-xs font-semibold text-white uppercase flex-shrink-0">
               {user?.name?.charAt(0) || 'U'}
@@ -310,7 +398,7 @@ export default function Layout({ children }) {
             <button
               onClick={handleLogout}
               title="Sign out"
-              className="p-1.5 text-blue-300 hover:text-white hover:bg-white/10 rounded transition-colors"
+              className="p-1.5 text-blue-300 hover:text-red-400 hover:bg-white/10 rounded transition-colors"
             >
               {Icons.logout}
             </button>
@@ -329,17 +417,27 @@ export default function Layout({ children }) {
       {/* Main content */}
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Top bar (mobile) */}
-        <header className="lg:hidden flex items-center gap-4 px-4 py-3 bg-white border-b border-rule">
+        <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-rule">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setMobileOpen(true)}
+              className="p-1.5 rounded-sm hover:bg-paper transition-colors"
+              aria-label="Open navigation"
+            >
+              <svg className="w-5 h-5 text-navy" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <span className="font-serif text-navy font-semibold text-sm">MES Wadia COE</span>
+          </div>
           <button
-            onClick={() => setMobileOpen(true)}
-            className="p-1.5 rounded-sm hover:bg-paper transition-colors"
-            aria-label="Open navigation"
+            onClick={handleLogout}
+            title="Sign out"
+            className="flex items-center gap-1.5 text-xs text-red-600 hover:text-red-700 font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors"
           >
-            <svg className="w-5 h-5 text-navy" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
+            <span>Sign out</span>
+            {Icons.logout}
           </button>
-          <span className="font-serif text-navy font-semibold text-sm">MES Wadia COE</span>
         </header>
 
         <main className="flex-1 overflow-auto">

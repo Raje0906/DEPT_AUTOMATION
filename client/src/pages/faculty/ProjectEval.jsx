@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
 
@@ -9,7 +10,6 @@ export default function ProjectEval() {
   // Backend data states
   const [assignments, setAssignments] = useState([]);
   const [guidedGroups, setGuidedGroups] = useState([]);
-  const [guideRequests, setGuideRequests] = useState([]);
   
   // Evaluation modal states
   const [selectedAssignment, setSelectedAssignment] = useState(null);
@@ -21,14 +21,12 @@ export default function ProjectEval() {
   const fetchFacultyData = async () => {
     setLoading(true);
     try {
-      const [assRes, guidedRes, reqRes] = await Promise.all([
+      const [assRes, guidedRes] = await Promise.all([
         api.get('/projects/evaluator/assignments'),
         api.get('/projects/guide/my-groups'),
-        api.get('/projects/guide/requests'),
       ]);
       setAssignments(assRes.data);
       setGuidedGroups(guidedRes.data);
-      setGuideRequests(reqRes.data);
     } catch (err) {
       toast.error('Failed to fetch faculty project data');
     } finally {
@@ -46,14 +44,18 @@ export default function ProjectEval() {
       setFormData(res.data);
       setSelectedAssignment(ass);
       
-      // Initialize scores map
+      // Initialize scores map per student member
       const initialMap = {};
-      for (const crit of res.data.criteria) {
-        const existing = res.data.scoresMap[crit.id];
-        initialMap[crit.id] = {
-          marks_awarded: existing ? existing.marks_awarded : 0,
-          remark: existing ? existing.remark : '',
-        };
+      for (const m of res.data.members) {
+        initialMap[m.id] = {};
+        for (const crit of res.data.criteria) {
+          const existingSt = res.data.studentScoresMap?.[m.id]?.[crit.id];
+          const legacyGrp = res.data.scoresMap?.[crit.id];
+          initialMap[m.id][crit.id] = {
+            marks_awarded: existingSt ? existingSt.marks_awarded : (legacyGrp ? legacyGrp.marks_awarded : 0),
+            remark: existingSt ? existingSt.remark : (legacyGrp ? legacyGrp.remark : ''),
+          };
+        }
       }
       setScoresInput(initialMap);
       setOverallRemarks(res.data.evaluation ? res.data.evaluation.overall_remarks || '' : '');
@@ -62,14 +64,31 @@ export default function ProjectEval() {
     }
   };
 
+  const handleCopyFirstStudentScores = () => {
+    if (!formData?.members || formData.members.length === 0) return;
+    const firstMemId = formData.members[0].id;
+    const firstScores = scoresInput[firstMemId] || {};
+    
+    const updated = { ...scoresInput };
+    for (const m of formData.members) {
+      updated[m.id] = { ...firstScores };
+    }
+    setScoresInput(updated);
+    toast.success('Applied Student-1 scores to all team members');
+  };
+
   const handleSaveEvaluation = async (submitStatus) => {
     if (!selectedAssignment || !formData) return;
 
-    // Build scores array
-    const scoresArray = formData.criteria.map((c) => ({
-      criterion_id: c.id,
-      marks_awarded: Number(scoresInput[c.id]?.marks_awarded || 0),
-      remark: scoresInput[c.id]?.remark || '',
+    // Build per-student scores payload
+    const studentScoresArray = formData.members.map((m) => ({
+      member_id: m.id,
+      student_id: m.student_id || null,
+      scores: formData.criteria.map((c) => ({
+        criterion_id: c.id,
+        marks_awarded: Number(scoresInput[m.id]?.[c.id]?.marks_awarded || 0),
+        remark: scoresInput[m.id]?.[c.id]?.remark || '',
+      })),
     }));
 
     setSaving(true);
@@ -78,7 +97,7 @@ export default function ProjectEval() {
         assignment_id: selectedAssignment.assignment_id,
         status: submitStatus,
         overall_remarks: overallRemarks,
-        scores: scoresArray,
+        student_scores: studentScoresArray,
       });
       toast.success(res.data.message);
       setSelectedAssignment(null);
@@ -90,15 +109,7 @@ export default function ProjectEval() {
     }
   };
 
-  const handleGuideRequestDecision = async (requestId, status) => {
-    try {
-      const res = await api.patch(`/projects/guide/requests/${requestId}`, { status });
-      toast.success(res.data.message);
-      fetchFacultyData();
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to update request');
-    }
-  };
+
 
   if (loading) {
     return (
@@ -122,15 +133,9 @@ export default function ProjectEval() {
         <div>
           <h1 className="font-serif text-3xl font-bold text-ink">Project Evaluation Portal</h1>
           <p className="text-base text-draft mt-1 font-medium">
-            Continuous Rubric Assessment &amp; Project Supervision Center · 2025–26
+            Academic Year 2026-27
           </p>
         </div>
-        {guideRequests.length > 0 && (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">
-            <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
-            {guideRequests.length} Pending Guide Requests
-          </span>
-        )}
       </div>
 
       {/* Summary Stat Cards */}
@@ -143,7 +148,7 @@ export default function ProjectEval() {
         <div className="p-4 bg-white border border-rule rounded">
           <p className="text-xs uppercase tracking-wider text-draft font-semibold">Evaluations Completed</p>
           <p className="font-serif text-3xl font-bold text-emerald-700 mt-1">{completedAssignments}</p>
-          <p className="text-xs text-emerald-700 mt-1 font-medium">Locked &amp; Submitted</p>
+          <p className="text-xs text-emerald-700 mt-1 font-medium">Submitted</p>
         </div>
         <div className="p-4 bg-white border border-rule rounded">
           <p className="text-xs uppercase tracking-wider text-draft font-semibold">Pending Reviews</p>
@@ -179,21 +184,6 @@ export default function ProjectEval() {
         >
           My Guided Groups ({guidedGroups.length})
         </button>
-        <button
-          onClick={() => setActiveTab('requests')}
-          className={`px-4 py-2 text-xs font-semibold rounded transition-colors relative ${
-            activeTab === 'requests'
-              ? 'bg-navy text-white'
-              : 'bg-white border border-rule text-ink hover:bg-paper'
-          }`}
-        >
-          Pending Requests
-          {guideRequests.length > 0 && (
-            <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-mono font-bold">
-              {guideRequests.length}
-            </span>
-          )}
-        </button>
       </div>
 
       {/* TAB 1: PANELIST ASSIGNMENTS */}
@@ -201,9 +191,6 @@ export default function ProjectEval() {
         <div className="panel">
           <div className="panel-header flex items-center justify-between">
             <h2 className="font-serif text-xl font-semibold">Panel Evaluator Assignments</h2>
-            <span className="text-xs font-medium text-draft bg-gray-100 px-2.5 py-1 rounded">
-              Continuous Assessment Rubric
-            </span>
           </div>
           <div className="overflow-x-auto">
             <table className="result-table">
@@ -244,7 +231,7 @@ export default function ProjectEval() {
                         {ass.evaluation_status === 'SUBMITTED' || ass.evaluation_status === 'LOCKED' ? (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                            Submitted &amp; Locked
+                            Submitted
                           </span>
                         ) : ass.evaluation_status === 'DRAFT' ? (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
@@ -263,7 +250,7 @@ export default function ProjectEval() {
                           onClick={() => handleOpenEvaluationModal(ass)}
                           className="btn-primary py-1.5 px-3 text-xs"
                         >
-                          {ass.evaluation_status === 'SUBMITTED' ? 'View Evaluation' : 'Score Group →'}
+                          {ass.evaluation_status === 'SUBMITTED' ? 'View Evaluation' : 'Score Students →'}
                         </button>
                       </td>
                     </tr>
@@ -295,7 +282,7 @@ export default function ProjectEval() {
                       <h3 className="font-serif text-lg font-bold text-ink">{g.title}</h3>
                     </div>
                     <span className="text-xs font-mono font-medium text-draft bg-gray-100 px-2.5 py-1 rounded">
-                      {g.batch} · {g.academic_year}
+                      {g.academic_year}
                     </span>
                   </div>
                   <p className="text-xs text-draft font-medium">Domain: <span className="text-ink font-semibold">{g.domain}</span></p>
@@ -316,60 +303,23 @@ export default function ProjectEval() {
         </div>
       )}
 
-      {/* TAB 3: PENDING GUIDE REQUESTS */}
-      {activeTab === 'requests' && (
-        <div className="panel">
-          <div className="panel-header">
-            <h2 className="font-serif text-xl font-semibold">Pending Guide Requests</h2>
-          </div>
-          <div className="divide-y divide-rule">
-            {guideRequests.length === 0 ? (
-              <div className="p-8 text-center text-draft">No pending guide requests.</div>
-            ) : (
-              guideRequests.map((req) => (
-                <div key={req.id} className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-navy bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
-                        {req.group_code}
-                      </span>
-                      <h3 className="font-serif text-base font-bold text-ink">{req.title}</h3>
-                    </div>
-                    <p className="text-xs text-draft mt-1 font-medium">Domain: <span className="text-ink font-semibold">{req.domain}</span></p>
-                    <p className="text-xs text-draft mt-1">Requested by Leader: <span className="font-semibold text-ink">{req.leader_name}</span> ({req.leader_email})</p>
-                    <p className="text-xs text-ink italic mt-2 bg-paper p-2.5 border border-rule rounded">{req.abstract || 'No abstract provided'}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => handleGuideRequestDecision(req.id, 'REJECTED')}
-                      className="px-4 py-2 border border-red-300 text-red-700 bg-red-50 hover:bg-red-100 rounded text-xs font-semibold"
-                    >
-                      Decline
-                    </button>
-                    <button
-                      onClick={() => handleGuideRequestDecision(req.id, 'APPROVED')}
-                      className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-xs font-semibold shadow-xs"
-                    >
-                      Approve &amp; Supervise →
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
 
-      {/* RUBRIC EVALUATION MODAL */}
-      {selectedAssignment && formData && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded border border-rule max-w-2xl w-full p-6 shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto">
+
+      {/* RUBRIC EVALUATION MODAL (INDIVIDUAL STUDENT SCORING) */}
+      {selectedAssignment && formData && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded border border-rule max-w-4xl w-full p-6 shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="border-b border-rule pb-3 mb-4 flex items-center justify-between">
               <div>
-                <span className="text-xs font-mono font-bold text-navy uppercase tracking-wider">
-                  {formData.assignment.group_code} · {formData.assignment.stage_name}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono font-bold text-navy uppercase tracking-wider">
+                    {formData.assignment.group_code} · {formData.assignment.stage_name}
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800 border border-emerald-300">
+                    Individual Student Marks Entry
+                  </span>
+                </div>
                 <h3 className="font-serif text-lg font-bold text-ink mt-0.5 leading-snug">
                   {formData.assignment.title}
                 </h3>
@@ -382,132 +332,145 @@ export default function ProjectEval() {
               </button>
             </div>
 
-            {/* COI Warning Box if applicable */}
-            {formData.isGuide ? (
-              <div className="p-4 bg-red-50 border border-red-200 rounded text-red-800 text-xs font-semibold space-y-1">
-                <p className="font-bold uppercase tracking-wider text-red-900">⚠️ Conflict of Interest Warning</p>
-                <p>You are recorded as the Project Guide for this group. Per departmental governance rules, guides cannot submit panel evaluation scores for their own guided groups.</p>
-              </div>
-            ) : (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleSaveEvaluation('SUBMITTED');
-                }}
-                className="space-y-5"
-              >
-                {/* Roster & Guide Info */}
-                <div className="p-3 bg-paper border border-rule rounded text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div>
-                    <span className="text-draft font-bold">Team Members: </span>
-                    <span className="text-ink">{formData.members.map((m) => `${m.name} (${m.roll_no})`).join(', ')}</span>
-                  </div>
-                  <div>
-                    <span className="text-draft font-bold">Guide: </span>
-                    <span className="text-navy font-semibold">{formData.assignment.guide_name || 'Unassigned'}</span>
-                  </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSaveEvaluation('SUBMITTED');
+              }}
+              className="space-y-6"
+            >
+              {/* Quick Actions & Guide Info */}
+              <div className="p-3 bg-paper border border-rule rounded text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <span className="text-draft font-bold">Project Guide: </span>
+                  <span className="text-navy font-semibold">{formData.assignment.guide_name || 'Unassigned'}</span>
+                  <span className="text-draft ml-3">· Evaluator assigns marks <strong>individually</strong> to each student member.</span>
                 </div>
+                <button
+                  type="button"
+                  onClick={handleCopyFirstStudentScores}
+                  className="px-3 py-1 bg-blue-50 hover:bg-blue-100 text-navy border border-blue-200 text-xs font-bold rounded flex items-center gap-1 shrink-0"
+                  title="Copy Student 1 marks to all team members"
+                >
+                  <span>⚡</span> Copy Student-1 Scores to All
+                </button>
+              </div>
 
-                {/* Criteria Scoring Inputs */}
-                <div className="space-y-4">
-                  <h4 className="font-serif text-sm font-bold text-ink uppercase tracking-wider border-b border-rule pb-1">
-                    Continuous Evaluation Rubric Criteria
-                  </h4>
-                  {formData.criteria.map((crit) => {
-                    const curr = scoresInput[crit.id] || { marks_awarded: 0, remark: '' };
-                    return (
-                      <div key={crit.id} className="p-4 bg-gray-50/50 border border-rule rounded space-y-2">
-                        <div className="flex items-center justify-between">
-                          <label className="text-xs font-bold text-ink">{crit.name}</label>
-                          <span className="text-xs font-mono text-draft font-semibold">Max: {crit.max_marks} Marks</span>
-                        </div>
-                        <div className="grid grid-cols-3 gap-3">
+              {/* INDIVIDUAL STUDENT RUBRIC SCORING SECTIONS */}
+              <div className="space-y-6">
+                {formData.members.map((member, mIdx) => {
+                  const mScores = scoresInput[member.id] || {};
+                  const studentTotal = formData.criteria.reduce(
+                    (sum, c) => sum + Number(mScores[c.id]?.marks_awarded || 0),
+                    0
+                  );
+
+                  return (
+                    <div key={member.id} className="border border-rule rounded p-5 bg-white shadow-xs space-y-4">
+                      {/* Student Header */}
+                      <div className="flex items-center justify-between border-b border-rule pb-2 bg-gray-50 -mx-5 -mt-5 p-4 rounded-t">
+                        <div className="flex items-center gap-3">
+                          <span className="w-7 h-7 rounded-full bg-navy text-white text-xs font-bold flex items-center justify-center font-mono">
+                            {mIdx + 1}
+                          </span>
                           <div>
-                            <input
-                              type="number"
-                              min="0"
-                              max={crit.max_marks}
-                              step="0.5"
-                              value={curr.marks_awarded}
-                              onChange={(e) =>
-                                setScoresInput({
-                                  ...scoresInput,
-                                  [crit.id]: { ...curr, marks_awarded: e.target.value },
-                                })
-                              }
-                              className="input-field font-mono font-bold text-navy"
-                              required
-                            />
+                            <h4 className="font-serif text-base font-bold text-ink flex items-center gap-2">
+                              {member.name}
+                              {member.is_leader && (
+                                <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 rounded">
+                                  LEADER
+                                </span>
+                              )}
+                            </h4>
+                            <p className="text-xs font-mono text-draft">PRN / Roll No: <strong className="text-navy">{member.roll_no}</strong></p>
                           </div>
-                          <div className="col-span-2">
-                            <input
-                              type="text"
-                              placeholder="Criterion specific feedback / observation..."
-                              value={curr.remark}
-                              onChange={(e) =>
-                                setScoresInput({
-                                  ...scoresInput,
-                                  [crit.id]: { ...curr, remark: e.target.value },
-                                })
-                              }
-                              className="input-field text-xs"
-                            />
-                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <span className="text-[11px] uppercase tracking-wider text-draft font-semibold block">Total Score</span>
+                          <span className="font-serif text-xl font-bold text-navy">
+                            {studentTotal} / {formData.assignment.max_marks_total}
+                          </span>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
 
-                {/* Score Summary Box */}
-                <div className="p-4 bg-navy text-white rounded flex items-center justify-between">
-                  <span className="text-xs font-semibold uppercase tracking-wider">Total Calculated Marks</span>
-                  <span className="font-serif text-2xl font-bold">
-                    {formData.criteria.reduce(
-                      (sum, c) => sum + Number(scoresInput[c.id]?.marks_awarded || 0),
-                      0
-                    )}{' '}
-                    / {formData.assignment.max_marks_total}
-                  </span>
-                </div>
+                      {/* Criteria Scoring Inputs for this student */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                        {formData.criteria.map((crit) => {
+                          const curr = mScores[crit.id] || { marks_awarded: 0, remark: '' };
+                          return (
+                            <div key={crit.id} className="p-3 bg-paper border border-rule rounded flex items-center justify-between gap-3">
+                              <div className="flex-1">
+                                <label className="text-xs font-bold text-ink block">{crit.name}</label>
+                                <span className="text-[11px] font-mono text-draft font-medium">Max: {crit.max_marks} Marks</span>
+                              </div>
+                              <div className="w-28">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max={crit.max_marks}
+                                  step="0.5"
+                                  value={curr.marks_awarded}
+                                  onFocus={(e) => e.target.select()}
+                                  onChange={(e) =>
+                                    setScoresInput({
+                                      ...scoresInput,
+                                      [member.id]: {
+                                        ...mScores,
+                                        [crit.id]: { ...curr, marks_awarded: e.target.value },
+                                      },
+                                    })
+                                  }
+                                  className="input-field font-mono font-bold text-navy text-right focus:bg-blue-50 focus:ring-2 focus:ring-navy"
+                                  required
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
 
-                {/* Overall Examiner Remarks */}
-                <div>
-                  <label className="input-label">Overall Examiner Remarks &amp; Feedback</label>
-                  <textarea
-                    rows={3}
-                    placeholder="Record overall observations, demonstration performance, or suggestions..."
-                    value={overallRemarks}
-                    onChange={(e) => setOverallRemarks(e.target.value)}
-                    className="input-field"
-                  />
-                </div>
+              {/* Overall Mentor Remarks */}
+              <div>
+                <label className="input-label font-bold text-ink">Overall Mentor Remarks &amp; Observations</label>
+                <textarea
+                  rows={3}
+                  placeholder="Record overall team performance remarks, demonstration feedback, or Viva notes..."
+                  value={overallRemarks}
+                  onChange={(e) => setOverallRemarks(e.target.value)}
+                  className="input-field text-sm"
+                />
+              </div>
 
-                {/* Form Actions */}
-                <div className="flex justify-end gap-3 pt-3 border-t border-rule">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedAssignment(null)}
-                    className="px-4 py-2 border border-rule rounded text-xs font-medium text-draft hover:bg-paper"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => handleSaveEvaluation('DRAFT')}
-                    className="px-4 py-2 border border-navy text-navy hover:bg-blue-50 rounded text-xs font-semibold"
-                  >
-                    Save Draft
-                  </button>
-                  <button type="submit" disabled={saving} className="btn-primary">
-                    {saving ? 'Saving...' : 'Submit & Lock Evaluation →'}
-                  </button>
-                </div>
-              </form>
-            )}
+              {/* Form Actions */}
+              <div className="flex justify-end gap-3 pt-3 border-t border-rule">
+                <button
+                  type="button"
+                  onClick={() => setSelectedAssignment(null)}
+                  className="px-4 py-2 border border-rule rounded text-xs font-medium text-draft hover:bg-paper"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => handleSaveEvaluation('DRAFT')}
+                  className="px-4 py-2 border border-navy text-navy hover:bg-blue-50 rounded text-xs font-semibold"
+                >
+                  Save Draft
+                </button>
+                <button type="submit" disabled={saving} className="btn-primary py-2 px-6 font-bold">
+                  {saving ? 'Saving Scores...' : 'Submit Evaluation →'}
+                </button>
+              </div>
+            </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

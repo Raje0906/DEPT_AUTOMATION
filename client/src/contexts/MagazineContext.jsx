@@ -1,10 +1,13 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import api from '../api/axios';
+import { parseClassAndDivision } from '../utils/toppersUtils';
+import { DEMO_MAGAZINE_METADATA, DEMO_MAGAZINE_SECTION_DATA } from '../utils/demoMagazineData';
 
 const MagazineContext = createContext(null);
 
 // ── Sample magazine issues ────────────────────────────────────────────────────
 const SAMPLE_MAGAZINES = [
+  DEMO_MAGAZINE_METADATA,
   {
     id: 'MAG-2025-32',
     title: 'Reflection',
@@ -15,6 +18,7 @@ const SAMPLE_MAGAZINES = [
     period: 'June – December 2025',
     description: 'The annual departmental magazine capturing student achievements, academic milestones, and departmental events of the first half of academic year 2025–26.',
     status: 'Published',
+    template: 'modern-academic',
     publishedDate: '2026-01-15',
     coverColor: '#1E2D5A',
     totalPages: 20,
@@ -43,6 +47,7 @@ const SAMPLE_MAGAZINES = [
     period: 'January – May 2025',
     description: 'Departmental magazine for the second semester of academic year 2024–25.',
     status: 'Published',
+    template: 'editorial',
     publishedDate: '2025-06-10',
     coverColor: '#6B2737',
     totalPages: 18,
@@ -71,6 +76,7 @@ const SAMPLE_MAGAZINES = [
     period: 'June – December 2024',
     description: 'First-semester edition covering departmental achievements and academic highlights.',
     status: 'Archived',
+    template: 'institutional-premium',
     publishedDate: '2025-01-20',
     coverColor: '#3B6B47',
     totalPages: 16,
@@ -93,7 +99,14 @@ const SAMPLE_MAGAZINES = [
 
 // ── Default section data for a new magazine ───────────────────────────────────
 // ── Default section data for a new magazine ───────────────────────────────────
-export const CLASS_OPTIONS = ['SE I', 'SE II', 'SE III', 'TE I', 'TE II', 'TE III', 'BE I', 'BE II', 'BE III'];
+export const CLASS_OPTIONS = [
+  'SE - Div A', 'SE - Div B', 'SE - Div C',
+  'TE - Div A', 'TE - Div B', 'TE - Div C',
+  'BE - Div A', 'BE - Div B', 'BE - Div C',
+  'SE I', 'SE II', 'SE III',
+  'TE I', 'TE II', 'TE III',
+  'BE I', 'BE II', 'BE III'
+];
 
 export function normalizeToppersData(toppersInput) {
   if (!toppersInput) {
@@ -126,14 +139,21 @@ export function normalizeToppersData(toppersInput) {
     const id = s.id || `student-${idx + 1}-${Date.now()}`;
     if (!seenIds.has(id)) {
       seenIds.add(id);
-      const cls = s.className || s.class || 'SE I';
+      const { year, division } = parseClassAndDivision(s);
+      const rawRank = s.rank !== undefined && s.rank !== null && s.rank !== ''
+        ? s.rank
+        : (s.position !== undefined && s.position !== null && s.position !== '' ? s.position : '');
+      const parsedRank = rawRank !== '' ? parseInt(rawRank, 10) : '';
+
       cleanStudents.push({
         id,
         name: s.name || '',
-        class: cls,
-        className: cls,
+        class: year,
+        division,
+        className: `${year} - Div ${division}`,
         cgpa: s.cgpa !== undefined && s.cgpa !== null ? String(s.cgpa) : '',
-        position: s.position !== undefined && s.position !== null ? Number(s.position) || s.position : '',
+        position: parsedRank,
+        rank: parsedRank,
         photo: s.photo || s.photoUrl || null,
         photoUrl: s.photo || s.photoUrl || null,
       });
@@ -142,7 +162,10 @@ export function normalizeToppersData(toppersInput) {
 
   const classes = {};
   CLASS_OPTIONS.forEach(c => {
-    classes[c] = cleanStudents.filter(s => (s.className || s.class) === c);
+    classes[c] = cleanStudents.filter(s => {
+      const formatted = `${s.class} - Div ${s.division}`;
+      return s.className === c || s.class === c || formatted === c;
+    });
   });
 
   return {
@@ -163,6 +186,13 @@ const defaultSectionData = () => {
       tagline: 'Knowledge grows when it is shared with others',
       collegeLogo: null,
       coverImage: null,
+      overlay: {
+        type: 'none',
+        color: '#000000',
+        opacity: 0,
+        gradientStart: '#1E2D5A',
+        gradientEnd: '#0D1B2A',
+      },
     },
     message: {
       principal: {
@@ -226,7 +256,16 @@ export function MagazineProvider({ children }) {
       const saved = localStorage.getItem(STORAGE_KEY_MAGAZINES);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Guarantee MAG-2026-33 is present as the published issue at the top
+          const exists = parsed.some(m => m.id === DEMO_MAGAZINE_METADATA.id);
+          if (!exists) {
+            const updated = [DEMO_MAGAZINE_METADATA, ...parsed];
+            localStorage.setItem(STORAGE_KEY_MAGAZINES, JSON.stringify(updated));
+            return updated;
+          }
+          return parsed;
+        }
       }
     } catch (e) {
       console.warn('Could not read saved magazines from localStorage:', e);
@@ -297,6 +336,11 @@ export function MagazineProvider({ children }) {
     } catch (e) {
       console.warn(`Could not load sectionData for ${magId}:`, e);
     }
+    if (magId === DEMO_MAGAZINE_METADATA.id) {
+      const demoData = JSON.parse(JSON.stringify(DEMO_MAGAZINE_SECTION_DATA));
+      demoData.toppers = normalizeToppersData(demoData.toppers);
+      return demoData;
+    }
     return fallbackData || defaultSectionData();
   }, []);
 
@@ -306,6 +350,7 @@ export function MagazineProvider({ children }) {
     const newMag = {
       id,
       ...info,
+      template: info.template || 'modern-academic',
       status: 'Draft',
       publishedDate: null,
       coverColor: '#1E2D5A',
@@ -396,13 +441,21 @@ export function MagazineProvider({ children }) {
   const addTopperStudent = useCallback((student) => {
     setSectionData(prev => {
       const currentToppers = normalizeToppersData(prev.toppers);
+      const { year, division } = parseClassAndDivision(student);
+      const rawRank = student.rank !== undefined && student.rank !== null && student.rank !== ''
+        ? student.rank
+        : (student.position !== undefined && student.position !== null && student.position !== '' ? student.position : '');
+      const parsedRank = rawRank !== '' ? parseInt(rawRank, 10) : '';
+
       const newStudent = {
         id: student.id || `student-${Date.now()}`,
         name: student.name || '',
-        class: student.className || student.class || 'SE I',
-        className: student.className || student.class || 'SE I',
+        class: year,
+        division,
+        className: `${year} - Div ${division}`,
         cgpa: String(student.cgpa || ''),
-        position: student.position !== undefined ? Number(student.position) || student.position : '',
+        position: parsedRank,
+        rank: parsedRank,
         photo: student.photo || student.photoUrl || null,
         photoUrl: student.photo || student.photoUrl || null,
       };
@@ -424,12 +477,20 @@ export function MagazineProvider({ children }) {
       const currentToppers = normalizeToppersData(prev.toppers);
       const updatedStudents = currentToppers.students.map(s => {
         if (s.id === studentId) {
-          const cls = updatedFields.className || updatedFields.class || s.className || s.class;
+          const merged = { ...s, ...updatedFields };
+          const { year, division } = parseClassAndDivision(merged);
+          const rawRank = merged.rank !== undefined && merged.rank !== null && merged.rank !== ''
+            ? merged.rank
+            : (merged.position !== undefined && merged.position !== null && merged.position !== '' ? merged.position : '');
+          const parsedRank = rawRank !== '' ? parseInt(rawRank, 10) : '';
+
           return {
-            ...s,
-            ...updatedFields,
-            class: cls,
-            className: cls,
+            ...merged,
+            class: year,
+            division,
+            className: `${year} - Div ${division}`,
+            position: parsedRank,
+            rank: parsedRank,
             photo: updatedFields.photo !== undefined ? updatedFields.photo : s.photo,
             photoUrl: updatedFields.photo !== undefined ? updatedFields.photo : s.photoUrl,
           };
@@ -517,6 +578,10 @@ export function MagazineProvider({ children }) {
       saveMagazinesList(updated);
       return updated;
     });
+    if (currentMagazine?.id === targetId) {
+      setMagazineStatus('approved');
+      setCurrentMagazine(prev => prev ? { ...prev, status: 'Approved', reviewComment: null } : null);
+    }
 
     api.patch(`/magazines/${targetId}/status`, {
       status: 'Approved'
@@ -564,7 +629,6 @@ export function MagazineProvider({ children }) {
       setMagazineStatus('draft');
       setCurrentMagazine(prev => prev ? { ...prev, status: 'Draft', reviewComment: comment } : null);
     }
-
     api.patch(`/magazines/${targetId}/status`, {
       status: 'Draft',
       reviewComment: comment
@@ -603,12 +667,16 @@ export function MagazineProvider({ children }) {
         department: 'Computer Engineering',
         period: 'June – December 2025',
         status: 'Draft',
+        template: 'modern-academic',
         sections: {},
       };
       setMagazines(prev => [mag, ...prev]);
     }
 
     if (mag) {
+      if (!mag.template) {
+        mag = { ...mag, template: 'modern-academic' };
+      }
       setCurrentMagazine(mag);
       const loadedData = getPersistedSectionData(mag.id, mag.sectionData || defaultSectionData());
       setSectionData(loadedData);
@@ -670,8 +738,12 @@ export function MagazineProvider({ children }) {
       completeSection,
       saveDraft,
       submitForApproval,
+      approveMagazine,
+      publishMagazine,
+      requestChangesMagazine,
       loadMagazine,
       setCurrentMagazine,
+      updateMagazineTemplate,
       addTopperStudent,
       updateTopperStudent,
       deleteTopperStudent,

@@ -4,14 +4,26 @@ import { useMagazine, MAGAZINE_SECTIONS } from '../../../contexts/MagazineContex
 import SectionSidebar from '../../../components/magazine/SectionSidebar';
 import SectionEditor  from '../../../components/magazine/SectionEditor';
 import AIPanel        from '../../../components/magazine/AIPanel';
+import TemplateSelectorModal from '../../../components/magazine/TemplateSelectorModal';
+import { getTemplate } from '../../../utils/magazineTemplates';
 import toast from 'react-hot-toast';
 
 export default function MagazineEditor() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { currentMagazine, loadMagazine, saveDraft, submitForApproval, magazineStatus, activeSection, setActiveSection } = useMagazine();
+  const {
+    currentMagazine,
+    loadMagazine,
+    saveDraft,
+    submitForApproval,
+    magazineStatus,
+    activeSection,
+    setActiveSection,
+    updateMagazineTemplate,
+  } = useMagazine();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
 
   useEffect(() => {
     if (id && (!currentMagazine || currentMagazine.id !== id)) {
@@ -20,6 +32,7 @@ export default function MagazineEditor() {
   }, [id, currentMagazine, loadMagazine]);
 
   const sectionLabel = MAGAZINE_SECTIONS.find(s => s.id === activeSection)?.label || '';
+  const currentTheme = getTemplate(currentMagazine?.template || 'modern-academic');
 
   const handleSubmit = () => {
     submitForApproval();
@@ -56,6 +69,18 @@ export default function MagazineEditor() {
         </div>
         <span className={statusBadge.cls}>{statusBadge.label}</span>
 
+        {/* Change Design / Template Button */}
+        <button
+          onClick={() => setShowTemplateModal(true)}
+          className="flex items-center gap-1.5 text-xs border border-navy/25 bg-blue-50/70 text-navy font-semibold rounded-sm px-2.5 py-1.5 hover:bg-blue-100/70 transition-colors"
+          title="Change magazine visual theme"
+        >
+          <svg className="w-3.5 h-3.5 text-navy" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9.53 16.122a3 3 0 00-5.78 1.128 2.25 2.25 0 01-2.4 2.245 4.5 4.5 0 008.4-2.245c0-.399-.078-.78-.22-1.128zm0 0a15.998 15.998 0 003.388-1.62m-5.043-.025a15.994 15.994 0 011.622-3.395m3.42 3.42a15.995 15.995 0 004.764-4.648l3.876-5.814a1.151 1.151 0 00-1.597-1.597L14.146 6.32a15.996 15.996 0 00-4.649 4.763m3.42 3.42a6.776 6.776 0 00-3.42-3.42" />
+          </svg>
+          Design: <span className="underline decoration-navy/40">{currentTheme.name}</span>
+        </button>
+
         {/* Mobile section toggle */}
         <button
           onClick={() => setSidebarOpen(o => !o)}
@@ -89,6 +114,17 @@ export default function MagazineEditor() {
         </div>
       </header>
 
+      {/* HOD Revision Remarks Banner if sent back */}
+      {currentMagazine?.reviewComment && magazineStatus === 'draft' && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center gap-2.5 text-xs text-amber-900 flex-shrink-0">
+          <svg className="w-4 h-4 text-amber-700 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+          </svg>
+          <span className="font-semibold text-amber-950 uppercase tracking-wide text-[10px]">HOD Revision Remarks:</span>
+          <span>{currentMagazine.reviewComment}</span>
+        </div>
+      )}
+
       {/* 3-column editor */}
       <div className="flex flex-1 min-h-0 overflow-hidden relative">
         {/* Mobile overlay */}
@@ -103,7 +139,10 @@ export default function MagazineEditor() {
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
           lg:translate-x-0 lg:flex
         `} style={{ top: 'auto' }}>
-          <SectionSidebar onSave={() => setSidebarOpen(false)} />
+          <SectionSidebar
+            onSave={() => setSidebarOpen(false)}
+            onOpenDesign={() => { setShowTemplateModal(true); setSidebarOpen(false); }}
+          />
         </div>
 
         {/* CENTER — Content editor */}
@@ -159,6 +198,17 @@ export default function MagazineEditor() {
           </div>
         </div>
       )}
+
+      {/* Magazine Design Theme Selector Modal */}
+      <TemplateSelectorModal
+        isOpen={showTemplateModal}
+        onClose={() => setShowTemplateModal(false)}
+        selectedTemplate={currentMagazine?.template || 'modern-academic'}
+        onSelectTemplate={(newTmplId) => {
+          updateMagazineTemplate(newTmplId);
+          toast.success(`Design theme updated to "${getTemplate(newTmplId).name}". Content preserved.`);
+        }}
+      />
     </div>
   );
 }

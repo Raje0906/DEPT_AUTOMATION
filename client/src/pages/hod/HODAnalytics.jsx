@@ -3,18 +3,28 @@ import api from '../../api/axios';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function HODAnalytics() {
-  const [data, setData]       = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [semester, setSemester] = useState('');
+  const [data, setData]               = useState(null);
+  const [loading, setLoading]         = useState(true);
+  const [semester, setSemester]       = useState('');
+  const [academicYear, setAcademicYear] = useState('2026-27');
 
-  useEffect(() => {
-    api.get(`/hod/analytics${semester ? `?semester=${semester}` : ''}`)
+  const fetchAnalytics = () => {
+    setLoading(true);
+    const params = new URLSearchParams();
+    if (semester) params.append('semester', semester);
+    if (academicYear) params.append('academic_year', academicYear);
+
+    api.get(`/hod/analytics?${params.toString()}`)
       .then(res => setData(res.data))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [semester]);
+  };
 
-  if (loading) return <div className="p-8 text-sm text-draft">Loading analytics…</div>;
+  useEffect(() => {
+    fetchAnalytics();
+  }, [semester, academicYear]);
+
+  if (loading) return <div className="p-8 text-sm text-draft">Loading live analytics…</div>;
 
   const gradeOrder = ['O', 'A+', 'A', 'B+', 'B', 'C', 'P', 'F'];
   const gradeData = gradeOrder.map(g => ({
@@ -28,7 +38,7 @@ export default function HODAnalytics() {
     { range: '6–7', min: 6, max: 7 },
     { range: '7–8', min: 7, max: 8 },
     { range: '8–9', min: 8, max: 9 },
-    { range: '9–10', min: 9, max: 10 },
+    { range: '9–10', min: 9, max: 10.01 },
   ];
   const sgpaHistogram = sgpaRanges.map(r => ({
     range: r.range,
@@ -39,17 +49,33 @@ export default function HODAnalytics() {
     <div className="p-6 lg:p-8 max-w-5xl">
       <div className="mb-6 pb-4 border-b border-rule flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="font-serif text-2xl font-bold text-ink">Department Analytics</h1>
-          <p className="text-sm text-draft mt-0.5">Published results · Computer Engineering</p>
+          <div className="flex items-center gap-2.5">
+            <h1 className="font-serif text-2xl font-bold text-ink">Department Analytics</h1>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              Live Real-Time
+            </span>
+          </div>
+          <p className="text-sm text-draft mt-0.5">Published examination results · Computer Engineering</p>
         </div>
-        <select
-          value={semester}
-          onChange={e => { setSemester(e.target.value); setLoading(true); }}
-          className="input-field w-auto py-1.5"
-        >
-          <option value="">All semesters</option>
-          {[5, 6, 7, 8].map(s => <option key={s} value={s}>Semester {s}</option>)}
-        </select>
+        <div className="flex items-center gap-2.5">
+          <select
+            value={academicYear}
+            onChange={e => setAcademicYear(e.target.value)}
+            className="input-field w-auto py-1.5 text-xs font-medium"
+          >
+            <option value="2026-27">AY 2026-27 (Current)</option>
+            <option value="2025-26">AY 2025-26</option>
+          </select>
+          <select
+            value={semester}
+            onChange={e => setSemester(e.target.value)}
+            className="input-field w-auto py-1.5 text-xs font-medium"
+          >
+            <option value="">All semesters</option>
+            {[3, 4, 5, 6, 7, 8].map(s => <option key={s} value={s}>Semester {s}</option>)}
+          </select>
+        </div>
       </div>
 
       {/* Summary row */}
@@ -68,7 +94,7 @@ export default function HODAnalytics() {
       </div>
 
       {/* Grade distribution + SGPA histogram */}
-      <div className="grid lg:grid-cols-2 gap-6 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <div className="panel p-5">
           <p className="text-xs text-draft uppercase tracking-wide mb-4">Grade distribution</p>
           <ResponsiveContainer width="100%" height={180}>

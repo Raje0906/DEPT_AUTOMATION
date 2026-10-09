@@ -85,8 +85,9 @@ export default function MagazineCard({ magazine, onEdit }) {
             </button>
           )}
           <button
-            onClick={() => alert('PDF download coming soon')}
+            onClick={() => navigate(`/faculty/magazines/preview/${magazine.id}`)}
             className="btn-ghost text-xs px-3 py-1.5 border border-rule"
+            title="Open preview to generate PDF"
           >
             ↓ PDF
           </button>

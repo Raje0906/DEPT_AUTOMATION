@@ -2,10 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api/axios';
 import { StatusBadge } from '../../components/ResultTable';
+import { useMagazine } from '../../contexts/MagazineContext';
 
 export default function HODDashboard() {
   const [data, setData]     = useState(null);
   const [loading, setLoading] = useState(true);
+  const { magazines } = useMagazine();
+
+  const pendingMagazines = magazines?.filter(m => m.status === 'Under Review') || [];
 
   useEffect(() => {
     api.get('/hod/dashboard')
@@ -28,14 +32,14 @@ export default function HODDashboard() {
   }
 
   return (
-    <div className="p-8 lg:p-10 w-full max-w-7xl mx-auto">
+    <div className="px-4 sm:px-6 lg:px-8 lg:p-10 py-6 w-full max-w-7xl mx-auto">
       <div className="mb-8 pb-5 border-b border-rule">
         <h1 className="font-serif text-3xl lg:text-4xl font-bold text-ink">HOD Dashboard</h1>
         <p className="text-base text-draft mt-1 font-medium">Department of Computer Engineering — Academic Year 2024–25</p>
       </div>
 
       {/* Alert strip */}
-      {(needsAction.length > 0 || data?.pendingRevaluations > 0) && (
+      {(needsAction.length > 0 || pendingMagazines.length > 0) && (
         <div className="space-y-2 mb-6">
           {needsAction.length > 0 && (
             <div className="notification-strip">
@@ -44,11 +48,11 @@ export default function HODDashboard() {
               <Link to="/hod/approval" className="ml-2 text-maroon font-medium hover:underline">Review now</Link>
             </div>
           )}
-          {data?.pendingRevaluations > 0 && (
-            <div className="notification-strip">
-              <span className="text-xs font-semibold text-navy uppercase tracking-wide mr-2">Revaluation</span>
-              {data.pendingRevaluations} pending revaluation request{data.pendingRevaluations > 1 ? 's' : ''}.
-              <Link to="/hod/revaluation" className="ml-2 text-maroon font-medium hover:underline">View</Link>
+          {pendingMagazines.length > 0 && (
+            <div className="notification-strip border-amber-300 bg-amber-50/80 text-amber-950">
+              <span className="text-xs font-semibold text-amber-900 uppercase tracking-wide mr-2">Magazine Awaiting Approval</span>
+              {pendingMagazines.length} magazine issue{pendingMagazines.length > 1 ? 's' : ''} submitted for HOD review.
+              <Link to="/hod/magazine-approvals" className="ml-2 text-maroon font-medium hover:underline">Review & Approve</Link>
             </div>
           )}
         </div>
@@ -67,45 +71,47 @@ export default function HODDashboard() {
               <span className="text-draft">{subs.filter(s => s.status === 'draft' || s.status === 'not_started').length} pending</span>
             </div>
           </div>
-          <table className="result-table">
-            <thead>
-              <tr>
-                <th>Subject</th>
-                <th>Code</th>
-                <th>Faculty</th>
-                <th>Class</th>
-                <th className="numeric">Enrolled</th>
-                <th className="numeric">Entered</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {subs.map((s, i) => (
-                <tr key={i} className={s.status === 'submitted' ? 'bg-amber-50' : ''}>
-                  <td className="font-medium">{s.subject_name}</td>
-                  <td className="font-mono text-xs text-draft">{s.code}</td>
-                  <td>{s.faculty_name}</td>
-                  <td>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-50 text-blue-900 border border-blue-200">
-                      {s.division}
-                    </span>
-                  </td>
-                  <td className="numeric">{s.enrolled}</td>
-                  <td className="numeric">{s.marks_entered}</td>
-                  <td><StatusBadge status={s.status} /></td>
-                  <td>
-                    {s.status === 'submitted' && (
-                      <Link to={`/hod/approval?subjectId=${s.id}&sem=${s.semester}&ay=${s.academic_year}`}
-                        className="text-sm text-maroon hover:underline font-medium">
-                        Review
-                      </Link>
-                    )}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="result-table">
+              <thead>
+                <tr>
+                  <th>Subject</th>
+                  <th>Code</th>
+                  <th>Faculty</th>
+                  <th>Class</th>
+                  <th className="numeric">Enrolled</th>
+                  <th className="numeric">Entered</th>
+                  <th>Status</th>
+                  <th></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {subs.map((s, i) => (
+                  <tr key={i} className={s.status === 'submitted' ? 'bg-amber-50' : ''}>
+                    <td className="font-medium">{s.subject_name}</td>
+                    <td className="font-mono text-xs text-draft">{s.code}</td>
+                    <td>{s.faculty_name}</td>
+                    <td>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-50 text-blue-900 border border-blue-200">
+                        {s.division}
+                      </span>
+                    </td>
+                    <td className="numeric">{s.enrolled}</td>
+                    <td className="numeric">{s.marks_entered}</td>
+                    <td><StatusBadge status={s.status} /></td>
+                    <td>
+                      {s.status === 'submitted' && (
+                        <Link to={`/hod/approval?subjectId=${s.id}&sem=${s.semester}&ay=${s.academic_year}`}
+                          className="text-sm text-maroon hover:underline font-medium whitespace-nowrap">
+                          Review
+                        </Link>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       ))}
 

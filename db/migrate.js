@@ -117,33 +117,20 @@ async function runMigrations() {
       CREATE TABLE IF NOT EXISTS audit_log (
         id          SERIAL PRIMARY KEY,
         table_name  VARCHAR(100) NOT NULL,
-        record_id   INTEGER      NOT NULL,
-        changed_by  INTEGER      NOT NULL REFERENCES users(id),
+        record_id   INTEGER,
+        changed_by  INTEGER      REFERENCES users(id),
         old_value   JSONB,
         new_value   JSONB,
-        action      VARCHAR(20)  NOT NULL CHECK (action IN ('INSERT','UPDATE','DELETE')),
+        action      VARCHAR(50)  NOT NULL,
         reason      TEXT,
+        ip_address  VARCHAR(45),
+        user_agent  TEXT,
         created_at  TIMESTAMPTZ DEFAULT NOW()
       )
     `);
 
-    // ─── REVALUATION REQUESTS ─────────────────────────────────────────────────
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS revaluation_requests (
-        id              SERIAL PRIMARY KEY,
-        student_id      INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
-        subject_id      INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
-        semester        INTEGER NOT NULL,
-        academic_year   VARCHAR(20) NOT NULL,
-        status          VARCHAR(20) NOT NULL DEFAULT 'pending'
-                        CHECK (status IN ('pending','under_review','marks_updated','resolved','rejected')),
-        student_remark  TEXT,
-        faculty_remark  TEXT,
-        hod_remark      TEXT,
-        requested_at    TIMESTAMPTZ DEFAULT NOW(),
-        updated_at      TIMESTAMPTZ DEFAULT NOW()
-      )
-    `);
+    // ─── REVALUATION REQUESTS (DROPPED) ───────────────────────────────────────
+    await client.query(`DROP TABLE IF EXISTS revaluation_requests CASCADE;`);
 
     // ─── RESULT PUBLISH STATUS ────────────────────────────────────────────────
     await client.query(`
@@ -216,6 +203,19 @@ async function runMigrations() {
     await client.query(`ALTER TABLE project_group_members ADD COLUMN IF NOT EXISTS email VARCHAR(200)`);
     await client.query(`ALTER TABLE project_group_members ADD COLUMN IF NOT EXISTS mobile_no VARCHAR(30)`);
     await client.query(`ALTER TABLE project_group_members ADD COLUMN IF NOT EXISTS division VARCHAR(30)`);
+    await client.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS class_year VARCHAR(10) DEFAULT 'TE'`);
+
+    // BE Project Coordinator Governance & HOD Confirmation fields
+    await client.query(`ALTER TABLE faculty ADD COLUMN IF NOT EXISTS is_project_coordinator BOOLEAN DEFAULT FALSE`);
+    await client.query(`ALTER TABLE faculty ADD COLUMN IF NOT EXISTS is_club_coordinator BOOLEAN DEFAULT FALSE`);
+    await client.query(`ALTER TABLE project_groups ADD COLUMN IF NOT EXISTS proposed_guide_id INTEGER REFERENCES faculty(id) ON DELETE SET NULL`);
+    await client.query(`ALTER TABLE project_groups ADD COLUMN IF NOT EXISTS guide_approval_status VARCHAR(30) DEFAULT 'NONE'`);
+    await client.query(`ALTER TABLE project_groups ADD COLUMN IF NOT EXISTS guide_requested_by INTEGER REFERENCES users(id)`);
+    await client.query(`ALTER TABLE project_groups ADD COLUMN IF NOT EXISTS guide_decided_at TIMESTAMPTZ`);
+    await client.query(`ALTER TABLE project_score_releases ADD COLUMN IF NOT EXISTS status VARCHAR(30) DEFAULT 'APPROVED'`);
+    await client.query(`ALTER TABLE project_score_releases ADD COLUMN IF NOT EXISTS requested_by INTEGER REFERENCES users(id)`);
+    await client.query(`ALTER TABLE project_score_releases ADD COLUMN IF NOT EXISTS approved_by INTEGER REFERENCES users(id)`);
+    await client.query(`ALTER TABLE project_score_releases ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ`);
 
     // ─── PROJECT GUIDE REQUESTS ───────────────────────────────────────────────
     await client.query(`
@@ -302,6 +302,17 @@ async function runMigrations() {
       )
     `);
 
+    // ─── PROJECT REGISTRATION SETTINGS ───────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS project_registration_settings (
+        academic_year        VARCHAR(20) PRIMARY KEY,
+        is_registration_open BOOLEAN DEFAULT TRUE,
+        due_date             TIMESTAMPTZ,
+        updated_by           INTEGER REFERENCES users(id),
+        updated_at           TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
     // ─── PROJECT SCORE RELEASES ───────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS project_score_releases (
@@ -318,7 +329,6 @@ async function runMigrations() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_marks_subject ON marks(subject_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_marks_status  ON marks(status)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_audit_record  ON audit_log(table_name, record_id)`);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_reval_student ON revaluation_requests(student_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_proj_group_code ON project_groups(group_code)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_proj_group_guide ON project_groups(guide_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_proj_panel_group ON project_panel_assignments(group_id, stage_id)`);
@@ -464,6 +474,93 @@ async function runMigrations() {
       ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS hod_remarks TEXT;
     `);
 
+    // ─── SEMINAR GROUP REGISTRATIONS ──────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS registrations (
+        id            SERIAL PRIMARY KEY,
+        group_id      INTEGER NOT NULL REFERENCES seminar_groups(id) ON DELETE CASCADE,
+        seminar_id    INTEGER NOT NULL REFERENCES seminar_sessions(id) ON DELETE CASCADE,
+        registered_by INTEGER NOT NULL REFERENCES users(id),
+        registered_at TIMESTAMPTZ DEFAULT NOW(),
+        status        VARCHAR(30) NOT NULL DEFAULT 'REGISTERED' CHECK (status IN ('REGISTERED', 'CANCELLED', 'PENDING')),
+        CONSTRAINT uq_group_seminar_registration UNIQUE (group_id, seminar_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_registrations_group_id ON registrations(group_id);
+      CREATE INDEX IF NOT EXISTS idx_registrations_seminar_id ON registrations(seminar_id);
+      CREATE INDEX IF NOT EXISTS idx_registrations_registered_by ON registrations(registered_by);
+
+      -- Backfill existing seminar_groups into registrations if not already present
+      INSERT INTO registrations (group_id, seminar_id, registered_by, registered_at, status)
+      SELECT sg.id, sg.session_id, COALESCE(sg.leader_user_id, ss.created_by), COALESCE(sg.submitted_at, sg.created_at, NOW()), 'REGISTERED'
+      FROM seminar_groups sg
+      JOIN seminar_sessions ss ON sg.session_id = ss.id
+      WHERE sg.leader_user_id IS NOT NULL OR ss.created_by IS NOT NULL
+      ON CONFLICT (group_id, seminar_id) DO NOTHING;
+
+      -- Enable Row Level Security (RLS) on registrations
+      ALTER TABLE registrations ENABLE ROW LEVEL SECURITY;
+
+      DROP POLICY IF EXISTS "Allow group members and faculty to view registrations" ON registrations;
+      CREATE POLICY "Allow group members and faculty to view registrations"
+      ON registrations
+      FOR SELECT
+      USING (
+        registered_by = (NULLIF(current_setting('app.current_user_id', true), ''))::int
+        OR EXISTS (
+          SELECT 1 FROM seminar_group_members sgm
+          JOIN students s ON (
+            UPPER(REPLACE(s.enrollment_no, ' ', '')) = UPPER(REPLACE(sgm.prn, ' ', ''))
+            OR UPPER(REPLACE(s.roll_no, ' ', '')) = UPPER(REPLACE(sgm.prn, ' ', ''))
+          )
+          WHERE sgm.group_id = registrations.group_id
+            AND s.user_id = (NULLIF(current_setting('app.current_user_id', true), ''))::int
+        )
+        OR EXISTS (
+          SELECT 1 FROM users u
+          WHERE u.id = (NULLIF(current_setting('app.current_user_id', true), ''))::int
+            AND u.role IN ('faculty', 'hod')
+        )
+      );
+
+      DROP POLICY IF EXISTS "Allow only group members to register for their group" ON registrations;
+      CREATE POLICY "Allow only group members to register for their group"
+      ON registrations
+      FOR INSERT
+      WITH CHECK (
+        registered_by = (NULLIF(current_setting('app.current_user_id', true), ''))::int
+        AND (
+          EXISTS (
+            SELECT 1 FROM seminar_groups sg
+            WHERE sg.id = registrations.group_id
+              AND sg.leader_user_id = (NULLIF(current_setting('app.current_user_id', true), ''))::int
+          )
+          OR EXISTS (
+            SELECT 1 FROM seminar_group_members sgm
+            JOIN students s ON (
+              UPPER(REPLACE(s.enrollment_no, ' ', '')) = UPPER(REPLACE(sgm.prn, ' ', ''))
+              OR UPPER(REPLACE(s.roll_no, ' ', '')) = UPPER(REPLACE(sgm.prn, ' ', ''))
+            )
+            WHERE sgm.group_id = registrations.group_id
+              AND s.user_id = (NULLIF(current_setting('app.current_user_id', true), ''))::int
+          )
+        )
+      );
+
+      DROP POLICY IF EXISTS "Allow group members to update their registration" ON registrations;
+      CREATE POLICY "Allow group members to update their registration"
+      ON registrations
+      FOR UPDATE
+      USING (
+        registered_by = (NULLIF(current_setting('app.current_user_id', true), ''))::int
+        OR EXISTS (
+          SELECT 1 FROM seminar_groups sg
+          WHERE sg.id = registrations.group_id
+            AND sg.leader_user_id = (NULLIF(current_setting('app.current_user_id', true), ''))::int
+        )
+      );
+    `);
+
     // ─── SEMINAR MARKS ────────────────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS seminar_marks (
@@ -594,6 +691,125 @@ async function runMigrations() {
         has_result_impact = EXCLUDED.has_result_impact,
         default_max_marks = EXCLUDED.default_max_marks,
         display_order = EXCLUDED.display_order;
+
+
+      -- BE Project Individual Student Scoring Migration
+      ALTER TABLE project_evaluation_scores ADD COLUMN IF NOT EXISTS member_id INTEGER REFERENCES project_group_members(id) ON DELETE CASCADE;
+      ALTER TABLE project_evaluation_scores ADD COLUMN IF NOT EXISTS student_id INTEGER REFERENCES students(id) ON DELETE CASCADE;
+      ALTER TABLE project_evaluation_scores DROP CONSTRAINT IF EXISTS project_evaluation_scores_evaluation_id_criterion_id_key;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_proj_eval_score_member ON project_evaluation_scores(evaluation_id, criterion_id, member_id);
+
+      -- ─── CLUBS & ACTIVITIES GOVERNANCE ─────────────────────────────────────
+      CREATE TABLE IF NOT EXISTS clubs (
+        id                      SERIAL PRIMARY KEY,
+        name                    VARCHAR(150) NOT NULL,
+        code                    VARCHAR(30) UNIQUE NOT NULL,
+        category                VARCHAR(50) NOT NULL,
+        department              VARCHAR(100) DEFAULT 'Computer Engineering',
+        description             TEXT,
+        faculty_coordinator_id  INTEGER REFERENCES faculty(id) ON DELETE SET NULL,
+        student_lead_name       VARCHAR(150),
+        student_lead_email      VARCHAR(200),
+        student_lead_phone      VARCHAR(30),
+        student_lead_division   VARCHAR(20),
+        academic_year           VARCHAR(20) DEFAULT '2026-27',
+        status                  VARCHAR(20) DEFAULT 'Active' CHECK (status IN ('Active', 'Inactive', 'Probation')),
+        founded_year            VARCHAR(10) DEFAULT '2020',
+        website_or_link         VARCHAR(300),
+        mentor_faculty_id       INTEGER REFERENCES faculty(id) ON DELETE SET NULL,
+        mentor_name             VARCHAR(150),
+        mentor_email            VARCHAR(200),
+        mentor_designation      VARCHAR(150),
+        mentor_type             VARCHAR(50) DEFAULT 'Faculty Mentor',
+        mentor_phone            VARCHAR(30),
+        created_at              TIMESTAMPTZ DEFAULT NOW(),
+        updated_at              TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      ALTER TABLE clubs ADD COLUMN IF NOT EXISTS mentor_faculty_id INTEGER REFERENCES faculty(id) ON DELETE SET NULL;
+      ALTER TABLE clubs ADD COLUMN IF NOT EXISTS mentor_name VARCHAR(150);
+      ALTER TABLE clubs ADD COLUMN IF NOT EXISTS mentor_email VARCHAR(200);
+      ALTER TABLE clubs ADD COLUMN IF NOT EXISTS mentor_designation VARCHAR(150);
+      ALTER TABLE clubs ADD COLUMN IF NOT EXISTS mentor_type VARCHAR(50) DEFAULT 'Faculty Mentor';
+      ALTER TABLE clubs ADD COLUMN IF NOT EXISTS mentor_phone VARCHAR(30);
+      ALTER TABLE clubs ADD COLUMN IF NOT EXISTS student_lead_prn VARCHAR(40);
+      ALTER TABLE clubs ADD COLUMN IF NOT EXISTS vice_president_name VARCHAR(150);
+      ALTER TABLE clubs ADD COLUMN IF NOT EXISTS vice_president_prn VARCHAR(40);
+      ALTER TABLE clubs ADD COLUMN IF NOT EXISTS vice_president_phone VARCHAR(30);
+      ALTER TABLE clubs ADD COLUMN IF NOT EXISTS vice_president_division VARCHAR(30);
+      ALTER TABLE clubs ADD COLUMN IF NOT EXISTS motto TEXT;
+      ALTER TABLE clubs ADD COLUMN IF NOT EXISTS logo_url TEXT;
+      ALTER TABLE students ADD COLUMN IF NOT EXISTS mobile VARCHAR(30);
+
+      CREATE TABLE IF NOT EXISTS club_events (
+        id                      SERIAL PRIMARY KEY,
+        club_id                 INTEGER NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+        title                   VARCHAR(250) NOT NULL,
+        event_type              VARCHAR(50) NOT NULL,
+        academic_year           VARCHAR(20) NOT NULL DEFAULT '2026-27',
+        start_date              DATE NOT NULL,
+        end_date                DATE,
+        time                    VARCHAR(50),
+        venue                   VARCHAR(150) NOT NULL,
+        mode                    VARCHAR(20) DEFAULT 'Offline' CHECK (mode IN ('Offline', 'Online', 'Hybrid')),
+        proposed_budget         NUMERIC(10,2) DEFAULT 0,
+        approved_budget         NUMERIC(10,2) DEFAULT 0,
+        expected_participants   INTEGER DEFAULT 0,
+        actual_participants     INTEGER DEFAULT 0,
+        speaker_or_trainer      VARCHAR(200),
+        description             TEXT,
+        status                  VARCHAR(30) DEFAULT 'Approved' CHECK (status IN ('Draft', 'Submitted', 'Approved', 'Completed', 'Cancelled')),
+        coordinator_remarks     TEXT,
+        created_by_faculty_id   INTEGER REFERENCES faculty(id) ON DELETE SET NULL,
+        created_at              TIMESTAMPTZ DEFAULT NOW(),
+        updated_at              TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS club_members (
+        id                      SERIAL PRIMARY KEY,
+        club_id                 INTEGER NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+        student_id              INTEGER REFERENCES students(id) ON DELETE SET NULL,
+        student_name            VARCHAR(150) NOT NULL,
+        roll_no                 VARCHAR(30),
+        division                VARCHAR(10),
+        class_year              VARCHAR(10) DEFAULT 'TE',
+        role                    VARCHAR(50) DEFAULT 'Member',
+        academic_year           VARCHAR(20) DEFAULT '2026-27',
+        is_core                 BOOLEAN DEFAULT FALSE,
+        joined_at               TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      ALTER TABLE club_members ADD COLUMN IF NOT EXISTS prn VARCHAR(40);
+
+      CREATE TABLE IF NOT EXISTS club_event_registrations (
+        id                      SERIAL PRIMARY KEY,
+        event_id                INTEGER NOT NULL REFERENCES club_events(id) ON DELETE CASCADE,
+        user_id                 INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        student_id              INTEGER REFERENCES students(id) ON DELETE SET NULL,
+        student_name            VARCHAR(150) NOT NULL,
+        prn                     VARCHAR(40),
+        roll_no                 VARCHAR(30),
+        division                VARCHAR(30),
+        class_year              VARCHAR(10) DEFAULT 'TE',
+        email                   VARCHAR(150),
+        contact_no              VARCHAR(30),
+        status                  VARCHAR(30) DEFAULT 'Registered',
+        registered_at           TIMESTAMPTZ DEFAULT NOW(),
+        notes                   TEXT,
+        CONSTRAINT uq_club_event_user UNIQUE (event_id, user_id)
+      );
+
+      -- Seed sample departmental clubs if none exist
+      INSERT INTO clubs (name, code, category, department, description, faculty_coordinator_id, student_lead_name, student_lead_email, student_lead_phone, student_lead_division, academic_year, status, founded_year)
+      VALUES 
+        ('Computer Society of India (CSI)', 'CSI', 'Professional Chapter', 'Computer Engineering', 'Promotes professional computing competence, national competitions, technical publications, and industry seminars.', 7, NULL, NULL, NULL, NULL, '2026-27', 'Active', '2018'),
+        ('ACM Student Chapter', 'ACM', 'Professional Chapter', 'Computer Engineering', 'Advancing computing as a science and profession through algorithm decathlons, ICPC bootcamps, and research talks.', 3, NULL, NULL, NULL, NULL, '2026-27', 'Active', '2019'),
+        ('Google Developer Groups (GDG / GDSC)', 'GDG_ON_CAMPUS', 'Technical & Coding', 'Computer Engineering', 'Developer ecosystem focusing on Cloud, Flutter, Android, Firebase, and Open Source contributions.', 4, NULL, NULL, NULL, NULL, '2026-27', 'Active', '2021'),
+        ('Competitive Programming & Algo Club', 'CP_ALGO', 'Technical & Coding', 'Computer Engineering', 'Peer-driven platform for LeetCode, Codeforces contests, data structures, and tech interview masterclasses.', 2, NULL, NULL, NULL, NULL, '2026-27', 'Active', '2022'),
+        ('Cyber Security & Forensics Guild', 'CYBER_SEC', 'Technical & Security', 'Computer Engineering', 'Hands-on network security, Capture The Flag (CTF) events, ethical hacking drills, and digital forensics.', 6, NULL, NULL, NULL, NULL, '2026-27', 'Active', '2023'),
+        ('AI & Machine Learning Innovators Club', 'AI_ML_CLUB', 'Innovation & AI', 'Computer Engineering', 'Research papers implementation, Kaggle hackathons, LLM development, and computer vision workshops.', 5, NULL, NULL, NULL, NULL, '2026-27', 'Active', '2023'),
+        ('Smart India Hackathon (SIH) Cell', 'SIH', 'National Hackathon & Innovation', 'Computer Engineering', 'Directs departmental team registrations, internal hackathons, problem statement shortlisting, mentoring, and university/national nodal submissions for Smart India Hackathon.', 8, NULL, NULL, NULL, NULL, '2026-27', 'Active', '2019')
+      ON CONFLICT (code) DO NOTHING;
     `);
 
     // ─── MAGAZINES ────────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -20,27 +20,45 @@
 
 @layer base {
   html {
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
     color: var(--ink);
     background-color: var(--paper);
     -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.01em;
   }
 
   body {
     margin: 0;
     padding: 0;
+    overflow-x: hidden;
   }
 
-  h1, h2, h3 {
-    font-family: 'Playfair Display', Georgia, serif;
-    font-weight: 600;
-    color: var(--ink);
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+  }
+
+  .font-serif {
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif !important;
+  }
+
+  .font-heading {
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif !important;
+  }
+
+  .font-mono {
+    font-family: 'JetBrains Mono', monospace !important;
   }
 
   /* Tabular figures for all numeric data */
-  table, .tabular-num {
+  table, .tabular-num, .font-mono {
     font-variant-numeric: tabular-nums;
     font-feature-settings: 'tnum';
+  }
+
+  .tabular-num {
+    font-family: 'JetBrains Mono', monospace;
   }
 
   /* Hairline table borders — the defining visual primitive */
@@ -51,7 +69,7 @@
   }
 
   .result-table th {
-    font-family: 'Inter', sans-serif;
+    font-family: 'Plus Jakarta Sans', sans-serif;
     font-weight: 600;
     font-size: 0.8125rem;
     text-transform: uppercase;
@@ -78,6 +96,7 @@
 
   .result-table td.numeric {
     text-align: right;
+    font-family: 'JetBrains Mono', monospace;
     font-variant-numeric: tabular-nums;
   }
 
@@ -88,6 +107,20 @@
   .result-table tbody tr:hover {
     background-color: #F0EEF8;
     transition: background-color 0.12s ease;
+  }
+
+  /* Dense / compact table variant for multi-column dashboards */
+  .result-table.dense th {
+    padding: 0.6rem 0.75rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+
+  .result-table.dense td {
+    padding: 0.55rem 0.75rem;
+    font-size: 0.8125rem;
+    line-height: 1.35;
   }
 }
 
@@ -219,7 +252,7 @@
 
   /* ─── CGPA / SGPA Display ─────────────────────────────────────────────────── */
   .gpa-display {
-    @apply font-serif text-4xl font-bold text-navy;
+    @apply font-mono text-4xl font-bold text-navy tracking-tight;
     font-variant-numeric: tabular-nums;
   }
 
@@ -241,6 +274,32 @@
   /* ─── Anomaly Flag ───────────────────────────────────────────────────────── */
   .anomaly-flag {
     @apply flex items-start gap-2 p-3 bg-amber-50 border border-pending rounded-sm text-sm;
+  }
+
+  /* ─── Responsive Table Scroll Wrapper ────────────────────────────────────── */
+  .table-scroll {
+    @apply w-full overflow-x-auto rounded;
+    -webkit-overflow-scrolling: touch;
+  }
+  .table-scroll::-webkit-scrollbar {
+    height: 6px;
+    width: 6px;
+  }
+  .table-scroll::-webkit-scrollbar-track {
+    background: #f0eee8;
+    border-radius: 3px;
+  }
+  .table-scroll::-webkit-scrollbar-thumb {
+    background: #c5c0b6;
+    border-radius: 3px;
+  }
+  .table-scroll::-webkit-scrollbar-thumb:hover {
+    background: #9d9689;
+  }
+
+  /* ─── Page Container ─────────────────────────────────────────────────────── */
+  .page-container {
+    @apply px-4 sm:px-6 lg:px-8 py-6 max-w-screen-2xl mx-auto w-full;
   }
 }
 
@@ -274,11 +333,63 @@
 
 /* ─── Print styles for mark sheet PDF ───────────────────────────────────────── */
 @media print {
-  body {
-    background: white;
-    color: black;
+  @page {
+    size: A4 portrait;
+    margin: 6mm 8mm;
   }
-  .no-print {
+
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    font-size: 11px !important;
+    line-height: 1.2 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  aside, nav, header, footer, .no-print, [role="navigation"] {
     display: none !important;
+  }
+
+  .print\:hidden {
+    display: none !important;
+  }
+
+  .print\:block {
+    display: block !important;
+  }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+  }
+
+  .sppu-marksheet-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    padding: 4px 6px !important;
+    box-shadow: none !important;
+    border: 1px solid #000000 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 }

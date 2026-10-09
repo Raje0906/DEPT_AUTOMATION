@@ -4,19 +4,27 @@ import api from '../api/axios';
 const AuthContext = createContext(null);
 
 const DEMO_USERS = {
-  'hod@meswadiacoe.edu': {
+  'nfs@meswadiacoe.edu': {
     id: 1,
-    name: 'Dr. A. B. Patil',
-    email: 'hod@meswadiacoe.edu',
+    name: 'Dr.(Mrs.) N. F. Shaikh',
+    email: 'nfs@meswadiacoe.edu',
     role: 'hod',
-    employee_id: 'HOD001',
+    employee_id: 'NFS',
   },
-  'rajan@meswadiacoe.edu': {
+  'skw@meswadiacoe.edu': {
     id: 2,
-    name: 'Prof. Rajan Sharma',
-    email: 'rajan@meswadiacoe.edu',
+    name: 'Dr. (Mrs.) S. K. Wagh',
+    email: 'skw@meswadiacoe.edu',
     role: 'faculty',
-    employee_id: 'FAC001',
+    employee_id: 'SKW',
+  },
+  'ssr@meswadiacoe.edu': {
+    id: 10,
+    name: 'Dr. (Mrs.) S. S. Raskar',
+    email: 'ssr@meswadiacoe.edu',
+    role: 'faculty',
+    employee_id: 'SSR',
+    is_seminar_coordinator: true,
   },
   'ce6a001@meswadiacoe.edu': {
     id: 3,
@@ -53,52 +61,47 @@ export function AuthProvider({ children }) {
       } catch {
         localStorage.removeItem('user');
       }
+      api.get('/auth/me').then(res => {
+        if (res.data?.user) {
+          localStorage.setItem('user', JSON.stringify(res.data.user));
+          setUser(res.data.user);
+        }
+      }).catch(() => {});
     }
     setLoading(false);
   }, []);
 
   const login = async (identifier, password) => {
-    try {
-      const res = await api.post('/auth/login', { identifier, password });
-      const { token, user: userData } = res.data;
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(userData));
-      setUser(userData);
-      return userData;
-    } catch (err) {
-      // Offline / Demo fallback when backend or database is unreachable
-      const key = identifier?.trim().toLowerCase();
-      const matched = DEMO_USERS[key] || (
-        key?.includes('hod')
-          ? DEMO_USERS['hod@meswadiacoe.edu']
-          : key?.includes('faculty') || key?.includes('rajan')
-          ? DEMO_USERS['rajan@meswadiacoe.edu']
-          : DEMO_USERS['ce6a001@meswadiacoe.edu']
-      );
-
-      if (matched) {
-        const token = 'demo-token';
-        localStorage.setItem('token', token);
-        localStorage.setItem('user', JSON.stringify(matched));
-        setUser(matched);
-        return matched;
-      }
-
-      throw err;
-    }
+    const res = await api.post('/auth/login', { identifier, password });
+    const { token, user: userData } = res.data;
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(userData));
+    setUser(userData);
+    return userData;
   };
 
-  const loginDemo = (role = 'student') => {
-    const roleMap = {
-      hod: DEMO_USERS['hod@meswadiacoe.edu'],
-      faculty: DEMO_USERS['rajan@meswadiacoe.edu'],
-      student: DEMO_USERS['ce6a001@meswadiacoe.edu'],
+  const loginDemo = async (role = 'student') => {
+    const credsMap = {
+      hod: { id: 'nfs', pw: 'faculty@123' },
+      faculty: { id: 'skw', pw: 'faculty@123' },
+      coordinator: { id: 'ssr', pw: 'faculty@123' },
+      student: { id: 'F23112050', pw: 'student@123' },
     };
-    const demoUser = roleMap[role] || DEMO_USERS['ce6a001@meswadiacoe.edu'];
-    localStorage.setItem('token', 'demo-token');
-    localStorage.setItem('user', JSON.stringify(demoUser));
-    setUser(demoUser);
-    return demoUser;
+    const target = credsMap[role] || credsMap.student;
+    return await login(target.id, target.pw);
+  };
+
+  const refreshUser = async () => {
+    try {
+      const res = await api.get('/auth/me');
+      if (res.data?.user) {
+        localStorage.setItem('user', JSON.stringify(res.data.user));
+        setUser(res.data.user);
+        return res.data.user;
+      }
+    } catch {
+      // ignore
+    }
   };
 
   const logout = () => {
@@ -108,7 +111,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, loginDemo, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, loginDemo, logout, refreshUser, loading }}>
       {children}
     </AuthContext.Provider>
   );

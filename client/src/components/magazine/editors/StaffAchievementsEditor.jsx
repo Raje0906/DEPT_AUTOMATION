@@ -114,9 +114,40 @@ export default function StaffAchievementsEditor() {
                         <textarea rows={2} className="input-field resize-none" value={a.description} onChange={e => updateAchievement(s.id, a.id, 'description', e.target.value)} placeholder="Additional details…" />
                       </div>
                     </div>
-                    <button onClick={() => toast('Upload certificate or photo for this achievement.')} className="text-xs text-draft border border-rule rounded-sm px-3 py-1.5 hover:bg-white transition-colors">
-                      Upload Certificate / Photo
-                    </button>
+                    <div className="pt-2 flex items-center gap-3">
+                      {a.photo ? (
+                        <div className="flex items-center gap-2">
+                          <img src={a.photo} alt="Achievement" className="w-12 h-12 object-cover rounded border border-rule" />
+                          <button
+                            type="button"
+                            onClick={() => updateAchievement(s.id, a.id, 'photo', null)}
+                            className="text-xs text-fail hover:underline"
+                          >
+                            Remove Photo
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="text-xs text-draft border border-rule rounded-sm px-3 py-1.5 hover:bg-white transition-colors cursor-pointer inline-flex items-center gap-1.5">
+                          <span>Upload Certificate / Photo</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const reader = new FileReader();
+                              reader.onload = (ev) => {
+                                updateAchievement(s.id, a.id, 'photo', ev.target.result);
+                                toast.success('Achievement photo uploaded.');
+                              };
+                              reader.readAsDataURL(file);
+                              e.target.value = '';
+                            }}
+                          />
+                        </label>
+                      )}
+                    </div>
                   </div>
                 ))}
 

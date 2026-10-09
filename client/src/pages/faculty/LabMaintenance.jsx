@@ -1,17 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import facultyService from '../../services/facultyService';
 
-const initialLabs = [
+const baseLabTemplates = [
   {
     id: 'LAB-01',
     name: 'Advanced Computing & AI Lab',
     room: 'Room 301',
     systems: 45,
     os: 'Ubuntu 22.04 LTS / NVIDIA CUDA',
-    inCharge: 'Prof. Rajan Mehta',
+    inCharge: 'Dr. (Mrs.) S. K. Wagh',
     status: 'Operational',
-    lastServiced: '02 Mar 2025',
-    nextAudit: '15 Apr 2025',
+    lastServiced: '02 Mar 2026',
+    nextAudit: '15 Apr 2026',
   },
   {
     id: 'LAB-02',
@@ -19,10 +20,10 @@ const initialLabs = [
     room: 'Room 302',
     systems: 40,
     os: 'Windows 11 Pro / VS Code Suite',
-    inCharge: 'Prof. Sunita Patil',
+    inCharge: 'Dr. (Mrs.) J. R. Pansare',
     status: 'Operational',
-    lastServiced: '25 Feb 2025',
-    nextAudit: '20 Apr 2025',
+    lastServiced: '25 Feb 2026',
+    nextAudit: '20 Apr 2026',
   },
   {
     id: 'LAB-03',
@@ -30,11 +31,11 @@ const initialLabs = [
     room: 'Room 304',
     systems: 42,
     os: 'CentOS Stream / PostgreSQL & Docker',
-    inCharge: 'Prof. Arjun Sharma',
+    inCharge: 'Dr. (Miss.) R. M. Wahul',
     status: 'Under Maintenance',
     issue: 'Server rack UPS replacement in progress',
-    lastServiced: '05 Mar 2025',
-    nextAudit: '10 Mar 2025',
+    lastServiced: '05 Mar 2026',
+    nextAudit: '10 Mar 2026',
   },
   {
     id: 'LAB-04',
@@ -42,10 +43,10 @@ const initialLabs = [
     room: 'Room 305',
     systems: 38,
     os: 'Kali Linux & Cisco Packet Tracer',
-    inCharge: 'Prof. Rajan Mehta',
+    inCharge: 'Dr. (Mrs.) S. R. Khonde',
     status: 'Operational',
-    lastServiced: '18 Feb 2025',
-    nextAudit: '25 Apr 2025',
+    lastServiced: '18 Feb 2026',
+    nextAudit: '25 Apr 2026',
   },
   {
     id: 'LAB-05',
@@ -53,10 +54,10 @@ const initialLabs = [
     room: 'Room 308',
     systems: 32,
     os: 'Raspberry Pi OS / Arduino IDE',
-    inCharge: 'Prof. Sunita Patil',
+    inCharge: 'Dr. (Mrs.) S. P. Khedkar',
     status: 'Operational',
-    lastServiced: '10 Feb 2025',
-    nextAudit: '30 Apr 2025',
+    lastServiced: '10 Feb 2026',
+    nextAudit: '30 Apr 2026',
   },
   {
     id: 'LAB-06',
@@ -64,15 +65,43 @@ const initialLabs = [
     room: 'Room 310',
     systems: 35,
     os: 'Dual Boot Linux/Windows 11',
-    inCharge: 'Prof. Arjun Sharma',
+    inCharge: 'Dr. (Mr). B. K. Bodkhe',
     status: 'Routine Inspection',
-    lastServiced: '01 Mar 2025',
-    nextAudit: '12 Mar 2025',
+    lastServiced: '01 Mar 2026',
+    nextAudit: '12 Mar 2026',
   },
 ];
 
 export default function LabMaintenance() {
-  const [labs, setLabs] = useState(initialLabs);
+  const [facultyList, setFacultyList] = useState([]);
+  const [labs, setLabs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadFacultyAndLabs() {
+      try {
+        const res = await facultyService.getAllFaculty();
+        const facs = res.faculty || [];
+        setFacultyList(facs);
+
+        // Assign real faculty members from database to the lab in-charge roles
+        const initializedLabs = baseLabTemplates.map((lab, index) => {
+          const assignedFac = facs[index % (facs.length || 1)];
+          return {
+            ...lab,
+            inCharge: assignedFac ? `${assignedFac.name} (${assignedFac.employee_id})` : 'Unassigned',
+            inChargeId: assignedFac ? assignedFac.id : null,
+          };
+        });
+        setLabs(initializedLabs);
+      } catch (err) {
+        console.error('Failed to load faculty for labs:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadFacultyAndLabs();
+  }, []);
   const [filter, setFilter] = useState('all');
   const [showModal, setShowModal] = useState(false);
   const [newLog, setNewLog] = useState({
@@ -291,7 +320,7 @@ export default function LabMaintenance() {
 
               <div>
                 <label className="input-label">Severity Level</label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {['Low', 'Medium', 'Critical'].map((level) => (
                     <button
                       key={level}

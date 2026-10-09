@@ -102,7 +102,7 @@ export default function ClassReports() {
         <div className="p-4 bg-white border border-rule rounded-sm">
           <p className="text-xs uppercase tracking-wider text-draft font-semibold">Backlogs</p>
           <p className="font-serif text-3xl font-bold text-[#8B3A3A] mt-1">5</p>
-          <p className="text-xs text-draft mt-1 font-medium">Eligible for revaluation / remedial</p>
+          <p className="text-xs text-draft mt-1 font-medium">Eligible for remedial support</p>
         </div>
       </div>
 

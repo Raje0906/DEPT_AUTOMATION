@@ -1,7 +1,7 @@
 const express = require('express');
 const pool = require('../db/pool');
 const { verifyToken, requireRole } = require('../middleware/auth');
-const { computeSGPA, computeCGPA } = require('../services/gradeCalculator');
+const { computeSGPA, computeCGPA, computeSubjectRollup } = require('../services/gradeCalculator');
 const { auditRecord } = require('../middleware/auditLogger');
 
 const router = express.Router();
@@ -10,42 +10,46 @@ router.use(verifyToken, requireRole('hod'));
 // ─── GET /api/hod/dashboard ───────────────────────────────────────────────────
 router.get('/dashboard', async (req, res) => {
   try {
+    const selectedYear = req.query.academic_year || '2026-27';
+    const selectedSem = req.query.semester ? parseInt(req.query.semester, 10) : 5;
+
     // Dept-wide subject submission status table
     const result = await pool.query(
-      `SELECT fsm.id, s.name AS subject_name, s.code, s.semester, fsm.division, fsm.academic_year,
+      `SELECT fsm.id, s.id AS subject_id, s.name AS subject_name, s.code, s.semester, s.credits,
+              s.subject_type, s.has_practical, fsm.division, fsm.academic_year,
               u.name AS faculty_name, f.employee_id,
-              COUNT(m.id) AS marks_entered,
-              COUNT(st.id) AS enrolled,
+              COUNT(sem.id) AS marks_entered,
+              (SELECT COUNT(*) FROM students st WHERE st.division = fsm.division AND st.current_semester = fsm.semester) AS enrolled,
               CASE
-                WHEN COUNT(m.id) = 0 THEN 'not_started'
-                WHEN COUNT(m.id) FILTER (WHERE m.status = 'published') = COUNT(m.id) AND COUNT(m.id) > 0 THEN 'published'
-                WHEN COUNT(m.id) FILTER (WHERE m.status = 'approved') = COUNT(m.id) AND COUNT(m.id) > 0 THEN 'approved'
-                WHEN COUNT(m.id) FILTER (WHERE m.status = 'submitted') > 0 THEN 'submitted'
+                WHEN COUNT(sem.id) = 0 THEN 'not_started'
+                WHEN COUNT(sem.id) FILTER (WHERE sem.status = 'published') > 0 THEN 'published'
+                WHEN COUNT(sem.id) FILTER (WHERE sem.status = 'approved') = COUNT(sem.id) AND COUNT(sem.id) > 0 THEN 'approved'
+                WHEN COUNT(sem.id) FILTER (WHERE sem.status = 'submitted') > 0 THEN 'submitted'
                 ELSE 'draft'
               END AS status
        FROM faculty_subject_map fsm
        JOIN subjects s ON s.id = fsm.subject_id
        JOIN faculty f ON f.id = fsm.faculty_id
        JOIN users u ON u.id = f.user_id
-       LEFT JOIN students st ON st.division = fsm.division AND st.current_semester = s.semester
-       LEFT JOIN marks m ON m.subject_id = s.id AND m.semester = fsm.semester AND m.academic_year = fsm.academic_year
-       WHERE f.department = $1
+       LEFT JOIN student_exam_marks sem ON sem.subject_id = s.id AND sem.semester = fsm.semester AND sem.academic_year = fsm.academic_year
+       WHERE f.department = $1 AND fsm.academic_year = $2
        GROUP BY fsm.id, s.id, u.name, f.employee_id
-       ORDER BY s.semester, s.code`,
-      [req.user.dept]
+       ORDER BY s.semester, s.code, fsm.division`,
+      [req.user.dept, selectedYear]
     );
 
-    // Pending revaluation requests
-    const revalResult = await pool.query(
-      `SELECT COUNT(*) AS pending FROM revaluation_requests r
-       JOIN subjects s ON s.id = r.subject_id
-       WHERE s.department = $1 AND r.status = 'pending'`,
-      [req.user.dept]
+
+    // Publication status per division for this semester & year
+    const pubStatusRes = await pool.query(
+      `SELECT division, status, published_at 
+       FROM result_publish_status 
+       WHERE semester = $1 AND academic_year = $2 AND department = $3`,
+      [selectedSem, selectedYear, req.user.dept]
     );
 
     res.json({
       subjects: result.rows,
-      pendingRevaluations: parseInt(revalResult.rows[0].pending, 10),
+      publishStatus: pubStatusRes.rows,
     });
   } catch (err) {
     console.error('[HOD] Dashboard error:', err.message);
@@ -53,53 +57,119 @@ router.get('/dashboard', async (req, res) => {
   }
 });
 
+// ─── GET /api/hod/exam-completion-status ───────────────────────────────────────
+// Detailed matrix showing status of each exam type per subject and division
+router.get('/exam-completion-status', async (req, res) => {
+  try {
+    const semester = req.query.semester ? parseInt(req.query.semester, 10) : 5;
+    const academicYear = req.query.academic_year || '2026-27';
+
+    const examTypesRes = await pool.query(`SELECT * FROM exam_types ORDER BY display_order`);
+    const examTypes = examTypesRes.rows;
+
+    const matrixRes = await pool.query(
+      `SELECT fsm.id AS map_id, fsm.division, fsm.semester, fsm.academic_year,
+              s.id AS subject_id, s.name AS subject_name, s.code AS subject_code, s.subject_type,
+              u.name AS faculty_name, f.employee_id,
+              et.id AS exam_type_id, et.code AS exam_code, et.name AS exam_name,
+              COUNT(sem.id) AS entered_count,
+              (SELECT COUNT(*) FROM students st WHERE st.division = fsm.division AND st.current_semester = fsm.semester) AS total_students,
+              MAX(sem.status) AS current_status
+       FROM faculty_subject_map fsm
+       JOIN subjects s ON s.id = fsm.subject_id
+       JOIN faculty f ON f.id = fsm.faculty_id
+       JOIN users u ON u.id = f.user_id
+       CROSS JOIN exam_types et
+       LEFT JOIN students st2 ON st2.division = fsm.division AND st2.current_semester = fsm.semester
+       LEFT JOIN student_exam_marks sem ON sem.student_id = st2.id 
+         AND sem.subject_id = s.id 
+         AND sem.exam_type_id = et.id 
+         AND sem.semester = fsm.semester 
+         AND sem.academic_year = fsm.academic_year
+       WHERE f.department = $1 AND fsm.semester = $2 AND fsm.academic_year = $3
+       GROUP BY fsm.id, fsm.division, fsm.semester, fsm.academic_year, s.id, u.name, f.employee_id, et.id
+       ORDER BY s.code, fsm.division, et.display_order`,
+      [req.user.dept, semester, academicYear]
+    );
+
+    res.json({
+      semester,
+      academicYear,
+      examTypes,
+      completionMatrix: matrixRes.rows
+    });
+  } catch (err) {
+    console.error('[HOD] Exam completion status error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ─── GET /api/hod/marks/:subjectId ────────────────────────────────────────────
-// Full mark list for approval review + anomaly detection
+// Full mark list for approval review (strictly read-only)
 router.get('/marks/:subjectId', async (req, res) => {
   try {
     const { subjectId } = req.params;
-    const { semester, academicYear } = req.query;
+    const semester = parseInt(req.query.semester, 10) || 5;
+    const academicYear = req.query.academic_year || '2026-27';
+    const division = req.query.division || 'TE 1';
 
+    const subjectResult = await pool.query(`SELECT * FROM subjects WHERE id = $1`, [subjectId]);
+    if (subjectResult.rows.length === 0) return res.status(404).json({ error: 'Subject not found' });
+    const subject = subjectResult.rows[0];
+
+    const examTypesRes = await pool.query(`SELECT * FROM exam_types ORDER BY display_order`);
+    const examTypes = examTypesRes.rows;
+
+    // Fetch marks per student
     const marksResult = await pool.query(
-      `SELECT m.id AS mark_id, m.cie_marks, m.practical_marks, m.end_sem_marks,
-              m.total, m.grade, m.grade_points, m.is_backlog, m.status,
-              u.name AS student_name, s2.roll_no, s2.enrollment_no,
-              sub.name AS subject_name, sub.code, sub.max_cie, sub.max_end_sem,
-              sub.max_practical, sub.has_practical, sub.credits
-       FROM marks m
-       JOIN students s2 ON s2.id = m.student_id
-       JOIN users u ON u.id = s2.user_id
-       JOIN subjects sub ON sub.id = m.subject_id
-       WHERE m.subject_id = $1 AND m.semester = $2 AND m.academic_year = $3
-       ORDER BY s2.roll_no`,
-      [subjectId, semester, academicYear || '2024-25']
+      `SELECT st.id AS student_id, st.roll_no, st.enrollment_no, u.name AS student_name,
+              sem.marks_obtained, sem.is_absent, sem.status,
+              et.id AS exam_type_id, et.code AS exam_code, et.name AS exam_name
+       FROM students st
+       JOIN users u ON u.id = st.user_id
+       LEFT JOIN student_exam_marks sem ON sem.student_id = st.id 
+         AND sem.subject_id = $1 AND sem.semester = $2 AND sem.academic_year = $3
+       LEFT JOIN exam_types et ON et.id = sem.exam_type_id
+       WHERE st.division = $4 AND st.current_semester = $2
+       ORDER BY CAST(NULLIF(regexp_replace(st.roll_no, '[^0-9]', '', 'g'), '') AS INTEGER), st.roll_no, et.display_order`,
+      [subjectId, semester, academicYear, division]
     );
 
-    const rows = marksResult.rows;
-
-    // Anomaly detection
-    const anomalies = [];
-    const totals = rows.map(r => parseFloat(r.total) || 0);
-    const avg = totals.length > 0 ? totals.reduce((a, b) => a + b, 0) / totals.length : 0;
-    const stdDev = totals.length > 1
-      ? Math.sqrt(totals.reduce((sum, t) => sum + Math.pow(t - avg, 2), 0) / totals.length)
-      : 0;
-
-    for (const row of rows) {
-      const t = parseFloat(row.total) || 0;
-      if (t === 0 && row.cie_marks === 0 && row.end_sem_marks === 0) {
-        anomalies.push({ rollNo: row.roll_no, type: 'all_zero', message: 'All marks are zero — possible missing entry' });
+    // Group marks by student
+    const studentMap = {};
+    for (const row of marksResult.rows) {
+      if (!studentMap[row.student_id]) {
+        studentMap[row.student_id] = {
+          student_id: row.student_id,
+          roll_no: row.roll_no,
+          enrollment_no: row.enrollment_no,
+          student_name: row.student_name,
+          marks: {},
+          overall_status: 'draft'
+        };
       }
-      const maxTotal = parseFloat(row.max_cie) + (row.has_practical ? parseFloat(row.max_practical) : 0) + parseFloat(row.max_end_sem);
-      if (t === maxTotal) {
-        anomalies.push({ rollNo: row.roll_no, type: 'full_marks', message: 'Full marks — verify entry' });
-      }
-      if (stdDev > 5 && Math.abs(t - avg) > 2.5 * stdDev) {
-        anomalies.push({ rollNo: row.roll_no, type: 'outlier', message: `Statistical outlier — ${t.toFixed(1)} is far from class average of ${avg.toFixed(1)}` });
+      if (row.exam_code) {
+        studentMap[row.student_id].marks[row.exam_code] = {
+          marks: row.marks_obtained,
+          isAbsent: row.is_absent,
+          status: row.status
+        };
+        if (row.status === 'submitted' || row.status === 'approved' || row.status === 'published') {
+          studentMap[row.student_id].overall_status = row.status;
+        }
       }
     }
 
-    res.json({ marks: rows, anomalies, classAverage: Math.round(avg * 10) / 10 });
+    const students = Object.values(studentMap);
+
+    res.json({
+      subject,
+      semester,
+      academicYear,
+      division,
+      examTypes,
+      students,
+    });
   } catch (err) {
     console.error('[HOD] Marks review error:', err.message);
     res.status(500).json({ error: 'Internal server error' });
@@ -110,30 +180,33 @@ router.get('/marks/:subjectId', async (req, res) => {
 router.post('/approve/:subjectId', async (req, res) => {
   try {
     const { subjectId } = req.params;
-    const { semester, academicYear } = req.body;
+    const { semester = 5, academicYear = '2026-27', division = 'TE 1' } = req.body;
 
     const updateResult = await pool.query(
-      `UPDATE marks SET status = 'approved', last_modified_at = NOW()
-       WHERE subject_id = $1 AND semester = $2 AND academic_year = $3 AND status = 'submitted'
-       RETURNING id`,
-      [subjectId, semester, academicYear]
+      `UPDATE student_exam_marks sem
+       SET status = 'approved', last_modified_at = NOW()
+       FROM students st
+       WHERE sem.student_id = st.id AND sem.subject_id = $1 AND sem.semester = $2 
+         AND sem.academic_year = $3 AND st.division = $4 AND sem.status = 'submitted'
+       RETURNING sem.id`,
+      [subjectId, semester, academicYear, division]
     );
 
     if (updateResult.rows.length === 0) {
-      return res.status(400).json({ error: 'No submitted marks found to approve for this subject' });
+      return res.status(400).json({ error: 'No submitted marks found to approve for this subject & division' });
     }
 
     auditRecord({
-      tableName: 'marks',
+      tableName: 'student_exam_marks',
       recordId: parseInt(subjectId, 10),
       changedBy: req.user.id,
       oldValue: { status: 'submitted' },
       newValue: { status: 'approved' },
       action: 'UPDATE',
-      reason: 'HOD approved marks',
+      reason: `HOD approved marks for subject ${subjectId} (${division})`,
     });
 
-    res.json({ message: `Approved ${updateResult.rows.length} mark entries. Subject is now locked for faculty edits.` });
+    res.json({ message: `Approved ${updateResult.rows.length} mark entries. Marks are locked for faculty edits.` });
   } catch (err) {
     console.error('[HOD] Approve error:', err.message);
     res.status(500).json({ error: 'Internal server error' });
@@ -144,29 +217,33 @@ router.post('/approve/:subjectId', async (req, res) => {
 router.post('/sendback/:subjectId', async (req, res) => {
   try {
     const { subjectId } = req.params;
-    const { semester, academicYear, comment } = req.body;
+    const { semester = 5, academicYear = '2026-27', division = 'TE 1', comment } = req.body;
 
-    if (!comment || comment.trim().length < 10) {
-      return res.status(400).json({ error: 'A detailed comment is required when sending marks back for correction' });
+    if (!comment || comment.trim().length < 5) {
+      return res.status(400).json({ error: 'A remark is required when sending marks back for correction' });
     }
 
-    await pool.query(
-      `UPDATE marks SET status = 'draft', last_modified_at = NOW()
-       WHERE subject_id = $1 AND semester = $2 AND academic_year = $3 AND status = 'submitted'`,
-      [subjectId, semester, academicYear]
+    const updateRes = await pool.query(
+      `UPDATE student_exam_marks sem
+       SET status = 'draft', last_modified_at = NOW()
+       FROM students st
+       WHERE sem.student_id = st.id AND sem.subject_id = $1 AND sem.semester = $2 
+         AND sem.academic_year = $3 AND st.division = $4 AND sem.status IN ('submitted', 'approved')
+       RETURNING sem.id`,
+      [subjectId, semester, academicYear, division]
     );
 
     auditRecord({
-      tableName: 'marks',
+      tableName: 'student_exam_marks',
       recordId: parseInt(subjectId, 10),
       changedBy: req.user.id,
       oldValue: { status: 'submitted' },
       newValue: { status: 'draft' },
       action: 'UPDATE',
-      reason: `HOD sent back for correction: ${comment}`,
+      reason: `HOD sent back for correction (${division}): ${comment}`,
     });
 
-    res.json({ message: 'Marks sent back to faculty for correction.', comment });
+    res.json({ message: `Sent back ${updateRes.rows.length} marks to faculty as draft.`, comment });
   } catch (err) {
     console.error('[HOD] Send back error:', err.message);
     res.status(500).json({ error: 'Internal server error' });
@@ -176,42 +253,24 @@ router.post('/sendback/:subjectId', async (req, res) => {
 // ─── POST /api/hod/publish ────────────────────────────────────────────────────
 router.post('/publish', async (req, res) => {
   try {
-    const { semester, academicYear, division, confirmPublish } = req.body;
+    const { semester = 5, academicYear = '2026-27', division = 'TE 1', confirmPublish } = req.body;
 
     if (!confirmPublish) {
       return res.status(400).json({ error: 'Publish confirmation is required' });
-    }
-
-    // Ensure all subjects for this semester/division are approved
-    const pendingCheck = await pool.query(
-      `SELECT COUNT(*) FROM marks m
-       JOIN faculty_subject_map fsm ON fsm.subject_id = m.subject_id
-       JOIN faculty f ON f.id = fsm.faculty_id
-       WHERE m.semester = $1 AND m.academic_year = $2 AND fsm.division = $3
-       AND f.department = $4 AND m.status NOT IN ('approved','published')`,
-      [semester, academicYear, division, req.user.dept]
-    );
-
-    const pendingCount = parseInt(pendingCheck.rows[0].count, 10);
-    if (pendingCount > 0) {
-      return res.status(400).json({
-        error: `${pendingCount} mark entries are not yet approved. All marks must be approved before publishing.`,
-      });
     }
 
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
 
-      // Publish all approved marks
-      await client.query(
-        `UPDATE marks SET status = 'published', last_modified_at = NOW()
-         WHERE subject_id IN (
-           SELECT fsm.subject_id FROM faculty_subject_map fsm
-           JOIN faculty f ON f.id = fsm.faculty_id
-           WHERE fsm.semester = $1 AND fsm.academic_year = $2 AND fsm.division = $3 AND f.department = $4
-         ) AND semester = $1 AND academic_year = $2 AND status = 'approved'`,
-        [semester, academicYear, division, req.user.dept]
+      // Publish all marks for this division & semester
+      const pubRes = await client.query(
+        `UPDATE student_exam_marks sem
+         SET status = 'published', last_modified_at = NOW()
+         FROM students st
+         WHERE sem.student_id = st.id AND sem.semester = $1 AND sem.academic_year = $2 AND st.division = $3
+         RETURNING sem.id`,
+        [semester, academicYear, division]
       );
 
       // Update or insert publish status record
@@ -227,14 +286,14 @@ router.post('/publish', async (req, res) => {
         tableName: 'result_publish_status',
         recordId: parseInt(semester, 10),
         changedBy: req.user.id,
-        oldValue: { status: 'approved' },
+        oldValue: { status: 'open' },
         newValue: { status: 'published' },
         action: 'UPDATE',
-        reason: `HOD published Semester ${semester} results for ${division} division`,
+        reason: `HOD published Semester ${semester} results for ${division}`,
       });
 
       await client.query('COMMIT');
-      res.json({ message: `Semester ${semester} results published. Students can now view their results.` });
+      res.json({ message: `Semester ${semester} results published for ${division} (${pubRes.rows.length} marks published). Students can now view their official results.` });
     } catch (err) {
       await client.query('ROLLBACK');
       throw err;
@@ -250,65 +309,146 @@ router.post('/publish', async (req, res) => {
 // ─── GET /api/hod/analytics ───────────────────────────────────────────────────
 router.get('/analytics', async (req, res) => {
   try {
-    const { semester, academicYear } = req.query;
+    const semester = req.query.semester ? parseInt(req.query.semester, 10) : null;
+    const academicYear = req.query.academic_year || req.query.academicYear || '2026-27';
 
-    const marksResult = await pool.query(
-      `SELECT m.grade, m.grade_points, m.total, m.is_backlog,
-              s.credits, s.semester AS sub_semester, u.name AS student_name, s2.roll_no
-       FROM marks m
-       JOIN students s2 ON s2.id = m.student_id
-       JOIN users u ON u.id = s2.user_id
-       JOIN subjects s ON s.id = m.subject_id
+    // 1. Fetch subjects for this department (and optional semester filter)
+    let subjectsQuery = `SELECT * FROM subjects WHERE department = $1`;
+    const subjectsParams = [req.user.dept];
+    if (semester) {
+      subjectsQuery += ` AND semester = $2`;
+      subjectsParams.push(semester);
+    }
+    const subjectsRes = await pool.query(subjectsQuery, subjectsParams);
+    const subjectsMap = {};
+    for (const s of subjectsRes.rows) {
+      subjectsMap[s.id] = s;
+    }
+
+    // 2. Fetch real-time student_exam_marks joined with students and exam types
+    const marksRes = await pool.query(
+      `SELECT sem.student_id, sem.subject_id, sem.marks_obtained, sem.is_absent, sem.status,
+              et.code AS exam_code, et.has_result_impact,
+              s2.roll_no, s2.division, s.credits, s.semester AS sub_semester
+       FROM student_exam_marks sem
+       JOIN exam_types et ON et.id = sem.exam_type_id
+       JOIN subjects s ON s.id = sem.subject_id
+       JOIN students s2 ON s2.id = sem.student_id
        WHERE s.department = $1
-         AND ($2::int IS NULL OR m.semester = $2)
-         AND ($3::text IS NULL OR m.academic_year = $3)
-         AND m.status = 'published'
-       ORDER BY m.semester, s2.roll_no`,
-      [req.user.dept, semester || null, academicYear || null]
+         AND ($2::text IS NULL OR sem.academic_year = $2)
+         AND ($3::int IS NULL OR sem.semester = $3)
+         AND sem.status = 'published'
+       ORDER BY sem.student_id, sem.subject_id`,
+      [req.user.dept, academicYear, semester]
     );
 
-    const rows = marksResult.rows;
-    const total = rows.length;
-    const passed = rows.filter(r => r.grade !== 'F').length;
-    const gradeDistribution = {};
-    for (const r of rows) {
-      gradeDistribution[r.grade] = (gradeDistribution[r.grade] || 0) + 1;
+    // Group marks by student -> subject -> examRows
+    const studentMap = {};
+    for (const r of marksRes.rows) {
+      if (!studentMap[r.student_id]) {
+        studentMap[r.student_id] = { roll_no: r.roll_no, division: r.division, subjects: {} };
+      }
+      if (!studentMap[r.student_id].subjects[r.subject_id]) {
+        studentMap[r.student_id].subjects[r.subject_id] = [];
+      }
+      studentMap[r.student_id].subjects[r.subject_id].push(r);
     }
 
-    // SGPA distribution for students
-    const studentSGPAs = {};
-    for (const r of rows) {
-      if (!studentSGPAs[r.roll_no]) studentSGPAs[r.roll_no] = { subjects: [] };
-      studentSGPAs[r.roll_no].subjects.push({ credits: r.credits, gradePoints: parseFloat(r.grade_points) || 0 });
+    let total = 0;
+    let passed = 0;
+    const gradeDistribution = { O: 0, 'A+': 0, A: 0, 'B+': 0, B: 0, C: 0, P: 0, F: 0 };
+    const studentSGPAs = [];
+
+    for (const [studentId, studData] of Object.entries(studentMap)) {
+      const studentSubjectsForSGPA = [];
+      for (const [subjectId, examRows] of Object.entries(studData.subjects)) {
+        const subject = subjectsMap[subjectId];
+        if (!subject) continue;
+        const rollup = computeSubjectRollup(subject, examRows);
+
+        if (rollup.hasAnyMark) {
+          total++;
+          if (rollup.grade !== 'F') {
+            passed++;
+          }
+          gradeDistribution[rollup.grade] = (gradeDistribution[rollup.grade] || 0) + 1;
+          studentSubjectsForSGPA.push({
+            credits: subject.credits,
+            gradePoints: rollup.gradePoints,
+          });
+        }
+      }
+      if (studentSubjectsForSGPA.length > 0) {
+        const sgpa = computeSGPA(studentSubjectsForSGPA);
+        studentSGPAs.push(sgpa);
+      }
     }
-    const sgpaValues = Object.values(studentSGPAs).map(s => computeSGPA(s.subjects));
-    const avgSGPA = sgpaValues.length > 0
-      ? Math.round((sgpaValues.reduce((a, b) => a + b, 0) / sgpaValues.length) * 100) / 100
+
+    // Fallback: If no real-time exam marks exist for the selection, check legacy marks table
+    if (total === 0) {
+      const legacyRes = await pool.query(
+        `SELECT m.grade, m.grade_points, s.credits, s2.roll_no
+         FROM marks m
+         JOIN students s2 ON s2.id = m.student_id
+         JOIN subjects s ON s.id = m.subject_id
+         WHERE s.department = $1
+           AND ($2::int IS NULL OR m.semester = $2)
+           AND ($3::text IS NULL OR m.academic_year = $3)
+           AND m.status = 'published'`,
+        [req.user.dept, semester, academicYear]
+      );
+      if (legacyRes.rows.length > 0) {
+        total = legacyRes.rows.length;
+        passed = legacyRes.rows.filter(r => r.grade !== 'F').length;
+        const legacyStudents = {};
+        for (const r of legacyRes.rows) {
+          gradeDistribution[r.grade] = (gradeDistribution[r.grade] || 0) + 1;
+          if (!legacyStudents[r.roll_no]) legacyStudents[r.roll_no] = [];
+          legacyStudents[r.roll_no].push({ credits: r.credits, gradePoints: parseFloat(r.grade_points) || 0 });
+        }
+        for (const list of Object.values(legacyStudents)) {
+          studentSGPAs.push(computeSGPA(list));
+        }
+      }
+    }
+
+    const failed = total - passed;
+    const passPercentage = total > 0 ? Math.round((passed / total) * 1000) / 10 : 0;
+    const avgSGPA = studentSGPAs.length > 0
+      ? Math.round((studentSGPAs.reduce((a, b) => a + b, 0) / studentSGPAs.length) * 100) / 100
       : 0;
 
-    // Faculty compliance
+    // Faculty submission compliance with live exam submissions
     const complianceResult = await pool.query(
       `SELECT u.name AS faculty_name, f.employee_id,
-              COUNT(fsm.id) AS total_subjects,
-              COUNT(fsm.id) FILTER (WHERE EXISTS (
-                SELECT 1 FROM marks m WHERE m.subject_id = fsm.subject_id
-                AND m.status IN ('submitted','approved','published')
+              COUNT(DISTINCT fsm.id) AS total_subjects,
+              COUNT(DISTINCT fsm.id) FILTER (WHERE EXISTS (
+                SELECT 1 FROM student_exam_marks sem
+                WHERE sem.subject_id = fsm.subject_id
+                  AND sem.semester = fsm.semester
+                  AND sem.academic_year = fsm.academic_year
+                  AND sem.status IN ('submitted','approved','published')
               )) AS submitted_count
        FROM faculty_subject_map fsm
        JOIN faculty f ON f.id = fsm.faculty_id
        JOIN users u ON u.id = f.user_id
        WHERE f.department = $1
-       GROUP BY u.name, f.employee_id`,
-      [req.user.dept]
+         AND ($2::int IS NULL OR fsm.semester = $2)
+         AND ($3::text IS NULL OR fsm.academic_year = $3)
+       GROUP BY u.name, f.employee_id
+       ORDER BY u.name`,
+      [req.user.dept, semester, academicYear]
     );
 
     res.json({
+      academicYear,
+      semester,
       total,
       passed,
-      failed: total - passed,
-      passPercentage: total > 0 ? Math.round((passed / total) * 1000) / 10 : 0,
+      failed,
+      passPercentage,
       gradeDistribution,
-      sgpaValues,
+      sgpaValues: studentSGPAs,
       averageSGPA: avgSGPA,
       facultyCompliance: complianceResult.rows,
     });
@@ -326,17 +466,18 @@ router.get('/audit-log', async (req, res) => {
 
     const result = await pool.query(
       `SELECT a.id, a.table_name, a.record_id, a.action, a.old_value, a.new_value,
-              a.reason, a.created_at, u.name AS changed_by_name, u.role AS changed_by_role
+              a.reason, a.created_at, a.ip_address, a.user_agent,
+              u.name AS changed_by_name, u.role AS changed_by_role
        FROM audit_log a
-       JOIN users u ON u.id = a.changed_by
-       WHERE u.department = $1
+       LEFT JOIN users u ON u.id = a.changed_by
+       WHERE (u.department = $1 OR a.changed_by IS NULL)
        ORDER BY a.created_at DESC
        LIMIT $2 OFFSET $3`,
       [req.user.dept, limit, offset]
     );
 
     const countResult = await pool.query(
-      `SELECT COUNT(*) FROM audit_log a JOIN users u ON u.id = a.changed_by WHERE u.department = $1`,
+      `SELECT COUNT(*) FROM audit_log a LEFT JOIN users u ON u.id = a.changed_by WHERE (u.department = $1 OR a.changed_by IS NULL)`,
       [req.user.dept]
     );
 
@@ -352,31 +493,6 @@ router.get('/audit-log', async (req, res) => {
   }
 });
 
-// ─── GET /api/hod/revaluation ─────────────────────────────────────────────────
-router.get('/revaluation', async (req, res) => {
-  try {
-    const result = await pool.query(
-      `SELECT r.id, r.status, r.student_remark, r.hod_remark, r.requested_at, r.updated_at,
-              u.name AS student_name, s2.roll_no, sub.name AS subject_name, sub.code,
-              r.semester, r.academic_year, uf.name AS faculty_name
-       FROM revaluation_requests r
-       JOIN students s2 ON s2.id = r.student_id
-       JOIN users u ON u.id = s2.user_id
-       JOIN subjects sub ON sub.id = r.subject_id
-       LEFT JOIN faculty_subject_map fsm ON fsm.subject_id = r.subject_id
-       LEFT JOIN faculty f ON f.id = fsm.faculty_id
-       LEFT JOIN users uf ON uf.id = f.user_id
-       WHERE sub.department = $1
-       ORDER BY r.requested_at DESC`,
-      [req.user.dept]
-    );
-
-    res.json({ requests: result.rows });
-  } catch (err) {
-    console.error('[HOD] Revaluation list error:', err.message);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
 
 // ─── POST /api/hod/manual-override ────────────────────────────────────────────
 router.post('/manual-override', async (req, res) => {
@@ -522,7 +638,7 @@ router.post('/teachers/assign', async (req, res) => {
       return res.status(400).json({ error: 'Faculty is required' });
     }
 
-    const year = academicYear || '2025-26';
+    const year = academicYear || '2026-27';
 
     // Support both batch assignment (assignments: [...]) and single assignment
     const itemsToAssign = Array.isArray(assignments) && assignments.length > 0
@@ -626,7 +742,7 @@ router.post('/teachers/set-class-teacher', async (req, res) => {
     if (!facultyId || !className) {
       return res.status(400).json({ error: 'Faculty and class name are required' });
     }
-    const year = academicYear || '2025-26';
+    const year = academicYear || '2026-27';
 
     await pool.query(
       `INSERT INTO class_teachers (faculty_id, class_name, academic_year)
@@ -691,6 +807,285 @@ router.delete('/teachers/unassign/:mappingId', async (req, res) => {
   } catch (err) {
     console.error('[HOD] Unassign teacher error:', err.message);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── GET /api/hod/term-rollover/status ────────────────────────────────────────
+router.get('/term-rollover/status', async (req, res) => {
+  try {
+    const selectedYear = req.query.academic_year || '2026-27';
+
+    // 1. Current student breakdown by semester and division
+    const studentBreakdownRes = await pool.query(
+      `SELECT current_semester, division, COUNT(*) AS student_count
+       FROM students
+       GROUP BY current_semester, division
+       ORDER BY current_semester, division`
+    );
+
+    // 2. Available subjects grouped by semester
+    const subjectsRes = await pool.query(
+      `SELECT id, name, code, semester, credits, subject_type, has_practical
+       FROM subjects
+       ORDER BY semester, code`
+    );
+
+    // 3. Faculty count
+    const facultyCountRes = await pool.query(
+      `SELECT COUNT(*) AS total_faculty FROM faculty WHERE department = $1`,
+      [req.user.dept || 'Computer Engineering']
+    );
+
+    // 4. Existing publication statuses for selected year
+    const publishRes = await pool.query(
+      `SELECT semester, division, status, published_at
+       FROM result_publish_status
+       WHERE academic_year = $1 AND department = $2
+       ORDER BY semester, division`,
+      [selectedYear, req.user.dept || 'Computer Engineering']
+    );
+
+    // 5. Existing marks counts by semester and academic year
+    const marksStatsRes = await pool.query(
+      `SELECT semester, academic_year, COUNT(*) AS total_marks
+       FROM student_exam_marks
+       GROUP BY semester, academic_year
+       ORDER BY academic_year DESC, semester ASC`
+    );
+
+    res.json({
+      academicYear: selectedYear,
+      availableYears: ['2026-27', '2025-26', '2024-25'],
+      studentBreakdown: studentBreakdownRes.rows,
+      subjects: subjectsRes.rows,
+      totalFaculty: parseInt(facultyCountRes.rows[0]?.total_faculty || 0, 10),
+      publishStatuses: publishRes.rows,
+      marksStats: marksStatsRes.rows
+    });
+  } catch (err) {
+    console.error('[HOD] Term rollover status error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch rollover status' });
+  }
+});
+
+// ─── POST /api/hod/term-rollover/preview ───────────────────────────────────────
+router.post('/term-rollover/preview', async (req, res) => {
+  try {
+    const { fromSemester, toSemester, academicYear, divisions } = req.body;
+    const fromSem = parseInt(fromSemester, 10);
+    const toSem = parseInt(toSemester, 10);
+    const ay = academicYear || '2026-27';
+    const divList = Array.isArray(divisions) && divisions.length > 0 ? divisions : ['TE 1', 'TE 2', 'TE 3'];
+
+    // 1. Count students eligible for promotion
+    const eligibleStudentsRes = await pool.query(
+      `SELECT s.id, s.roll_no, s.enrollment_no, s.division, u.name
+       FROM students s
+       JOIN users u ON u.id = s.user_id
+       WHERE s.current_semester = $1 AND s.division = ANY($2::text[])
+       ORDER BY s.division, s.roll_no`,
+      [fromSem, divList]
+    );
+
+    // 2. Fetch target semester subjects
+    const targetSubjectsRes = await pool.query(
+      `SELECT id, name, code, semester, credits, subject_type
+       FROM subjects
+       WHERE semester = $1
+       ORDER BY code`,
+      [toSem]
+    );
+
+    // 3. Check if target semester marks already exist
+    const existingTargetMarksRes = await pool.query(
+      `SELECT COUNT(*) AS count
+       FROM student_exam_marks
+       WHERE semester = $1 AND academic_year = $2`,
+      [toSem, ay]
+    );
+
+    // 4. Fetch faculty members available
+    const facultyRes = await pool.query(
+      `SELECT f.id, u.name, f.employee_id, f.designation
+       FROM faculty f
+       JOIN users u ON u.id = f.user_id
+       WHERE f.department = $1
+       ORDER BY f.id ASC`,
+      [req.user.dept || 'Computer Engineering']
+    );
+
+    res.json({
+      fromSemester: fromSem,
+      toSemester: toSem,
+      academicYear: ay,
+      divisions: divList,
+      eligibleStudentsCount: eligibleStudentsRes.rows.length,
+      sampleStudents: eligibleStudentsRes.rows.slice(0, 5),
+      targetSubjects: targetSubjectsRes.rows,
+      targetSubjectsCount: targetSubjectsRes.rows.length,
+      existingTargetMarksCount: parseInt(existingTargetMarksRes.rows[0]?.count || 0, 10),
+      availableFacultyCount: facultyRes.rows.length
+    });
+  } catch (err) {
+    console.error('[HOD] Term rollover preview error:', err.message);
+    res.status(500).json({ error: 'Failed to generate rollover preview' });
+  }
+});
+
+// ─── POST /api/hod/term-rollover/execute ───────────────────────────────────────
+router.post('/term-rollover/execute', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const {
+      fromSemester,
+      toSemester,
+      academicYear,
+      divisions,
+      advanceStudents = true,
+      autoAssignFaculty = true,
+      initPublishStatus = true
+    } = req.body;
+
+    const fromSem = parseInt(fromSemester, 10);
+    const toSem = parseInt(toSemester, 10);
+    const ay = academicYear || '2026-27';
+    const divList = Array.isArray(divisions) && divisions.length > 0 ? divisions : ['TE 1', 'TE 2', 'TE 3'];
+
+    if (!fromSem || !toSem || fromSem === toSem) {
+      return res.status(400).json({ error: 'Valid distinct source and target semesters are required.' });
+    }
+
+    await client.query('BEGIN');
+
+    let updatedStudentsCount = 0;
+    let facultyMappingsCount = 0;
+
+    // 1. Advance Students
+    if (advanceStudents) {
+      const updateRes = await client.query(
+        `UPDATE students
+         SET current_semester = $1
+         WHERE current_semester = $2 AND division = ANY($3::text[])
+         RETURNING id`,
+        [toSem, fromSem, divList]
+      );
+      updatedStudentsCount = updateRes.rows.length;
+    }
+
+    // 2. Auto-Assign Faculty to Target Semester Subjects
+    if (autoAssignFaculty) {
+      const targetSubjectsRes = await client.query(
+        `SELECT id, code, name FROM subjects WHERE semester = $1 ORDER BY code`,
+        [toSem]
+      );
+      const targetSubjects = targetSubjectsRes.rows;
+
+      const facultyRes = await client.query(
+        `SELECT id FROM faculty WHERE department = $1 ORDER BY id ASC`,
+        [req.user.dept || 'Computer Engineering']
+      );
+      const facultyList = facultyRes.rows;
+
+      if (facultyList.length > 0 && targetSubjects.length > 0) {
+        let fIdx = 0;
+        for (const div of divList) {
+          for (const sub of targetSubjects) {
+            const facId = facultyList[fIdx % facultyList.length].id;
+            await client.query(
+              `INSERT INTO faculty_subject_map (faculty_id, subject_id, semester, academic_year, division)
+               VALUES ($1, $2, $3, $4, $5)
+               ON CONFLICT (faculty_id, subject_id, semester, academic_year, division) DO NOTHING`,
+              [facId, sub.id, toSem, ay, div]
+            );
+            facultyMappingsCount++;
+            fIdx++;
+          }
+        }
+      }
+    }
+
+    // 3. Initialize fresh Publish Status in 'draft' mode
+    if (initPublishStatus) {
+      for (const div of divList) {
+        await client.query(
+          `INSERT INTO result_publish_status (semester, academic_year, department, division, status)
+           VALUES ($1, $2, $3, $4, 'draft')
+           ON CONFLICT (semester, academic_year, department, division)
+           DO UPDATE SET status = 'draft', published_at = NULL`,
+          [toSem, ay, req.user.dept || 'Computer Engineering', div]
+        );
+      }
+    }
+
+    // Audit Log
+    auditRecord({
+      tableName: 'academic_term_rollover',
+      recordId: toSem,
+      changedBy: req.user.id,
+      oldValue: { fromSemester: fromSem, academicYear: ay },
+      newValue: { toSemester: toSem, updatedStudentsCount, facultyMappingsCount, divisions: divList },
+      action: 'UPDATE',
+      reason: `HOD executed Academic Term Rollover from Semester ${fromSem} to Semester ${toSem} (${ay})`,
+    });
+
+    await client.query('COMMIT');
+
+    res.json({
+      success: true,
+      message: `Term Rollover successfully completed! Promoted ${updatedStudentsCount} students to Semester ${toSem}, initialized new evaluation sheets for ${divList.join(', ')}.`,
+      promotedStudents: updatedStudentsCount,
+      facultyMappings: facultyMappingsCount,
+      toSemester: toSem,
+      academicYear: ay
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[HOD] Term rollover execution error:', err.message);
+    res.status(500).json({ error: 'Term rollover failed: ' + err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// ─── POST /api/hod/term-rollover/switch-active-semester ────────────────────────
+// Quick utility for HOD to switch students between semesters (e.g. back to Sem 5 or forward to Sem 6)
+router.post('/term-rollover/switch-active-semester', async (req, res) => {
+  try {
+    const { targetSemester, divisions } = req.body;
+    const targetSem = parseInt(targetSemester, 10);
+    const divList = Array.isArray(divisions) && divisions.length > 0 ? divisions : ['TE 1', 'TE 2', 'TE 3'];
+
+    if (!targetSem || targetSem < 1 || targetSem > 8) {
+      return res.status(400).json({ error: 'Valid target semester (1-8) required.' });
+    }
+
+    const result = await pool.query(
+      `UPDATE students
+       SET current_semester = $1
+       WHERE division = ANY($2::text[])
+       RETURNING id`,
+      [targetSem, divList]
+    );
+
+    auditRecord({
+      tableName: 'students',
+      recordId: targetSem,
+      changedBy: req.user.id,
+      oldValue: null,
+      newValue: { targetSemester: targetSem, divisions: divList, count: result.rows.length },
+      action: 'UPDATE',
+      reason: `HOD switched active current_semester to ${targetSem} for divisions: ${divList.join(', ')}`,
+    });
+
+    res.json({
+      success: true,
+      message: `Active working semester switched to Semester ${targetSem} for ${result.rows.length} students across ${divList.join(', ')}.`,
+      updatedStudents: result.rows.length,
+      currentSemester: targetSem
+    });
+  } catch (err) {
+    console.error('[HOD] Switch active semester error:', err.message);
+    res.status(500).json({ error: 'Failed to switch active semester' });
   }
 });
 
