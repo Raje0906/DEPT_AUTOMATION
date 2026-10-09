@@ -26,6 +26,7 @@ import MarksEntry        from './pages/faculty/MarksEntry'
 import ClassReports      from './pages/faculty/ClassReports'
 import LabMaintenance   from './pages/faculty/LabMaintenance'
 import ProjectEval       from './pages/faculty/ProjectEval'
+import BEProjectGovernance from './pages/faculty/BEProjectGovernance'
 import Magazines         from './pages/faculty/Magazines'
 import CreateMagazineForm from './pages/faculty/magazine/CreateMagazineForm'
 import MagazineEditor    from './pages/faculty/magazine/MagazineEditor'
@@ -40,7 +41,6 @@ import CoordinatorAssignment from './pages/hod/CoordinatorAssignment'
 import MarksApproval  from './pages/hod/MarksApproval'
 import PublishResults from './pages/hod/PublishResults'
 import HODAnalytics   from './pages/hod/HODAnalytics'
-import HODProjectMgmt from './pages/hod/HODProjectMgmt'
 import HODProjectView from './pages/hod/HODProjectView'
 import HODMagazineApprovals from './pages/hod/HODMagazineApprovals'
 import TermRollover   from './pages/hod/TermRollover'
@@ -112,7 +112,7 @@ export default function App() {
           <Route path="/faculty/reports" element={<FacultyLayout><ClassReports /></FacultyLayout>} />
           <Route path="/faculty/lab-maintenance" element={<FacultyLayout><LabMaintenance /></FacultyLayout>} />
           <Route path="/faculty/project-eval" element={<FacultyLayout><ProjectEval /></FacultyLayout>} />
-          <Route path="/faculty/project-coordination" element={<FacultyLayout><HODProjectMgmt /></FacultyLayout>} />
+          <Route path="/faculty/project-coordination" element={<FacultyLayout><BEProjectGovernance /></FacultyLayout>} />
           <Route path="/faculty/magazines" element={<FacultyLayout><Magazines /></FacultyLayout>} />
           <Route path="/faculty/magazines/create" element={<FacultyLayout><CreateMagazineForm /></FacultyLayout>} />
           <Route path="/faculty/magazines/editor/:id" element={<MagazineEditor />} />

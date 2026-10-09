@@ -72,8 +72,11 @@ export default function HODProjectView() {
             (m.roll_no || '').toLowerCase().includes(query) ||
             (m.email || '').toLowerCase().includes(query)
         );
+        const matchMentor = (g.mentors || []).some(
+          (m) => (m.name || m.mentor_name || '').toLowerCase().includes(query)
+        );
 
-        return matchCode || matchNum || matchDomain || matchBatch || matchTitle || matchTitle2 || matchTitle3 || matchGuide || matchMember;
+        return matchCode || matchNum || matchDomain || matchBatch || matchTitle || matchTitle2 || matchTitle3 || matchGuide || matchMember || matchMentor;
       }
 
       return true;
@@ -147,7 +150,7 @@ export default function HODProjectView() {
       <div className="p-10 max-w-7xl mx-auto flex items-center justify-center min-h-[420px]">
         <div className="flex flex-col items-center gap-3">
           <div className="w-9 h-9 border-4 border-navy border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-sm font-semibold text-draft">Loading BE Project Groups Roster...</p>
+          <p className="text-sm font-semibold text-draft">Loading BE Project Groups...</p>
         </div>
       </div>
     );
@@ -431,33 +434,54 @@ export default function HODProjectView() {
 
                       {/* Column 3: Assigned Faculty */}
                       <td className="align-top py-3.5">
-                        {g.guide_name ? (
-                          <div className="p-2 rounded bg-emerald-50/60 border border-emerald-200 space-y-1">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-emerald-700 text-xs">👨‍🏫</span>
-                              <span className="font-bold text-xs text-emerald-900">
-                                {g.guide_name}
+                        <div className="space-y-1.5">
+                          {/* Guide */}
+                          {g.guide_name ? (
+                            <div className="p-2 rounded bg-emerald-50/60 border border-emerald-200 space-y-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-emerald-700 text-xs">👨‍🏫</span>
+                                <span className="font-bold text-xs text-emerald-900">
+                                  {g.guide_name}
+                                </span>
+                              </div>
+                              <div className="pt-0.5 pl-4">
+                                <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                  ✓ Assigned Guide
+                                </span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="p-2 rounded bg-slate-50 border border-rule/70 space-y-1">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200">
+                                <span>⏳</span> No Guide Assigned
                               </span>
+                              <p className="text-[11px] text-draft italic">
+                                Guide allocation pending
+                              </p>
                             </div>
-                            <div className="text-[11px] text-emerald-800/80 pl-4 font-medium">
-                              {g.guide_designation || 'Faculty Member'}
+                          )}
+
+                          {/* Mentors */}
+                          {g.mentors && g.mentors.length > 0 && (
+                            <div className="p-2 rounded bg-purple-50/60 border border-purple-200 space-y-1.5">
+                              {g.mentors.map((m, mIdx) => (
+                                <div key={m.faculty_id || mIdx} className="space-y-0.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-purple-700 text-xs">🛡️</span>
+                                    <span className="font-bold text-xs text-purple-950">
+                                      {m.name || m.mentor_name}
+                                    </span>
+                                  </div>
+                                  <div className="pt-0.5 pl-4">
+                                    <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-purple-100 text-purple-800">
+                                      Assigned Mentor
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
-                            <div className="pt-1 pl-4">
-                              <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                                ✓ Assigned Guide
-                              </span>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="p-2 rounded bg-slate-50 border border-rule/70 space-y-1">
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200">
-                              <span>⏳</span> Not Assigned
-                            </span>
-                            <p className="text-[11px] text-draft italic">
-                              Guide allocation pending by coordinator
-                            </p>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </td>
 
                       {/* Column 4: Project Domain & Topics */}
@@ -471,23 +495,23 @@ export default function HODProjectView() {
                           </div>
 
                           {/* Primary Topic Preference */}
-                          <div className="text-xs space-y-1">
-                            <div className="font-semibold text-ink leading-snug">
-                              <span className="text-draft font-bold mr-1">Topic 1:</span>
+                          <div className="space-y-1.5">
+                            <div className="text-[13px] sm:text-sm font-semibold text-ink leading-snug">
+                              <span className="text-slate-600 font-bold mr-1.5">Topic 1:</span>
                               {g.title || 'Topic preference not specified'}
                             </div>
 
                             {/* Secondary preferences */}
                             {(g.title_2 || g.title_3) && (
-                              <div className="pt-1 space-y-0.5 text-[11px] text-draft pl-2 border-l-2 border-rule">
+                              <div className="pt-1 space-y-1 text-xs text-slate-600 pl-2.5 border-l-2 border-rule leading-relaxed">
                                 {g.title_2 && (
                                   <div>
-                                    <strong className="text-slate-600">Pref 2:</strong> {g.title_2}
+                                    <strong className="text-slate-700 font-bold">Pref 2:</strong> {g.title_2}
                                   </div>
                                 )}
                                 {g.title_3 && (
                                   <div>
-                                    <strong className="text-slate-600">Pref 3:</strong> {g.title_3}
+                                    <strong className="text-slate-700 font-bold">Pref 3:</strong> {g.title_3}
                                   </div>
                                 )}
                               </div>
@@ -562,51 +586,73 @@ export default function HODProjectView() {
                       {selectedGroupModal.domain || 'Not Specified'}
                     </p>
                   </div>
-                  <div className="space-y-1.5 pt-1 border-t border-rule/60">
+                  <div className="space-y-2 pt-1 border-t border-rule/60">
                     <div>
                       <span className="text-xs font-bold text-ink">1. Primary Topic:</span>
-                      <p className="text-xs text-ink mt-0.5">{selectedGroupModal.title || 'N/A'}</p>
+                      <p className="text-[13px] sm:text-sm font-semibold text-ink mt-0.5 leading-snug">{selectedGroupModal.title || 'N/A'}</p>
                     </div>
                     {selectedGroupModal.title_2 && (
                       <div>
                         <span className="text-xs font-bold text-draft">2. Second Choice:</span>
-                        <p className="text-xs text-draft mt-0.5">{selectedGroupModal.title_2}</p>
+                        <p className="text-xs sm:text-[13px] text-slate-700 mt-0.5 leading-snug">{selectedGroupModal.title_2}</p>
                       </div>
                     )}
                     {selectedGroupModal.title_3 && (
                       <div>
                         <span className="text-xs font-bold text-draft">3. Third Choice:</span>
-                        <p className="text-xs text-draft mt-0.5">{selectedGroupModal.title_3}</p>
+                        <p className="text-xs sm:text-[13px] text-slate-700 mt-0.5 leading-snug">{selectedGroupModal.title_3}</p>
                       </div>
                     )}
                   </div>
                 </div>
               </div>
 
-              {/* Assigned Faculty Guide */}
+              {/* Assigned Faculty Guide & Mentors */}
               <div className="space-y-2">
                 <span className="text-xs font-mono font-bold text-draft uppercase tracking-wider">
-                  Assigned Faculty Guide
+                  Assigned Faculty (Guide &amp; Mentors)
                 </span>
-                {selectedGroupModal.guide_name ? (
-                  <div className="p-3.5 rounded bg-emerald-50/70 border border-emerald-200 flex items-center justify-between">
-                    <div>
-                      <div className="font-bold text-sm text-emerald-950">
-                        {selectedGroupModal.guide_name}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {selectedGroupModal.guide_name ? (
+                    <div className="p-3.5 rounded bg-emerald-50/70 border border-emerald-200 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-emerald-700 text-sm">👨‍🏫</span>
+                        <div className="font-bold text-sm text-emerald-950">
+                          {selectedGroupModal.guide_name}
+                        </div>
                       </div>
-                      <div className="text-xs text-emerald-800">
-                        {selectedGroupModal.guide_designation || 'Faculty Member'}
-                      </div>
+                      <span className="px-2.5 py-1 text-xs font-bold rounded bg-emerald-200 text-emerald-900">
+                        ✓ Guide
+                      </span>
                     </div>
-                    <span className="px-2.5 py-1 text-xs font-bold rounded bg-emerald-200 text-emerald-900">
-                      ✓ Guide Assigned
-                    </span>
-                  </div>
-                ) : (
-                  <div className="p-3.5 rounded bg-slate-50 border border-rule text-xs text-draft italic">
-                    ⏳ No faculty guide has been assigned to this group yet.
-                  </div>
-                )}
+                  ) : (
+                    <div className="p-3.5 rounded bg-slate-50 border border-rule text-xs text-draft italic">
+                      ⏳ No guide assigned
+                    </div>
+                  )}
+
+                  {selectedGroupModal.mentors && selectedGroupModal.mentors.length > 0 ? (
+                    <div className="p-3.5 rounded bg-purple-50/70 border border-purple-200 space-y-2">
+                      {selectedGroupModal.mentors.map((m, mIdx) => (
+                        <div key={m.faculty_id || mIdx} className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-purple-700 text-sm">🛡️</span>
+                            <div className="font-bold text-sm text-purple-950">
+                              {m.name || m.mentor_name}
+                            </div>
+                          </div>
+                          <span className="px-2.5 py-1 text-xs font-bold rounded bg-purple-200 text-purple-900">
+                            Mentor
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-3.5 rounded bg-slate-50 border border-rule text-xs text-draft italic">
+                      ⏳ No mentor assigned
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Student Roster */}
