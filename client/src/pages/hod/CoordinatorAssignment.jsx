@@ -9,13 +9,14 @@ export default function CoordinatorAssignment() {
   const [data, setData] = useState({
     beCoordinator: null,
     teCoordinator: null,
+    clubCoordinator: null,
     facultyList: [],
     history: [],
   });
   const [searchTerm, setSearchTerm] = useState('');
 
   // Modal State
-  const [assignModal, setAssignModal] = useState(null); // 'BE_PROJECT_COORDINATOR' | 'TE_SEMINAR_COORDINATOR' | null
+  const [assignModal, setAssignModal] = useState(null); // 'BE_PROJECT_COORDINATOR' | 'TE_SEMINAR_COORDINATOR' | 'CLUB_HEAD_COORDINATOR' | null
   const [selectedFacultyId, setSelectedFacultyId] = useState('');
   const [assignNotes, setAssignNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -43,7 +44,12 @@ export default function CoordinatorAssignment() {
   const handleOpenAssignModal = (roleType) => {
     setAssignModal(roleType);
     setAssignNotes('');
-    const currentAppointee = roleType === 'BE_PROJECT_COORDINATOR' ? data.beCoordinator : data.teCoordinator;
+    const currentAppointee =
+      roleType === 'BE_PROJECT_COORDINATOR'
+        ? data.beCoordinator
+        : roleType === 'TE_SEMINAR_COORDINATOR'
+        ? data.teCoordinator
+        : data.clubCoordinator;
     if (currentAppointee) {
       setSelectedFacultyId(String(currentAppointee.faculty_id));
     } else if (data.facultyList?.length > 0) {
@@ -76,7 +82,12 @@ export default function CoordinatorAssignment() {
   };
 
   const handleRevoke = async (roleType, facultyName) => {
-    const roleTitle = roleType === 'BE_PROJECT_COORDINATOR' ? 'BE Project Coordinator' : 'TE Seminar Coordinator';
+    const roleTitle =
+      roleType === 'BE_PROJECT_COORDINATOR'
+        ? 'BE Project Coordinator'
+        : roleType === 'TE_SEMINAR_COORDINATOR'
+        ? 'TE Seminar Coordinator'
+        : 'Club Head Coordinator';
     if (!window.confirm(`Are you sure you want to revoke the ${roleTitle} assignment for ${facultyName}?`)) return;
 
     setSubmitting(true);
@@ -116,7 +127,7 @@ export default function CoordinatorAssignment() {
           </div>
           <h1 className="font-serif text-3xl font-bold text-ink">Academic Coordinator Governance</h1>
           <p className="text-base text-draft mt-1 font-medium">
-            Designate BE Project and TE Seminar coordinators per academic year with role scoping and audit tracking
+            Designate BE Project, TE Seminar, and Club Head coordinators per academic year with role scoping and audit tracking
           </p>
         </div>
 
@@ -135,7 +146,7 @@ export default function CoordinatorAssignment() {
       </div>
 
       {/* KPI Stats Strip */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div className="panel p-5">
           <p className="text-xs uppercase tracking-wider text-draft font-semibold">BE Project Coordinator</p>
           <p className="font-serif text-lg font-bold text-navy mt-1 truncate">
@@ -157,20 +168,24 @@ export default function CoordinatorAssignment() {
         </div>
 
         <div className="panel p-5">
+          <p className="text-xs uppercase tracking-wider text-draft font-semibold">Club Head Coordinator</p>
+          <p className="font-serif text-lg font-bold text-maroon mt-1 truncate">
+            {data.clubCoordinator ? data.clubCoordinator.faculty_name : 'Unassigned'}
+          </p>
+          <p className="text-xs text-draft mt-1">
+            {data.clubCoordinator ? 'Active for AY ' + academicYear : 'Pending appointment'}
+          </p>
+        </div>
+
+        <div className="panel p-5">
           <p className="text-xs uppercase tracking-wider text-draft font-semibold">Department Faculty</p>
           <p className="font-serif text-3xl font-bold text-ink mt-1">{data.facultyList?.length || 0}</p>
           <p className="text-xs text-draft mt-1">Eligible academic staff</p>
         </div>
-
-        <div className="panel p-5">
-          <p className="text-xs uppercase tracking-wider text-draft font-semibold">Tenure Logs</p>
-          <p className="font-serif text-3xl font-bold text-pass mt-1">{data.history?.length || 0}</p>
-          <p className="text-xs text-draft mt-1">Governance audit records</p>
-        </div>
       </div>
 
-      {/* Dual Role Appointment Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+      {/* Role Appointment Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
         {/* BE Project Coordinator Card */}
         <div className="panel p-6 border-t-4 border-t-navy flex flex-col justify-between">
           <div>
@@ -181,7 +196,7 @@ export default function CoordinatorAssignment() {
                 </div>
                 <div>
                   <h2 className="font-serif text-xl font-bold text-ink">BE Project Coordinator</h2>
-                  <p className="text-xs text-draft">Oversees Capstone Projects, Guide Allocations &amp; Final Defenses</p>
+                  <p className="text-xs text-draft">Capstone Projects, Guide Allocations &amp; Defenses</p>
                 </div>
               </div>
               <span className={`badge ${data.beCoordinator ? 'status-approved' : 'status-draft'}`}>
@@ -246,7 +261,7 @@ export default function CoordinatorAssignment() {
                 </div>
                 <div>
                   <h2 className="font-serif text-xl font-bold text-ink">TE Seminar Coordinator</h2>
-                  <p className="text-xs text-draft">Oversees Seminar Registration, Guide Allocations &amp; Evaluation Stages</p>
+                  <p className="text-xs text-draft">Seminar Registration, Guide Allocations &amp; Evaluation</p>
                 </div>
               </div>
               <span className={`badge ${data.teCoordinator ? 'status-approved' : 'status-draft'}`}>
@@ -300,70 +315,81 @@ export default function CoordinatorAssignment() {
             </button>
           </div>
         </div>
-      </div>
 
-      {/* Appointment History & Governance Audit Table */}
-      <div className="panel p-6 mb-8">
-        <div className="flex items-center justify-between pb-4 border-b border-rule mb-4">
+        {/* Club Head Coordinator Card */}
+        <div className="panel p-6 border-t-4 border-t-maroon flex flex-col justify-between">
           <div>
-            <h3 className="font-serif text-lg font-bold text-ink">Tenure History &amp; Governance Audit</h3>
-            <p className="text-xs text-draft">Log of coordinator appointments and revocations for AY {academicYear}</p>
-          </div>
-          <span className="badge bg-paper border border-rule text-xs font-mono">
-            {data.history?.length || 0} Records
-          </span>
-        </div>
+            <div className="flex items-center justify-between pb-4 border-b border-rule mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-maroon/10 text-maroon font-bold flex items-center justify-center text-sm font-mono tracking-wider">
+                  CLUB
+                </div>
+                <div>
+                  <h2 className="font-serif text-xl font-bold text-ink">Club Head Coordinator</h2>
+                  <p className="text-xs text-draft">Student Technical &amp; Cultural Clubs, Events &amp; Approvals</p>
+                </div>
+              </div>
+              <span className={`badge ${data.clubCoordinator ? 'status-approved' : 'status-draft'}`}>
+                {data.clubCoordinator ? 'Assigned' : 'Vacant'}
+              </span>
+            </div>
 
-        {data.history && data.history.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="result-table w-full text-left">
-              <thead>
-                <tr>
-                  <th className="py-2.5 px-3">Role</th>
-                  <th className="py-2.5 px-3">Faculty Member</th>
-                  <th className="py-2.5 px-3">Status</th>
-                  <th className="py-2.5 px-3">Appointed By</th>
-                  <th className="py-2.5 px-3">Timestamp</th>
-                  <th className="py-2.5 px-3">Notes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.history.map((record) => (
-                  <tr key={record.id} className="hover:bg-paper/60 transition-colors">
-                    <td className="py-2.5 px-3 font-semibold text-xs">
-                      {record.role_type === 'BE_PROJECT_COORDINATOR' ? (
-                        <span className="text-navy">BE Project Coordinator</span>
-                      ) : (
-                        <span className="text-accent">TE Seminar Coordinator</span>
-                      )}
-                    </td>
-                    <td className="py-2.5 px-3">
-                      <p className="font-bold text-ink text-sm leading-tight">{record.faculty_name}</p>
-                      <p className="text-xs text-draft font-mono">{record.faculty_email}</p>
-                    </td>
-                    <td className="py-2.5 px-3">
-                      <span className={`badge ${record.is_active ? 'status-approved' : 'status-draft'}`}>
-                        {record.is_active ? 'Active' : 'Superseded'}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-3 text-xs text-draft">
-                      {record.appointed_by_name || 'HOD'}
-                    </td>
-                    <td className="py-2.5 px-3 text-xs font-mono text-draft">
-                      {new Date(record.appointed_at || record.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="py-2.5 px-3 text-xs text-draft">
-                      {record.notes || '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {data.clubCoordinator ? (
+              <div className="bg-paper p-4 rounded border border-rule/60 space-y-2 mb-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-draft font-semibold uppercase">Appointed Faculty:</span>
+                  <span className="text-sm font-bold text-ink">{data.clubCoordinator.faculty_name}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-draft font-semibold uppercase">Designation:</span>
+                  <span className="text-xs text-ink">{data.clubCoordinator.designation || 'Faculty'}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-draft font-semibold uppercase">Email:</span>
+                  <span className="text-xs font-mono text-draft">{data.clubCoordinator.faculty_email}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-draft font-semibold uppercase">Academic Year:</span>
+                  <span className="badge bg-white border border-rule text-xs font-mono">{academicYear}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-amber-50/60 border border-amber-200/80 p-4 rounded text-center text-amber-800 text-sm mb-4">
+                No Club Head Coordinator appointed for AY {academicYear}. Click below to designate an in-charge faculty.
+              </div>
+            )}
           </div>
-        ) : (
-          <p className="text-xs text-draft italic py-4 text-center">No appointment logs found for AY {academicYear}.</p>
-        )}
+
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-rule">
+            {data.clubCoordinator && (
+              <>
+                <Link
+                  to="/hod/clubs"
+                  className="btn-secondary text-xs mr-auto"
+                >
+                  Manage Clubs →
+                </Link>
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => handleRevoke('CLUB_HEAD_COORDINATOR', data.clubCoordinator.faculty_name)}
+                  className="btn-secondary text-xs text-fail border-fail/40 hover:bg-fail/10"
+                >
+                  Revoke Role
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={() => handleOpenAssignModal('CLUB_HEAD_COORDINATOR')}
+              className="btn-primary text-xs flex items-center gap-1.5"
+            >
+              <span>+</span> {data.clubCoordinator ? 'Reassign Coordinator' : 'Appoint Coordinator'}
+            </button>
+          </div>
+        </div>
       </div>
+
 
       {/* Appointment Modal */}
       {assignModal && (
@@ -372,7 +398,13 @@ export default function CoordinatorAssignment() {
             <div className="panel-header p-5 bg-paper border-b border-rule flex items-center justify-between">
               <div>
                 <h3 className="font-serif text-lg font-bold text-ink">
-                  Appoint {assignModal === 'BE_PROJECT_COORDINATOR' ? 'BE Project Coordinator' : 'TE Seminar Coordinator'}
+                  Appoint {
+                    assignModal === 'BE_PROJECT_COORDINATOR'
+                      ? 'BE Project Coordinator'
+                      : assignModal === 'TE_SEMINAR_COORDINATOR'
+                      ? 'TE Seminar Coordinator'
+                      : 'Club Head Coordinator'
+                  }
                 </h3>
                 <p className="text-xs text-draft mt-0.5">Select a faculty member for AY {academicYear}</p>
               </div>

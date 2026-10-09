@@ -17,6 +17,7 @@ import CGPAView          from './pages/student/CGPAView'
 import StudentProject    from './pages/student/StudentProject'
 import SeminarGroupRegistration from './pages/student/SeminarGroupRegistration'
 import StudentMagazine   from './pages/student/StudentMagazine'
+import StudentClubActivities from './pages/student/StudentClubActivities'
 
 // Faculty
 import FacultyDashboard  from './pages/faculty/FacultyDashboard'
@@ -30,6 +31,7 @@ import CreateMagazineForm from './pages/faculty/magazine/CreateMagazineForm'
 import MagazineEditor    from './pages/faculty/magazine/MagazineEditor'
 import MagazinePreview   from './pages/faculty/magazine/MagazinePreview'
 import OnlineMagazineViewer from './pages/faculty/magazine/OnlineMagazineViewer'
+import ManageClubs       from './pages/faculty/ManageClubs'
 
 // HOD
 import HODDashboard   from './pages/hod/HODDashboard'
@@ -103,6 +105,7 @@ export default function App() {
           <Route path="/student/seminar" element={<StudentLayout><SeminarGroupRegistration /></StudentLayout>} />
           <Route path="/student/magazine" element={<StudentLayout><StudentMagazine /></StudentLayout>} />
           <Route path="/student/magazine/view/:id" element={<ProtectedRoute role="student"><OnlineMagazineViewer /></ProtectedRoute>} />
+          <Route path="/student/clubs" element={<StudentLayout><StudentClubActivities /></StudentLayout>} />
 
           {/* Faculty */}
           <Route path="/faculty" element={<FacultyLayout><FacultyDashboard /></FacultyLayout>} />
@@ -117,6 +120,8 @@ export default function App() {
           <Route path="/faculty/magazines/editor/:id" element={<MagazineEditor />} />
           <Route path="/faculty/magazines/preview/:id" element={<MagazinePreview />} />
           <Route path="/faculty/magazines/view/:id" element={<OnlineMagazineViewer />} />
+          <Route path="/faculty/clubs" element={<FacultyLayout><ManageClubs /></FacultyLayout>} />
+          <Route path="/hod/clubs" element={<Navigate to="/hod" replace />} />
 
           {/* Seminar Tool — Coordinator */}
           <Route path="/faculty/seminar"                    element={<CoordinatorLayout><SeminarSessions /></CoordinatorLayout>} />

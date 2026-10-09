@@ -13,6 +13,7 @@ const hodRoutes     = require('./routes/hod');
 const projectRoutes     = require('./routes/projects');
 const seminarRoutes     = require('./routes/seminar');
 const coordinatorRoutes = require('./routes/coordinators');
+const clubRoutes        = require('./routes/clubs');
 
 const app = express();
 
@@ -41,6 +42,7 @@ app.use('/api/hod',          hodRoutes);
 app.use('/api/projects',     projectRoutes);
 app.use('/api/seminar',      seminarRoutes);
 app.use('/api/coordinators', coordinatorRoutes);
+app.use('/api/clubs',        clubRoutes);
 
 // ─── Health check ────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {

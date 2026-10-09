@@ -17,8 +17,11 @@ export default {
         draft:   '#4A5568',
       },
       fontFamily: {
-        serif: ['"Playfair Display"', 'Georgia', 'serif'],
-        sans:  ['Inter', 'system-ui', 'sans-serif'],
+        sans:      ['"Plus Jakarta Sans"', 'Inter', 'system-ui', 'sans-serif'],
+        heading:   ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+        serif:     ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+        editorial: ['"Playfair Display"', 'Georgia', 'serif'],
+        mono:      ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
       },
       fontVariantNumeric: {
         tabular: 'tabular-nums',
