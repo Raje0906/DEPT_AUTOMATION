@@ -1,10 +1,38 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
 
+const StepBar = ({ current = 2 }) => {
+  const steps = ['1. Submissions & Validation', '2. Guide Assignment', '3. Review & Final Export'];
+  return (
+    <ol className="flex items-center gap-0 mb-6 select-none overflow-x-auto">
+      {steps.map((s, i) => {
+        const done = i < current;
+        const active = i === current;
+        return (
+          <li key={s} className="flex items-center shrink-0">
+            <div className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+              active ? 'bg-[var(--navy)] text-white shadow-xs' : done ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-[var(--ink)]/50'
+            }`}>
+              {done && (
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+              {s}
+            </div>
+            {i < steps.length - 1 && <div className="w-8 h-px bg-[var(--rule)] mx-2" />}
+          </li>
+        );
+      })}
+    </ol>
+  );
+};
+
 export default function SeminarReview() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [session, setSession] = useState(null);
   const [groups, setGroups]   = useState([]);
   const [loading, setLoading] = useState(true);
@@ -43,13 +71,31 @@ export default function SeminarReview() {
   if (loading) return <div className="p-8 text-sm text-[var(--ink)]/40">Loading…</div>;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <div className="flex items-center gap-2 mb-1 text-xs text-[var(--ink)]/40">
-        <Link to="/faculty/seminar" className="hover:text-[var(--navy)]">Sessions</Link>
-        <span>/</span>
-        <span className="text-[var(--ink)]/60 truncate">{session?.name}</span>
-        <span>/</span><span>Review</span>
+    <div className="p-6 max-w-6xl mx-auto space-y-6">
+      {/* Top-Left Back Button & Breadcrumb */}
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          id="btn-back-step"
+          onClick={() => navigate(`/faculty/seminar/${id}/assign`)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[var(--navy)] bg-white hover:bg-slate-100 border border-[var(--rule)] rounded-md transition-colors focus:outline-hidden focus:ring-2 focus:ring-[var(--navy)] shadow-xs"
+          aria-label="Back to Step 2: Guide Assignment"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+          </svg>
+          <span>Back</span>
+        </button>
+        <div className="flex items-center gap-2 text-xs text-[var(--ink)]/50">
+          <Link to="/faculty/seminar" className="hover:text-[var(--navy)]">Sessions</Link>
+          <span>/</span>
+          <span className="text-[var(--ink)]/80 font-medium truncate">{session?.name}</span>
+          <span>/</span>
+          <span>Step 3: Review &amp; Final Export</span>
+        </div>
       </div>
+
+      <StepBar current={2} />
 
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -57,9 +103,6 @@ export default function SeminarReview() {
           <p className="text-sm text-[var(--ink)]/50 mt-0.5">{session?.batch} · {session?.academic_year} · {groups.length} groups</p>
         </div>
         <div className="flex gap-3">
-          <Link to={`/faculty/seminar/${id}/audit`} className="px-4 py-2 text-sm font-medium border border-[var(--rule)] text-[var(--ink)]/60 rounded-md hover:border-[var(--navy)] hover:text-[var(--navy)] transition-colors">
-            Audit Log
-          </Link>
           <button
             id="btn-export"
             onClick={handleExport}

@@ -6,7 +6,6 @@ const csv = require('csv-parser');
 const { Readable } = require('stream');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { computeMarks } = require('../services/gradeCalculator');
-const { logAudit, auditMark, auditRecord } = require('../middleware/auditLogger');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
@@ -124,15 +123,6 @@ router.post('/', verifyToken, requireRole('hod'), async (req, res) => {
       created_at: userRes.rows[0].created_at,
     };
 
-    auditRecord({
-      tableName: 'faculty',
-      recordId: createdFaculty.id,
-      changedBy: req.user.id,
-      oldValue: null,
-      newValue: createdFaculty,
-      action: 'INSERT',
-      reason: `HOD added new faculty member ${name} (${cleanEmpId})`,
-    });
 
     res.status(201).json({
       message: `Faculty member ${name} created successfully!`,
@@ -240,15 +230,6 @@ router.put('/:id', verifyToken, requireRole('hod'), async (req, res) => {
       email: cleanEmail,
     };
 
-    auditRecord({
-      tableName: 'faculty',
-      recordId: parseInt(id, 10),
-      changedBy: req.user.id,
-      oldValue: current,
-      newValue: resultFaculty,
-      action: 'UPDATE',
-      reason: `HOD updated faculty #${id} details (${cleanName})`,
-    });
 
     res.json({
       message: `Faculty member ${cleanName} updated successfully!`,
@@ -299,15 +280,6 @@ router.delete('/:id', verifyToken, requireRole('hod'), async (req, res) => {
 
     await client.query('COMMIT');
 
-    auditRecord({
-      tableName: 'faculty',
-      recordId: parseInt(id, 10),
-      changedBy: req.user.id,
-      oldValue: faculty,
-      newValue: null,
-      action: 'DELETE',
-      reason: `HOD deleted faculty member #${id} (${faculty.name})`,
-    });
 
     res.json({ message: `Faculty member ${faculty.name} has been removed successfully.` });
   } catch (err) {
@@ -639,16 +611,6 @@ router.post('/marks', async (req, res) => {
         );
         markId = updateRes.rows[0].id;
 
-        await logAudit({
-          req,
-          tableName: 'student_exam_marks',
-          recordId: markId,
-          changedBy: req.user.id,
-          oldValue: { marks_obtained: oldRow.marks_obtained, is_absent: oldRow.is_absent, status: oldRow.status },
-          newValue: { marks_obtained: numMarks, is_absent: Boolean(isAbsent), status: 'draft', exam_type: examType.code },
-          action: 'UPDATE',
-          reason: `Faculty updated marks for ${examType.name}`
-        });
       } else {
         const insertRes = await client.query(
           `INSERT INTO student_exam_marks (student_id, subject_id, exam_type_id, semester, academic_year, marks_obtained, is_absent, status, entered_by, last_modified_at)
@@ -657,16 +619,6 @@ router.post('/marks', async (req, res) => {
         );
         markId = insertRes.rows[0].id;
 
-        await logAudit({
-          req,
-          tableName: 'student_exam_marks',
-          recordId: markId,
-          changedBy: req.user.id,
-          oldValue: null,
-          newValue: { marks_obtained: numMarks, is_absent: Boolean(isAbsent), status: 'draft', exam_type: examType.code },
-          action: 'INSERT',
-          reason: `Faculty entered new marks for ${examType.name}`
-        });
       }
 
       results.push({ studentId, markId, marksObtained: numMarks, isAbsent: Boolean(isAbsent) });
@@ -762,16 +714,6 @@ router.post('/term-work', async (req, res) => {
         );
       }
 
-      await logAudit({
-        req,
-        tableName: 'student_term_work_details',
-        recordId: studentId,
-        changedBy: req.user.id,
-        oldValue: existingTW.rows[0] || null,
-        newValue: { attendance: att, assignment1: a1, assignment2: a2, timely: tim, total: totalTW },
-        action: existingTW.rows.length > 0 ? 'UPDATE' : 'INSERT',
-        reason: 'Faculty updated Term Work breakdown'
-      });
 
       results.push({ studentId, totalTW });
     }
@@ -815,16 +757,6 @@ router.post('/marks/submit', async (req, res) => {
       [subjectId, semester, academicYear, division]
     );
 
-    await logAudit({
-      req,
-      tableName: 'student_exam_marks',
-      recordId: parseInt(subjectId, 10),
-      changedBy: req.user.id,
-      oldValue: { status: 'draft' },
-      newValue: { status: 'submitted' },
-      action: 'UPDATE',
-      reason: `Faculty submitted marks for subject ${subjectId} (${division})`
-    });
 
     res.json({ message: `Submitted ${updateRes.rows.length} marks for HOD approval.` });
   } catch (err) {

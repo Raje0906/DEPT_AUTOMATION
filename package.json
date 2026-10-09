@@ -9,6 +9,7 @@
     "migrate": "node db/run-migrate.js",
     "test": "node --test services/*.test.js",
     "seed": "node db/seed.js",
+    "seed:registrations": "node scripts/seed_seminar_registrations.js",
     "sync:students": "node scripts/sync_excel_students.js",
     "map:results": "node scripts/map_excel_results.js"
   },

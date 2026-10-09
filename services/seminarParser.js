@@ -462,11 +462,12 @@ function validateSingleGroup(groupData) {
   }
 
   const rawMembers = Array.isArray(groupData?.members) ? groupData.members : [];
-  if (rawMembers.length < 3) {
-    errors.push(`A seminar group must have at least 3 members (found ${rawMembers.length}).`);
-  }
-  if (rawMembers.length > 4) {
-    errors.push(`A seminar group cannot have more than 4 members (found ${rawMembers.length}).`);
+  if (rawMembers.length === 0) {
+    errors.push('At least one group member is required.');
+  } else if (rawMembers.length < 3) {
+    warnings.push(`Group has ${rawMembers.length} member(s). Recommended team size is 3 to 4 members.`);
+  } else if (rawMembers.length > 4) {
+    warnings.push(`Group has ${rawMembers.length} members. Maximum standard size is 4.`);
   }
 
   const cleanedMembers = [];
@@ -483,42 +484,25 @@ function validateSingleGroup(groupData) {
     const topic1 = normText(m?.topic1);
     const topic2 = normText(m?.topic2);
     const topic3 = normText(m?.topic3);
-    const is_leader = memberIndex === 1;
+    const is_leader = idx === 0;
 
     const label = `Student ${memberIndex}${is_leader ? ' (Leader)' : ''}`;
 
-    if (!name) errors.push(`${label}: Student Name is required.`);
-    if (!prn) {
-      errors.push(`${label}: College PRN is required.`);
-    } else {
-      // Basic format check for PRN: alphanumeric, 4 to 25 chars
-      if (!/^[A-Z0-9\-_]{4,25}$/i.test(prn)) {
-        errors.push(`${label}: PRN "${prn}" is malformed. Please enter a valid college PRN (alphanumeric, 4–25 characters).`);
-      }
+    if (!name && !prn) {
+      warnings.push(`${label}: Student Name and PRN are both missing.`);
     }
 
-    if (!division) errors.push(`${label}: Division is required.`);
-
-    if (!mobile) {
-      errors.push(`${label}: Mobile number is required.`);
-    } else {
-      // Basic format check for Mobile: 10 digits (or with 91 / +91)
-      const digitsOnly = mobile.replace(/\D/g, '');
-      const validTen = digitsOnly.length === 10 || (digitsOnly.length === 12 && digitsOnly.startsWith('91'));
-      if (!validTen) {
-        errors.push(`${label}: Mobile number "${rawMobile}" is invalid. Must be a 10-digit mobile number.`);
-      }
+    if (rawMobile && !mobile) {
+      warnings.push(`${label}: Mobile number "${rawMobile}" could not be normalized.`);
     }
 
-    if (!email) {
-      errors.push(`${label}: Email address is required.`);
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      errors.push(`${label}: Email address "${email}" is invalid.`);
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      warnings.push(`${label}: Email address "${email}" is non-standard.`);
     }
 
-    if (!topic1) errors.push(`${label}: Proposed Topic 1 is required.`);
-    if (!topic2) errors.push(`${label}: Proposed Topic 2 is required.`);
-    if (!topic3) errors.push(`${label}: Proposed Topic 3 is required.`);
+    if (!topic1 && !topic2 && !topic3) {
+      warnings.push(`${label}: Topic preferences are empty.`);
+    }
 
     if (prn) {
       if (seenPrns.has(prn)) {
@@ -530,14 +514,14 @@ function validateSingleGroup(groupData) {
 
     cleanedMembers.push({
       memberIndex,
-      student_name: name,
-      prn,
-      division,
-      mobile,
-      email,
-      topic1,
-      topic2,
-      topic3,
+      student_name: name || '',
+      prn: prn || '',
+      division: division || '',
+      mobile: mobile || '',
+      email: email || '',
+      topic1: topic1 || '',
+      topic2: topic2 || '',
+      topic3: topic3 || '',
       is_leader,
     });
   });
@@ -547,7 +531,7 @@ function validateSingleGroup(groupData) {
     errors,
     warnings,
     cleanedGroup: {
-      domain: rawDomain,
+      domain: rawDomain || 'General Computing',
       members: cleanedMembers,
     },
   };

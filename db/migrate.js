@@ -112,22 +112,8 @@ async function runMigrations() {
       )
     `);
 
-    // ─── AUDIT LOG ────────────────────────────────────────────────────────────
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS audit_log (
-        id          SERIAL PRIMARY KEY,
-        table_name  VARCHAR(100) NOT NULL,
-        record_id   INTEGER,
-        changed_by  INTEGER      REFERENCES users(id),
-        old_value   JSONB,
-        new_value   JSONB,
-        action      VARCHAR(50)  NOT NULL,
-        reason      TEXT,
-        ip_address  VARCHAR(45),
-        user_agent  TEXT,
-        created_at  TIMESTAMPTZ DEFAULT NOW()
-      )
-    `);
+    // ─── AUDIT LOG (DROPPED) ──────────────────────────────────────────────────
+    await client.query(`DROP TABLE IF EXISTS audit_log CASCADE;`);
 
     // ─── REVALUATION REQUESTS (DROPPED) ───────────────────────────────────────
     await client.query(`DROP TABLE IF EXISTS revaluation_requests CASCADE;`);
@@ -328,7 +314,6 @@ async function runMigrations() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_marks_student ON marks(student_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_marks_subject ON marks(subject_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_marks_status  ON marks(status)`);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_audit_record  ON audit_log(table_name, record_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_proj_group_code ON project_groups(group_code)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_proj_group_guide ON project_groups(guide_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_proj_panel_group ON project_panel_assignments(group_id, stage_id)`);
@@ -455,8 +440,16 @@ async function runMigrations() {
         CHECK (status IN ('SETUP','UPLOAD','VALIDATION','ASSIGNMENT','PUBLISHED','REGISTRATION_OPEN','LOCKED'));
 
       ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS leader_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS leader_prn VARCHAR(60);
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS domain_raw TEXT;
       ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS allow_edit BOOLEAN DEFAULT FALSE;
       ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ DEFAULT NOW();
+
+      ALTER TABLE seminar_guides ADD COLUMN IF NOT EXISTS initials VARCHAR(20);
+
+      ALTER TABLE seminar_group_members ADD COLUMN IF NOT EXISTS topic1_domain TEXT;
+      ALTER TABLE seminar_group_members ADD COLUMN IF NOT EXISTS topic2_domain TEXT;
+      ALTER TABLE seminar_group_members ADD COLUMN IF NOT EXISTS topic3_domain TEXT;
 
       CREATE INDEX IF NOT EXISTS idx_sem_groups_leader ON seminar_groups(leader_user_id);
       CREATE INDEX IF NOT EXISTS idx_sem_groups_session_leader ON seminar_groups(session_id, leader_user_id);
@@ -489,6 +482,7 @@ async function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_registrations_group_id ON registrations(group_id);
       CREATE INDEX IF NOT EXISTS idx_registrations_seminar_id ON registrations(seminar_id);
       CREATE INDEX IF NOT EXISTS idx_registrations_registered_by ON registrations(registered_by);
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_registrations_group_id ON registrations(group_id);
 
       -- Backfill existing seminar_groups into registrations if not already present
       INSERT INTO registrations (group_id, seminar_id, registered_by, registered_at, status)
@@ -613,18 +607,6 @@ async function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_sem_marks_group ON seminar_marks(group_id);
       CREATE INDEX IF NOT EXISTS idx_sem_marks_session ON seminar_marks(session_id);
       CREATE INDEX IF NOT EXISTS idx_sem_marks_prn ON seminar_marks(prn);
-    `);
-
-    // ─── AUDIT LOG ENHANCEMENTS (Cybersecurity & Auth Events) ─────────────────
-    await client.query(`
-      ALTER TABLE audit_log ALTER COLUMN record_id DROP NOT NULL;
-      ALTER TABLE audit_log ALTER COLUMN changed_by DROP NOT NULL;
-      ALTER TABLE audit_log DROP CONSTRAINT IF EXISTS audit_log_action_check;
-      ALTER TABLE audit_log ALTER COLUMN action TYPE VARCHAR(50);
-      ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS ip_address VARCHAR(45);
-      ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS user_agent TEXT;
-      CREATE INDEX IF NOT EXISTS idx_audit_created_at ON audit_log(created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action);
     `);
 
     // ─── EXAM TYPES & RESULT GENERATION SYSTEM ───────────────────────────────

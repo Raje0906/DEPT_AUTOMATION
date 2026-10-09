@@ -10,6 +10,7 @@ export default function StudentDashboard() {
   const [notices, setNotices] = useState([]);
   const [upcomingClubEvents, setUpcomingClubEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [seminarData, setSeminarData] = useState(null);
   const currentSem = user?.current_semester || 5;
 
   useEffect(() => {
@@ -18,10 +19,12 @@ export default function StudentDashboard() {
       api.get('/student/results'),
       api.get('/student/notifications'),
       api.get('/clubs/events?academicYear=2026-27').catch(() => ({ data: { events: [] } })),
-    ]).then(([semRes, allRes, notifRes, clubEventsRes]) => {
+      api.get('/seminar/my-submission').catch(() => ({ data: { hasSubmission: false } })),
+    ]).then(([semRes, allRes, notifRes, clubEventsRes, seminarRes]) => {
       setData({ sem: semRes.data, all: allRes.data });
       setNotices(notifRes.data.notifications || []);
       setUpcomingClubEvents((clubEventsRes.data?.events || []).slice(0, 3));
+      setSeminarData(seminarRes.data || null);
     }).catch(console.error)
       .finally(() => setLoading(false));
   }, [currentSem]);
@@ -146,6 +149,64 @@ export default function StudentDashboard() {
           )}
         </div>
       </div>
+
+      {/* TE Seminar & Project Group Status Widget */}
+      {seminarData && (
+        <div className="panel mb-6 border-l-4 border-l-navy">
+          <div className="panel-header flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-navy"></span>
+              <h2 className="font-serif text-lg font-semibold text-ink">TE Seminar &amp; Project Group (A.Y. 2025-26)</h2>
+            </div>
+            <Link to="/student/seminar" className="text-sm text-maroon hover:underline font-semibold flex items-center gap-1">
+              <span>{seminarData.hasSubmission ? 'View Group & Marks' : 'Register Group'}</span>
+              <span>&rarr;</span>
+            </Link>
+          </div>
+          <div className="p-5">
+            {seminarData.hasSubmission ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="p-4 bg-paper rounded-lg border border-rule">
+                  <p className="text-xs font-semibold text-draft uppercase tracking-wide">Assigned Group</p>
+                  <p className="text-xl font-bold font-mono text-navy mt-1">Group #{seminarData.group?.group_no}</p>
+                  <p className="text-xs text-draft truncate mt-0.5">{seminarData.group?.domain}</p>
+                </div>
+                <div className="p-4 bg-paper rounded-lg border border-rule md:col-span-2">
+                  <p className="text-xs font-semibold text-draft uppercase tracking-wide">Faculty Guide</p>
+                  {seminarData.group?.guide_name ? (
+                    <div className="mt-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-base font-bold text-ink">{seminarData.group.guide_name}</p>
+                        <span className="badge badge-approved text-[10px] py-0.5 px-2">Assigned</span>
+                      </div>
+                      {seminarData.group.guide_email && (
+                        <p className="text-xs font-mono text-draft mt-0.5">✉️ {seminarData.group.guide_email}</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="mt-1 flex items-center gap-2">
+                      <span className="text-xs font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded">
+                        Guide not assigned yet
+                      </span>
+                      <span className="text-xs text-draft">Awaiting coordinator &amp; HOD review</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-paper rounded-lg border border-dashed border-rule">
+                <div>
+                  <p className="text-sm font-semibold text-ink">Group Registration Open</p>
+                  <p className="text-xs text-draft mt-0.5">Submit your team member details and seminar topic preferences for AY 2025-26.</p>
+                </div>
+                <Link to="/student/seminar" className="btn-primary shrink-0 text-xs py-2 px-4">
+                  Register Group
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Upcoming Club Activities Widget */}
       {upcomingClubEvents.length > 0 && (

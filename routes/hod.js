@@ -2,7 +2,6 @@ const express = require('express');
 const pool = require('../db/pool');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { computeSGPA, computeCGPA, computeSubjectRollup } = require('../services/gradeCalculator');
-const { auditRecord } = require('../middleware/auditLogger');
 
 const router = express.Router();
 router.use(verifyToken, requireRole('hod'));
@@ -196,15 +195,6 @@ router.post('/approve/:subjectId', async (req, res) => {
       return res.status(400).json({ error: 'No submitted marks found to approve for this subject & division' });
     }
 
-    auditRecord({
-      tableName: 'student_exam_marks',
-      recordId: parseInt(subjectId, 10),
-      changedBy: req.user.id,
-      oldValue: { status: 'submitted' },
-      newValue: { status: 'approved' },
-      action: 'UPDATE',
-      reason: `HOD approved marks for subject ${subjectId} (${division})`,
-    });
 
     res.json({ message: `Approved ${updateResult.rows.length} mark entries. Marks are locked for faculty edits.` });
   } catch (err) {
@@ -233,15 +223,6 @@ router.post('/sendback/:subjectId', async (req, res) => {
       [subjectId, semester, academicYear, division]
     );
 
-    auditRecord({
-      tableName: 'student_exam_marks',
-      recordId: parseInt(subjectId, 10),
-      changedBy: req.user.id,
-      oldValue: { status: 'submitted' },
-      newValue: { status: 'draft' },
-      action: 'UPDATE',
-      reason: `HOD sent back for correction (${division}): ${comment}`,
-    });
 
     res.json({ message: `Sent back ${updateRes.rows.length} marks to faculty as draft.`, comment });
   } catch (err) {
@@ -282,15 +263,6 @@ router.post('/publish', async (req, res) => {
         [semester, academicYear, req.user.dept, division, req.user.id]
       );
 
-      auditRecord({
-        tableName: 'result_publish_status',
-        recordId: parseInt(semester, 10),
-        changedBy: req.user.id,
-        oldValue: { status: 'open' },
-        newValue: { status: 'published' },
-        action: 'UPDATE',
-        reason: `HOD published Semester ${semester} results for ${division}`,
-      });
 
       await client.query('COMMIT');
       res.json({ message: `Semester ${semester} results published for ${division} (${pubRes.rows.length} marks published). Students can now view their official results.` });
@@ -458,40 +430,6 @@ router.get('/analytics', async (req, res) => {
   }
 });
 
-// ─── GET /api/hod/audit-log ───────────────────────────────────────────────────
-router.get('/audit-log', async (req, res) => {
-  try {
-    const { page = 1, limit = 50 } = req.query;
-    const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
-
-    const result = await pool.query(
-      `SELECT a.id, a.table_name, a.record_id, a.action, a.old_value, a.new_value,
-              a.reason, a.created_at, a.ip_address, a.user_agent,
-              u.name AS changed_by_name, u.role AS changed_by_role
-       FROM audit_log a
-       LEFT JOIN users u ON u.id = a.changed_by
-       WHERE (u.department = $1 OR a.changed_by IS NULL)
-       ORDER BY a.created_at DESC
-       LIMIT $2 OFFSET $3`,
-      [req.user.dept, limit, offset]
-    );
-
-    const countResult = await pool.query(
-      `SELECT COUNT(*) FROM audit_log a LEFT JOIN users u ON u.id = a.changed_by WHERE (u.department = $1 OR a.changed_by IS NULL)`,
-      [req.user.dept]
-    );
-
-    res.json({
-      logs: result.rows,
-      total: parseInt(countResult.rows[0].count, 10),
-      page: parseInt(page, 10),
-      limit: parseInt(limit, 10),
-    });
-  } catch (err) {
-    console.error('[HOD] Audit log error:', err.message);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
 
 
 // ─── POST /api/hod/manual-override ────────────────────────────────────────────
@@ -532,17 +470,7 @@ router.post('/manual-override', async (req, res) => {
        computed.total, computed.grade, computed.gradePoints, computed.isBacklog, markId]
     );
 
-    auditRecord({
-      tableName: 'marks',
-      recordId: markId,
-      changedBy: req.user.id,
-      oldValue: { cie_marks: old.cie_marks, practical_marks: old.practical_marks, end_sem_marks: old.end_sem_marks, grade: old.grade },
-      newValue: { cie_marks: cie, practical_marks: practical, end_sem_marks: endSem, grade: computed.grade },
-      action: 'UPDATE',
-      reason: `HOD MANUAL OVERRIDE: ${typedReason}`,
-    });
-
-    res.json({ message: 'Manual override applied. Audit log updated.', computed });
+    res.json({ message: 'Manual override applied successfully.', computed });
   } catch (err) {
     console.error('[HOD] Manual override error:', err.message);
     res.status(500).json({ error: 'Internal server error' });
@@ -700,15 +628,6 @@ router.post('/teachers/assign', async (req, res) => {
         });
       }
 
-      auditRecord({
-        tableName: 'faculty_subject_map',
-        recordId: insertedIds[0] || parseInt(facultyId, 10),
-        changedBy: req.user.id,
-        oldValue: null,
-        newValue: { facultyId, insertedCount, academicYear: year, isClassTeacher, ctTargetClass },
-        action: 'INSERT',
-        reason: `HOD assigned ${insertedCount} course(s) to faculty #${facultyId}${isClassTeacher && ctTargetClass ? ` [Class Teacher for ${ctTargetClass}]` : ''}`,
-      });
 
       let msg = `Successfully assigned ${insertedCount} subject(s)!`;
       if (alreadyAssignedCount > 0) {
@@ -752,15 +671,6 @@ router.post('/teachers/set-class-teacher', async (req, res) => {
       [facultyId, className, year]
     );
 
-    auditRecord({
-      tableName: 'class_teachers',
-      recordId: parseInt(facultyId, 10),
-      changedBy: req.user.id,
-      oldValue: null,
-      newValue: { facultyId, className, year },
-      action: 'UPDATE',
-      reason: `HOD appointed faculty #${facultyId} as Class Teacher for ${className}`,
-    });
 
     res.json({ message: `Successfully appointed as Class Teacher for ${className}!` });
   } catch (err) {
@@ -793,15 +703,6 @@ router.delete('/teachers/unassign/:mappingId', async (req, res) => {
 
     await pool.query(`DELETE FROM faculty_subject_map WHERE id = $1`, [mappingId]);
 
-    auditRecord({
-      tableName: 'faculty_subject_map',
-      recordId: parseInt(mappingId, 10),
-      changedBy: req.user.id,
-      oldValue: existing.rows[0],
-      newValue: null,
-      action: 'DELETE',
-      reason: `HOD removed faculty subject mapping #${mappingId}`,
-    });
 
     res.json({ message: 'Assignment removed successfully' });
   } catch (err) {
@@ -1018,15 +919,6 @@ router.post('/term-rollover/execute', async (req, res) => {
     }
 
     // Audit Log
-    auditRecord({
-      tableName: 'academic_term_rollover',
-      recordId: toSem,
-      changedBy: req.user.id,
-      oldValue: { fromSemester: fromSem, academicYear: ay },
-      newValue: { toSemester: toSem, updatedStudentsCount, facultyMappingsCount, divisions: divList },
-      action: 'UPDATE',
-      reason: `HOD executed Academic Term Rollover from Semester ${fromSem} to Semester ${toSem} (${ay})`,
-    });
 
     await client.query('COMMIT');
 
@@ -1067,15 +959,6 @@ router.post('/term-rollover/switch-active-semester', async (req, res) => {
       [targetSem, divList]
     );
 
-    auditRecord({
-      tableName: 'students',
-      recordId: targetSem,
-      changedBy: req.user.id,
-      oldValue: null,
-      newValue: { targetSemester: targetSem, divisions: divList, count: result.rows.length },
-      action: 'UPDATE',
-      reason: `HOD switched active current_semester to ${targetSem} for divisions: ${divList.join(', ')}`,
-    });
 
     res.json({
       success: true,

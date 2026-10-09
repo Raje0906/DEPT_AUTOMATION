@@ -1133,7 +1133,7 @@ router.patch('/hod/groups/:id/guide', verifyToken, requireProjectCoordinatorOrHO
       const groupCode = updateRes.rows[0]?.group_code || `Group #${groupId}`;
 
       await pool.query(
-        `INSERT INTO audit_log (table_name, record_id, changed_by, action, reason)
+        `INSERT INTO audit_logs (entity_type, entity_id, user_id, action, details)
          VALUES ($1, $2, $3, $4, $5)`,
         [
           'project_groups',
@@ -1162,7 +1162,7 @@ router.patch('/hod/groups/:id/guide', verifyToken, requireProjectCoordinatorOrHO
       const groupCode = updateRes.rows[0]?.group_code || `Group #${groupId}`;
 
       await pool.query(
-        `INSERT INTO audit_log (table_name, record_id, changed_by, action, reason)
+        `INSERT INTO audit_logs (entity_type, entity_id, user_id, action, details)
          VALUES ($1, $2, $3, $4, $5)`,
         [
           'project_groups',
@@ -1268,7 +1268,7 @@ router.post('/hod/groups/clear-guides', verifyToken, requireProjectCoordinatorOr
     );
 
     await pool.query(
-      `INSERT INTO audit_log (table_name, record_id, changed_by, action, reason)
+      `INSERT INTO audit_logs (entity_type, entity_id, user_id, action, details)
        VALUES ($1, $2, $3, $4, $5)`,
       [
         'project_groups',
@@ -1789,10 +1789,10 @@ router.post('/hod/evaluations/:id/unlock', verifyToken, requireProjectCoordinato
     );
 
     await pool.query(
-      `INSERT INTO audit_log (table_name, record_id, changed_by, action, reason)
+      `INSERT INTO audit_logs (entity_type, entity_id, user_id, action, details)
        VALUES ('project_evaluations', $1, $2, 'UPDATE', $3)`,
       [evalId, req.user.id, `Unlocked evaluation: ${unlock_reason}`]
-    );
+    ).catch(() => {});
 
     res.json({ message: 'Evaluation unlocked for re-editing' });
   } catch (err) {
@@ -1821,7 +1821,7 @@ router.post('/hod/score-releases', verifyToken, requireProjectCoordinatorOrHOD, 
     const stageName = stageRes.rows[0]?.name || `Stage #${stage_id}`;
 
     await pool.query(
-      `INSERT INTO audit_log (table_name, record_id, changed_by, action, reason)
+      `INSERT INTO audit_logs (entity_type, entity_id, user_id, action, details)
        VALUES ($1, $2, $3, $4, $5)`,
       [
         'project_score_releases',
@@ -2001,23 +2001,12 @@ router.get('/hod/activity-updates', verifyToken, requireProjectCoordinatorOrHOD,
       [acadYear]
     );
 
-    // 5. Audit log updates for projects
-    const auditUpdates = await pool.query(
-      `SELECT a.id as record_id, a.action as type, a.reason as summary,
-              u.name as actor_name, a.created_at as timestamp
-       FROM audit_log a
-       LEFT JOIN users u ON a.changed_by = u.id
-       WHERE a.table_name LIKE 'project_%'
-       ORDER BY a.created_at DESC LIMIT 25`
-    ).catch(() => ({ rows: [] }));
-
     // Merge and sort by timestamp DESC
     const allUpdates = [
       ...guideUpdates.rows,
       ...scoreUpdates.rows,
       ...evalUpdates.rows,
-      ...groupUpdates.rows,
-      ...auditUpdates.rows
+      ...groupUpdates.rows
     ]
       .filter(item => item.timestamp)
       .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
