@@ -216,6 +216,22 @@ async function runMigrations() {
     await client.query(`ALTER TABLE project_score_releases ADD COLUMN IF NOT EXISTS approved_by INTEGER REFERENCES users(id)`);
     await client.query(`ALTER TABLE project_score_releases ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ`);
 
+    // Clean up any pending HOD approvals to ensure immediate activation for BE coordinator
+    await client.query(`
+      UPDATE project_groups
+      SET guide_id = COALESCE(guide_id, proposed_guide_id),
+          guide_approval_status = 'APPROVED',
+          status = 'ACTIVE',
+          guide_decided_at = COALESCE(guide_decided_at, NOW())
+      WHERE guide_approval_status = 'PENDING_HOD_APPROVAL' AND proposed_guide_id IS NOT NULL
+    `);
+    await client.query(`
+      UPDATE project_score_releases
+      SET status = 'APPROVED',
+          approved_at = COALESCE(approved_at, NOW())
+      WHERE status = 'PENDING_HOD_APPROVAL'
+    `);
+
     // ─── PROJECT GUIDE REQUESTS ───────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS project_guide_requests (
@@ -696,6 +712,23 @@ async function runMigrations() {
       ALTER TABLE project_evaluation_scores ADD COLUMN IF NOT EXISTS student_id INTEGER REFERENCES students(id) ON DELETE CASCADE;
       ALTER TABLE project_evaluation_scores DROP CONSTRAINT IF EXISTS project_evaluation_scores_evaluation_id_criterion_id_key;
       CREATE UNIQUE INDEX IF NOT EXISTS idx_proj_eval_score_member ON project_evaluation_scores(evaluation_id, criterion_id, member_id);
+
+      -- BE Project Designated Guides
+      CREATE TABLE IF NOT EXISTS project_designated_guides (
+        id              SERIAL PRIMARY KEY,
+        academic_year   VARCHAR(20) NOT NULL DEFAULT '2026-27',
+        faculty_id      INTEGER NOT NULL REFERENCES faculty(id) ON DELETE CASCADE,
+        designated_by   INTEGER REFERENCES users(id),
+        created_at      TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(academic_year, faculty_id)
+      );
+
+      -- Performance indexes for BE Project Governance
+      CREATE INDEX IF NOT EXISTS idx_project_groups_acad_year ON project_groups(academic_year);
+      CREATE INDEX IF NOT EXISTS idx_project_group_members_group_id ON project_group_members(group_id);
+      CREATE INDEX IF NOT EXISTS idx_project_eval_stages_acad_year ON project_evaluation_stages(academic_year);
+      CREATE INDEX IF NOT EXISTS idx_project_stage_criteria_stage_id ON project_stage_criteria(stage_id);
+      CREATE INDEX IF NOT EXISTS idx_project_panel_assignments_stage_id ON project_panel_assignments(stage_id);
     `);
 
     await client.query('COMMIT');

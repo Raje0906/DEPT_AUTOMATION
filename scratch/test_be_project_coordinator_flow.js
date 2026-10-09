@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 async function testBEProjectCoordinatorFlow() {
   const client = await pool.connect();
   try {
-    console.log('--- Testing BE Project Coordinator & HOD Confirmation Workflow ---');
+    console.log('--- Testing BE Project Coordinator Direct Workflow (No HOD Approvals Required) ---');
 
     // 1. Fetch HOD user and a faculty user
     const hodRes = await client.query(`SELECT u.id as user_id, u.email, f.id as faculty_id FROM users u JOIN faculty f ON f.user_id = u.id WHERE u.role = 'hod' LIMIT 1`);
@@ -43,34 +43,22 @@ async function testBEProjectCoordinatorFlow() {
 
     console.log(`✓ Testing with Group #${group.id} (${group.group_code})`);
 
-    // 4. BE Project Coordinator proposes guide assignment
+    // 4. BE Project Coordinator directly assigns guide (No HOD confirmation required)
     const targetGuideId = hod.faculty_id;
     await client.query(`
       UPDATE project_groups
-      SET proposed_guide_id = $1, guide_approval_status = 'PENDING_HOD_APPROVAL', guide_requested_by = $2
+      SET guide_id = $1, proposed_guide_id = $1, guide_approval_status = 'APPROVED',
+          guide_requested_by = $2, guide_decided_at = NOW(), status = 'ACTIVE'
       WHERE id = $3
     `, [targetGuideId, coordinator.user_id, group.id]);
 
-    const proposedGrp = (await client.query(`SELECT * FROM project_groups WHERE id = $1`, [group.id])).rows[0];
-    console.log(`✓ Coordinator proposed guide Faculty #${targetGuideId}. Approval Status: ${proposedGrp.guide_approval_status}, Active Guide ID: ${proposedGrp.guide_id}`);
-    if (proposedGrp.guide_approval_status !== 'PENDING_HOD_APPROVAL') {
-      throw new Error('Expected status PENDING_HOD_APPROVAL');
+    const assignedGrp = (await client.query(`SELECT * FROM project_groups WHERE id = $1`, [group.id])).rows[0];
+    console.log(`✓ Coordinator directly assigned guide Faculty #${targetGuideId}. Status: ${assignedGrp.status}, Active Guide ID: ${assignedGrp.guide_id}, Approval Status: ${assignedGrp.guide_approval_status}`);
+    if (assignedGrp.guide_id !== targetGuideId || assignedGrp.status !== 'ACTIVE') {
+      throw new Error('Expected guide to be active immediately without HOD confirmation');
     }
 
-    // 5. HOD approves guide assignment
-    await client.query(`
-      UPDATE project_groups
-      SET guide_id = proposed_guide_id, guide_approval_status = 'APPROVED', guide_decided_at = NOW(), status = 'ACTIVE'
-      WHERE id = $1
-    `, [group.id]);
-
-    const approvedGrp = (await client.query(`SELECT * FROM project_groups WHERE id = $1`, [group.id])).rows[0];
-    console.log(`✓ HOD confirmed guide. Approval Status: ${approvedGrp.guide_approval_status}, Active Guide ID: ${approvedGrp.guide_id}`);
-    if (approvedGrp.guide_approval_status !== 'APPROVED' || approvedGrp.guide_id !== targetGuideId) {
-      throw new Error('Failed to confirm guide');
-    }
-
-    // 6. Test Stage & Score release confirmation
+    // 5. BE Project Coordinator directly assigns panel mentors (No HOD confirmation required)
     let stageRes = await client.query(`SELECT id FROM project_evaluation_stages WHERE academic_year = '2026-27' LIMIT 1`);
     let stageId;
     if (stageRes.rows.length === 0) {
@@ -83,25 +71,57 @@ async function testBEProjectCoordinatorFlow() {
       stageId = stageRes.rows[0].id;
     }
 
-    // Coordinator requests score release
-    const relRes = await client.query(`
-      INSERT INTO project_score_releases (stage_id, group_id, released_by, status, requested_by)
-      VALUES ($1, $2, $3, 'PENDING_HOD_APPROVAL', $3) RETURNING *
-    `, [stageId, group.id, coordinator.user_id]);
-
-    const pendingRel = relRes.rows[0];
-    console.log(`✓ Coordinator requested score release #${pendingRel.id}. Status: ${pendingRel.status}`);
-
-    // HOD approves score release
+    await client.query(`DELETE FROM project_panel_assignments WHERE stage_id = $1 AND group_id = $2`, [stageId, group.id]);
     await client.query(`
-      UPDATE project_score_releases SET status = 'APPROVED', approved_by = $1, approved_at = NOW()
-      WHERE id = $2
-    `, [hod.user_id, pendingRel.id]);
+      INSERT INTO project_panel_assignments (stage_id, group_id, panel_member_id, assigned_by, status)
+      VALUES ($1, $2, $3, $4, 'ASSIGNED')
+    `, [stageId, group.id, coordinator.faculty_id, coordinator.user_id]);
 
-    const confirmedRel = (await client.query(`SELECT * FROM project_score_releases WHERE id = $1`, [pendingRel.id])).rows[0];
-    console.log(`✓ HOD confirmed score release. Status: ${confirmedRel.status}, Approved By: ${confirmedRel.approved_by}`);
+    const panelRes = await client.query(`SELECT * FROM project_panel_assignments WHERE stage_id = $1 AND group_id = $2`, [stageId, group.id]);
+    console.log(`✓ Coordinator assigned ${panelRes.rows.length} panel mentor(s). Assignment status: ${panelRes.rows[0].status}`);
+    if (panelRes.rows[0].status !== 'ASSIGNED') {
+      throw new Error('Expected panel mentor to be assigned immediately');
+    }
 
-    console.log('--- ALL BE PROJECT COORDINATOR & HOD CONFIRMATION TESTS PASSED LOGICALLY! ---');
+    // 6. BE Project Coordinator directly releases scores to students (No HOD confirmation required)
+    const existingRel = await client.query(
+      `SELECT id FROM project_score_releases WHERE stage_id = $1 AND (group_id = $2 OR ($2::int IS NULL AND group_id IS NULL))`,
+      [stageId, group.id]
+    );
+
+    let activeRel;
+    if (existingRel.rows.length > 0) {
+      const upd = await client.query(
+        `UPDATE project_score_releases
+         SET status = 'APPROVED', released_by = $1, released_at = NOW(), approved_by = $1, approved_at = NOW()
+         WHERE id = $2 RETURNING *`,
+        [coordinator.user_id, existingRel.rows[0].id]
+      );
+      activeRel = upd.rows[0];
+    } else {
+      const ins = await client.query(
+        `INSERT INTO project_score_releases (stage_id, group_id, released_by, status, requested_by, approved_by, approved_at)
+         VALUES ($1, $2, $3, 'APPROVED', $3, $3, NOW()) RETURNING *`,
+        [stageId, group.id, coordinator.user_id]
+      );
+      activeRel = ins.rows[0];
+    }
+    console.log(`✓ Coordinator directly released score release #${activeRel.id}. Status: ${activeRel.status}, Released to Students: Yes`);
+    if (activeRel.status !== 'APPROVED') {
+      throw new Error('Expected score release to be approved and published immediately');
+    }
+
+    // Verify student view queries this release without HOD block
+    const studentCheck = await client.query(`
+      SELECT stage_id FROM project_score_releases
+      WHERE (group_id IS NULL OR group_id = $1) AND (status IS NULL OR status != 'REJECTED')
+    `, [group.id]);
+    if (studentCheck.rows.length === 0) {
+      throw new Error('Student should be able to view released score without HOD approval');
+    }
+    console.log(`✓ Student view verified: stage scores are visible immediately.`);
+
+    console.log('--- ALL BE PROJECT COORDINATOR DIRECT WORKFLOW TESTS PASSED! ---');
   } catch (err) {
     console.error('Test Failed:', err);
   } finally {

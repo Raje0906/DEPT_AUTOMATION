@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'react-router-dom';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
 
 export default function ProjectEval() {
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('evaluations'); // 'evaluations' | 'guided' | 'requests'
+  const [activeTab, setActiveTab] = useState(
+    searchParams.get('tab') === 'evaluations' ? 'evaluations' : 'guided'
+  ); // 'guided' | 'evaluations' | 'requests'
   
   // Backend data states
   const [assignments, setAssignments] = useState([]);
@@ -141,14 +145,14 @@ export default function ProjectEval() {
       {/* Summary Stat Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="p-4 bg-white border border-rule rounded">
+          <p className="text-xs uppercase tracking-wider text-draft font-semibold">Guided Groups</p>
+          <p className="font-serif text-3xl font-bold text-navy mt-1">{guidedGroups.length}</p>
+          <p className="text-xs text-draft mt-1 font-medium">Under your supervision</p>
+        </div>
+        <div className="p-4 bg-white border border-rule rounded">
           <p className="text-xs uppercase tracking-wider text-draft font-semibold">Assigned Panel Groups</p>
           <p className="font-serif text-3xl font-bold text-ink mt-1">{assignments.length}</p>
           <p className="text-xs text-draft mt-1 font-medium">Across active stages</p>
-        </div>
-        <div className="p-4 bg-white border border-rule rounded">
-          <p className="text-xs uppercase tracking-wider text-draft font-semibold">Evaluations Completed</p>
-          <p className="font-serif text-3xl font-bold text-emerald-700 mt-1">{completedAssignments}</p>
-          <p className="text-xs text-emerald-700 mt-1 font-medium">Submitted</p>
         </div>
         <div className="p-4 bg-white border border-rule rounded">
           <p className="text-xs uppercase tracking-wider text-draft font-semibold">Pending Reviews</p>
@@ -156,37 +160,101 @@ export default function ProjectEval() {
           <p className="text-xs text-amber-700 mt-1 font-medium">Awaiting evaluation</p>
         </div>
         <div className="p-4 bg-white border border-rule rounded">
-          <p className="text-xs uppercase tracking-wider text-draft font-semibold">Guided Groups</p>
-          <p className="font-serif text-3xl font-bold text-navy mt-1">{guidedGroups.length}</p>
-          <p className="text-xs text-draft mt-1 font-medium">Under your supervision</p>
+          <p className="text-xs uppercase tracking-wider text-draft font-semibold">Evaluations Completed</p>
+          <p className="font-serif text-3xl font-bold text-emerald-700 mt-1">{completedAssignments}</p>
+          <p className="text-xs text-emerald-700 mt-1 font-medium">Submitted</p>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-rule pb-2">
+      <div className="flex items-center gap-2.5 border-b border-rule pb-3 overflow-x-auto">
         <button
-          onClick={() => setActiveTab('evaluations')}
-          className={`px-4 py-2 text-xs font-semibold rounded transition-colors ${
-            activeTab === 'evaluations'
-              ? 'bg-navy text-white'
-              : 'bg-white border border-rule text-ink hover:bg-paper'
-          }`}
-        >
-          Assigned Panel Evaluations ({assignments.length})
-        </button>
-        <button
+          type="button"
           onClick={() => setActiveTab('guided')}
-          className={`px-4 py-2 text-xs font-semibold rounded transition-colors ${
+          className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-md border transition-all whitespace-nowrap ${
             activeTab === 'guided'
-              ? 'bg-navy text-white'
-              : 'bg-white border border-rule text-ink hover:bg-paper'
+              ? 'bg-navy text-white border-navy shadow-xs'
+              : 'bg-white text-slate-700 border-rule hover:bg-slate-50 hover:text-ink hover:border-slate-300 shadow-2xs'
           }`}
         >
-          My Guided Groups ({guidedGroups.length})
+          <span className="text-sm">👥</span>
+          <span>My Guided Groups</span>
+          <span
+            className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+              activeTab === 'guided'
+                ? 'bg-white/20 text-white'
+                : 'bg-slate-100 text-slate-600'
+            }`}
+          >
+            {guidedGroups.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('evaluations')}
+          className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-md border transition-all whitespace-nowrap ${
+            activeTab === 'evaluations'
+              ? 'bg-navy text-white border-navy shadow-xs'
+              : 'bg-white text-slate-700 border-rule hover:bg-slate-50 hover:text-ink hover:border-slate-300 shadow-2xs'
+          }`}
+        >
+          <span className="text-sm">🛡️</span>
+          <span>Assigned Panel Evaluations</span>
+          <span
+            className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+              activeTab === 'evaluations'
+                ? 'bg-white/20 text-white'
+                : 'bg-slate-100 text-slate-600'
+            }`}
+          >
+            {assignments.length}
+          </span>
         </button>
       </div>
 
-      {/* TAB 1: PANELIST ASSIGNMENTS */}
+      {/* TAB 1: MY GUIDED GROUPS */}
+      {activeTab === 'guided' && (
+        <div className="panel">
+          <div className="panel-header">
+            <h2 className="font-serif text-xl font-semibold">Project Groups Guided by You</h2>
+          </div>
+          <div className="divide-y divide-rule">
+            {guidedGroups.length === 0 ? (
+              <div className="p-8 text-center text-draft">You are currently not guiding any active project groups.</div>
+            ) : (
+              guidedGroups.map((g) => (
+                <div key={g.id} className="p-6 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono text-sm font-bold text-navy bg-blue-50 border border-blue-200 px-2.5 py-1 rounded">
+                        {g.group_code}
+                      </span>
+                      <h3 className="font-serif text-lg font-bold text-ink">{g.title}</h3>
+                    </div>
+                    <span className="text-xs font-mono font-medium text-draft bg-gray-100 px-2.5 py-1 rounded">
+                      {g.academic_year}
+                    </span>
+                  </div>
+                  <p className="text-xs text-draft font-medium">Domain: <span className="text-ink font-semibold">{g.domain}</span></p>
+                  <p className="text-xs text-ink">{g.abstract}</p>
+
+                  <div className="pt-2 flex items-center gap-4 text-xs text-draft">
+                    <span className="font-bold text-navy">Roster ({g.members.length}):</span>
+                    {g.members.map((m, idx) => (
+                      <span key={idx} className="bg-paper border border-rule px-2 py-0.5 rounded font-mono">
+                        {m.name} ({m.roll_no}) {m.is_leader && '★'}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 2: PANELIST ASSIGNMENTS */}
       {activeTab === 'evaluations' && (
         <div className="panel">
           <div className="panel-header flex items-center justify-between">
@@ -258,47 +326,6 @@ export default function ProjectEval() {
                 )}
               </tbody>
             </table>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 2: MY GUIDED GROUPS */}
-      {activeTab === 'guided' && (
-        <div className="panel">
-          <div className="panel-header">
-            <h2 className="font-serif text-xl font-semibold">Project Groups Guided by You</h2>
-          </div>
-          <div className="divide-y divide-rule">
-            {guidedGroups.length === 0 ? (
-              <div className="p-8 text-center text-draft">You are currently not guiding any active project groups.</div>
-            ) : (
-              guidedGroups.map((g) => (
-                <div key={g.id} className="p-6 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono text-sm font-bold text-navy bg-blue-50 border border-blue-200 px-2.5 py-1 rounded">
-                        {g.group_code}
-                      </span>
-                      <h3 className="font-serif text-lg font-bold text-ink">{g.title}</h3>
-                    </div>
-                    <span className="text-xs font-mono font-medium text-draft bg-gray-100 px-2.5 py-1 rounded">
-                      {g.academic_year}
-                    </span>
-                  </div>
-                  <p className="text-xs text-draft font-medium">Domain: <span className="text-ink font-semibold">{g.domain}</span></p>
-                  <p className="text-xs text-ink">{g.abstract}</p>
-
-                  <div className="pt-2 flex items-center gap-4 text-xs text-draft">
-                    <span className="font-bold text-navy">Roster ({g.members.length}):</span>
-                    {g.members.map((m, idx) => (
-                      <span key={idx} className="bg-paper border border-rule px-2 py-0.5 rounded font-mono">
-                        {m.name} ({m.roll_no}) {m.is_leader && '★'}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))
-            )}
           </div>
         </div>
       )}

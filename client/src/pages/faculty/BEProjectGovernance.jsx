@@ -4,13 +4,13 @@ import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../contexts/AuthContext';
 
-export default function HODProjectMgmt() {
+export default function BEProjectGovernance() {
   const { user } = useAuth();
   const isHOD = user?.role === 'hod';
   const isCoordinator = user?.role === 'faculty' && user?.is_project_coordinator;
 
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'approvals' | 'groups' | 'stages' | 'panels' | 'governance'
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'groups' | 'stages' | 'governance'
   const [academicYear, setAcademicYear] = useState('2026-27');
 
   // Backend state
@@ -18,16 +18,10 @@ export default function HODProjectMgmt() {
   const [groups, setGroups] = useState([]);
   const [stages, setStages] = useState([]);
   const [availableGuides, setAvailableGuides] = useState([]);
-  const [pendingApprovals, setPendingApprovals] = useState(null);
 
-  // Panel Matrix & Auto-Assign state
+  // Panel Matrix state
   const [panelMatrix, setPanelMatrix] = useState([]);
   const [panelMatrixStageId, setPanelMatrixStageId] = useState('');
-  const [panelSearchQuery, setPanelSearchQuery] = useState('');
-
-  const [autoAssignModal, setAutoAssignModal] = useState(false);
-  const [autoAssignStageId, setAutoAssignStageId] = useState('');
-  const [autoAssignPanelSize, setAutoAssignPanelSize] = useState(2);
 
   const [copyStageModal, setCopyStageModal] = useState(false);
   const [copySourceStageId, setCopySourceStageId] = useState('');
@@ -90,65 +84,114 @@ export default function HODProjectMgmt() {
   const [dueDateInput, setDueDateInput] = useState('');
   const [submittingRegSettings, setSubmittingRegSettings] = useState(false);
 
-  // Groups Tab Filtering & Excel Import State
-  const fileInputRef = useRef(null);
-  const [importingExcel, setImportingExcel] = useState(false);
+  // Groups Tab Filtering State
   const [groupSearch, setGroupSearch] = useState('');
   const [selectedDivision, setSelectedDivision] = useState('ALL');
   const [expandedGroupId, setExpandedGroupId] = useState(null);
 
-  // Live Activity Updates State
-  const [activityUpdates, setActivityUpdates] = useState([]);
-  const [loadingUpdates, setLoadingUpdates] = useState(false);
-  const [updateFilter, setUpdateFilter] = useState('ALL');
+  // Governance Overview Faculty Search & Filter State
+  const [facultySearch, setFacultySearch] = useState('');
+  const [facultyFilter, setFacultyFilter] = useState('ALL'); // 'ALL' | 'GUIDES' | 'ELIGIBLE' | 'MENTORS'
+  const [togglingGuideId, setTogglingGuideId] = useState(null);
 
-  const handleImportExcel = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Guide Modal Search State
+  const [guideModalSearch, setGuideModalSearch] = useState('');
 
-    const formData = new FormData();
-    formData.append('file', file);
+  // Mentor Modals Search States
+  const [panelMentorSearch, setPanelMentorSearch] = useState('');
+  const [rangeMentorSearch, setRangeMentorSearch] = useState('');
 
-    setImportingExcel(true);
-    const toastId = toast.loading('Importing BE Project Groups from Excel...');
-    try {
-      const res = await api.post(`/projects/hod/groups/import-excel?academic_year=${academicYear}`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      toast.success(res.data.message || 'BE Project Groups imported successfully!', { id: toastId });
-      fetchHODData();
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to import Excel file', { id: toastId });
-    } finally {
-      setImportingExcel(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
+  const guidesCount = useMemo(() => {
+    return (dashboardData?.faculty_load || []).filter(
+      (f) => Boolean(f.is_designated_guide || Number(f.guided_groups) > 0) && Number(f.panel_assignments) === 0
+    ).length;
+  }, [dashboardData?.faculty_load]);
 
-  const fetchActivityUpdates = async () => {
-    setLoadingUpdates(true);
-    try {
-      const res = await api.get(`/projects/hod/activity-updates?academic_year=${academicYear}`);
-      setActivityUpdates(res.data || []);
-      toast.success('Activity updates refreshed');
-    } catch (err) {
-      console.error('Failed to load activity updates:', err);
-      toast.error('Failed to refresh updates');
-    } finally {
-      setLoadingUpdates(false);
-    }
-  };
+  const mentorsCount = useMemo(() => {
+    return (dashboardData?.faculty_load || []).filter(
+      (f) => Number(f.panel_assignments) > 0
+    ).length;
+  }, [dashboardData?.faculty_load]);
 
-  const filteredUpdates = useMemo(() => {
-    if (updateFilter === 'ALL') return activityUpdates;
-    return activityUpdates.filter((u) => {
-      if (updateFilter === 'GUIDES') return u.type === 'GUIDE_ASSIGNED' || u.type === 'PROJECT_GUIDE_ASSIGNED' || u.type === 'PROJECT_GUIDE_UNASSIGNED';
-      if (updateFilter === 'EVALUATIONS') return u.type === 'EVALUATION_SUBMITTED';
-      if (updateFilter === 'SCORES') return u.type === 'SCORE_RELEASED' || u.type === 'PROJECT_SCORE_RELEASED';
-      if (updateFilter === 'GROUPS') return u.type === 'GROUP_REGISTERED';
+  const eligibleCount = useMemo(() => {
+    return (dashboardData?.faculty_load || []).filter(
+      (f) => !f.is_designated_guide && Number(f.guided_groups) === 0 && Number(f.panel_assignments) === 0
+    ).length;
+  }, [dashboardData?.faculty_load]);
+
+  const filteredFacultyLoad = useMemo(() => {
+    const list = dashboardData?.faculty_load || [];
+    return list.filter((fac) => {
+      const isMentor = Number(fac.panel_assignments) > 0;
+      const isGuide = Boolean(fac.is_designated_guide || Number(fac.guided_groups) > 0) && !isMentor;
+
+      if (facultyFilter === 'GUIDES' && !isGuide) return false;
+      if (facultyFilter === 'ELIGIBLE' && (isGuide || isMentor)) return false;
+      if (facultyFilter === 'MENTORS' && !isMentor) return false;
+
+      if (facultySearch.trim()) {
+        const q = facultySearch.toLowerCase().trim();
+        const nameMatch = fac.name?.toLowerCase().includes(q);
+        const empMatch = fac.employee_id?.toLowerCase().includes(q);
+        const emailMatch = fac.email?.toLowerCase().includes(q);
+        const desigMatch = fac.designation?.toLowerCase().includes(q);
+        if (!nameMatch && !empMatch && !emailMatch && !desigMatch) return false;
+      }
       return true;
     });
-  }, [activityUpdates, updateFilter]);
+  }, [dashboardData?.faculty_load, facultySearch, facultyFilter]);
+
+  const filteredModalGuides = useMemo(() => {
+    if (!guideModalSearch.trim()) return availableGuides;
+    const q = guideModalSearch.toLowerCase().trim();
+    return availableGuides.filter((g) => {
+      return (
+        g.name?.toLowerCase().includes(q) ||
+        g.employee_id?.toLowerCase().includes(q) ||
+        g.email?.toLowerCase().includes(q) ||
+        g.designation?.toLowerCase().includes(q)
+      );
+    });
+  }, [availableGuides, guideModalSearch]);
+
+  const allDepartmentFaculty = useMemo(() => {
+    if (dashboardData?.faculty_load && dashboardData.faculty_load.length > 0) {
+      return dashboardData.faculty_load;
+    }
+    return availableGuides;
+  }, [dashboardData?.faculty_load, availableGuides]);
+
+  const filteredPanelMentors = useMemo(() => {
+    if (!panelMentorSearch.trim()) return allDepartmentFaculty;
+    const q = panelMentorSearch.toLowerCase().trim();
+    return allDepartmentFaculty.filter(
+      (f) =>
+        f.name?.toLowerCase().includes(q) ||
+        f.designation?.toLowerCase().includes(q) ||
+        f.employee_id?.toLowerCase().includes(q)
+    );
+  }, [allDepartmentFaculty, panelMentorSearch]);
+
+  const filteredRangeMentors = useMemo(() => {
+    if (!rangeMentorSearch.trim()) return allDepartmentFaculty;
+    const q = rangeMentorSearch.toLowerCase().trim();
+    return allDepartmentFaculty.filter(
+      (f) =>
+        f.name?.toLowerCase().includes(q) ||
+        f.designation?.toLowerCase().includes(q) ||
+        f.employee_id?.toLowerCase().includes(q)
+    );
+  }, [allDepartmentFaculty, rangeMentorSearch]);
+
+
+
+  const groupPanelistsMap = useMemo(() => {
+    const map = {};
+    for (const item of panelMatrix) {
+      map[item.id] = item.panelists || [];
+    }
+    return map;
+  }, [panelMatrix]);
 
   const filteredGroups = useMemo(() => {
     return groups.filter((g) => {
@@ -168,31 +211,29 @@ export default function HODProjectMgmt() {
           m.roll_no?.toLowerCase().includes(q) ||
           m.email?.toLowerCase().includes(q)
         );
-        if (!codeMatch && !titleMatch && !domainMatch && !guideMatch && !memberMatch) return false;
+        const mentors = groupPanelistsMap[g.id] || [];
+        const mentorMatch = mentors.some(m => m.name?.toLowerCase().includes(q));
+        if (!codeMatch && !titleMatch && !domainMatch && !guideMatch && !memberMatch && !mentorMatch) return false;
       }
       return true;
     });
-  }, [groups, selectedDivision, groupSearch]);
+  }, [groups, selectedDivision, groupSearch, groupPanelistsMap]);
 
   const fetchHODData = async () => {
     setLoading(true);
     try {
-      const [dashRes, groupsRes, stagesRes, guidesRes, pendingRes, settingsRes, updatesRes] = await Promise.all([
+      const [dashRes, groupsRes, stagesRes, guidesRes, settingsRes] = await Promise.all([
         api.get(`/projects/hod/dashboard?academic_year=${academicYear}`),
         api.get(`/projects/hod/groups?academic_year=${academicYear}`),
         api.get(`/projects/hod/stages?academic_year=${academicYear}`),
-        api.get('/projects/student/available-guides'),
-        api.get(`/projects/hod/pending-approvals?academic_year=${academicYear}`).catch(() => ({ data: { pendingGuides: [], pendingScoreReleases: [], totalPending: 0 } })),
+        api.get(`/projects/student/available-guides?academic_year=${academicYear}`),
         api.get(`/projects/registration-settings?academic_year=${academicYear}`).catch(() => ({ data: { is_registration_open: true, due_date: null, is_open: true } })),
-        api.get(`/projects/hod/activity-updates?academic_year=${academicYear}`).catch(() => ({ data: [] })),
       ]);
       setDashboardData(dashRes.data);
       setGroups(groupsRes.data);
       setStages(stagesRes.data);
       setAvailableGuides(guidesRes.data);
-      setPendingApprovals(pendingRes.data);
       setRegSettings(settingsRes.data);
-      setActivityUpdates(updatesRes.data || []);
       if (settingsRes.data?.due_date) {
         const d = new Date(settingsRes.data.due_date);
         const pad = (n) => String(n).padStart(2, '0');
@@ -214,26 +255,6 @@ export default function HODProjectMgmt() {
     }
   };
 
-  const handleConfirmGuide = async (groupId, action) => {
-    try {
-      const res = await api.post(`/projects/groups/${groupId}/confirm-guide`, { action });
-      toast.success(res.data.message);
-      fetchHODData();
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to process guide confirmation');
-    }
-  };
-
-  const handleConfirmScoreRelease = async (releaseId, action) => {
-    try {
-      const res = await api.post('/projects/confirm-score-release', { release_id: releaseId, action });
-      toast.success(res.data.message);
-      fetchHODData();
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to process score release confirmation');
-    }
-  };
-
   useEffect(() => {
     fetchHODData();
   }, [academicYear]);
@@ -245,6 +266,44 @@ export default function HODProjectMgmt() {
   }, [panelMatrixStageId]);
 
   // Handlers
+  const handleToggleDesignatedGuide = async (facultyId, currentIsGuide, guidedCount, panelAssignments) => {
+    if (Number(panelAssignments) > 0) {
+      toast.error('This faculty member is assigned as a Panel Mentor and cannot be a Guide.');
+      return;
+    }
+    if (currentIsGuide && Number(guidedCount) > 0) {
+      toast.error(`Cannot remove guide status: Faculty is actively guiding ${guidedCount} project group(s). Reassign them first.`);
+      return;
+    }
+
+    setTogglingGuideId(facultyId);
+    try {
+      const res = await api.post('/projects/hod/designated-guides/toggle', {
+        academic_year: academicYear,
+        faculty_id: facultyId,
+        is_guide: !currentIsGuide,
+      });
+      toast.success(res.data.message || 'Guide designation updated');
+      await fetchHODData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update guide designation');
+    } finally {
+      setTogglingGuideId(null);
+    }
+  };
+
+  const handleBatchAssignAllGuides = async () => {
+    try {
+      const res = await api.post('/projects/hod/designated-guides/batch-assign-all', {
+        academic_year: academicYear,
+      });
+      toast.success(res.data.message || 'Eligible faculty designated as Guides');
+      await fetchHODData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to batch assign guides');
+    }
+  };
+
   const handleAssignGuide = async (e) => {
     e.preventDefault();
     if (!guideModalGroup) return;
@@ -255,6 +314,7 @@ export default function HODProjectMgmt() {
       });
       toast.success(res.data.message);
       setGuideModalGroup(null);
+      setGuideModalSearch('');
       fetchHODData();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to assign guide');
@@ -317,26 +377,6 @@ export default function HODProjectMgmt() {
     }
   };
 
-  const handleAutoAssignPanels = async (e) => {
-    e.preventDefault();
-    if (!autoAssignStageId) return toast.error('Please select an evaluation stage');
-    setSubmitting(true);
-    try {
-      const res = await api.post('/projects/hod/panel-auto-assign', {
-        stage_id: Number(autoAssignStageId),
-        academic_year: academicYear,
-        panel_size: Number(autoAssignPanelSize),
-      });
-      toast.success(res.data.message);
-      setAutoAssignModal(false);
-      fetchHODData();
-      if (panelMatrixStageId) fetchPanelMatrix(panelMatrixStageId);
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Auto-assignment failed');
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   const handleRangeAssignPanels = async (e) => {
     e.preventDefault();
@@ -670,7 +710,7 @@ export default function HODProjectMgmt() {
     selectedGroupsToAssign.forEach((g) => {
       const guideId = g.guide_id || g.proposed_guide_id;
       if (guideId && rangePanelistIds.includes(String(guideId))) {
-        const guideObj = availableGuides.find((f) => String(f.faculty_id) === String(guideId));
+        const guideObj = allDepartmentFaculty.find((f) => String(f.faculty_id) === String(guideId));
         warnings.push({
           group_code: g.group_code,
           guideName: guideObj ? guideObj.name : (g.guide_name || 'Guide'),
@@ -678,30 +718,19 @@ export default function HODProjectMgmt() {
       }
     });
     return warnings;
-  }, [rangeSkipGuideConflict, rangePanelistIds, selectedGroupsToAssign, availableGuides]);
+  }, [rangeSkipGuideConflict, rangePanelistIds, selectedGroupsToAssign, allDepartmentFaculty]);
 
   if (loading) {
     return (
       <div className="p-8 max-w-7xl mx-auto flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-4 border-navy border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-sm font-medium text-draft">Loading HOD Project Management console...</p>
+          <p className="text-sm font-medium text-draft">Loading BE Project Governance console...</p>
         </div>
       </div>
     );
   }
 
-  // Filter matrix groups
-  const filteredMatrix = panelMatrix.filter((g) => {
-    if (!panelSearchQuery) return true;
-    const q = panelSearchQuery.toLowerCase();
-    return (
-      g.group_code?.toLowerCase().includes(q) ||
-      g.title?.toLowerCase().includes(q) ||
-      g.domain?.toLowerCase().includes(q) ||
-      g.guide_name?.toLowerCase().includes(q)
-    );
-  });
 
   // Find guide of selected group
   const currentSelectedGroupObj = groups.find((g) => g.id === Number(selectedGroupId));
@@ -735,74 +764,81 @@ export default function HODProjectMgmt() {
             <div>
               <p className="font-bold text-navy">Head of Department (HOD) Oversight Active</p>
               <p className="text-[11px] text-draft font-normal mt-0.5">
-                Full direct oversight of BE Projects (AY {academicYear}). Guide assignments, continuous assessment stages, panel scoring, and live project activity updates are synced in real-time.
+                Direct oversight of BE Projects (AY {academicYear}). Guide assignments, continuous assessment stages, and panel scoring are synced in real-time.
               </p>
             </div>
           </div>
-          <button
-            onClick={() => setActiveTab('updates')}
-            className="px-3.5 py-1.5 bg-navy hover:bg-navy/90 text-white rounded text-xs font-bold transition-colors shadow-xs whitespace-nowrap flex items-center gap-1.5"
-          >
-            <span>🔔</span> View Live Activity Feed ({activityUpdates.length}) →
-          </button>
         </div>
       )}
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-rule pb-2 overflow-x-auto">
+      <div className="flex items-center gap-2.5 border-b border-rule pb-3 overflow-x-auto">
         <button
+          type="button"
           onClick={() => setActiveTab('overview')}
-          className={`px-4 py-2 text-xs font-semibold rounded ${activeTab === 'overview' ? 'bg-navy text-white' : 'bg-paper text-draft hover:text-ink'
+          className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-md border transition-all whitespace-nowrap ${activeTab === 'overview'
+            ? 'bg-navy text-white border-navy shadow-xs'
+            : 'bg-white text-slate-700 border-rule hover:bg-slate-50 hover:text-ink hover:border-slate-300 shadow-2xs'
             }`}
         >
-          📊 Governance Overview
+          <span className="text-sm">📊</span>
+          <span>Governance Overview</span>
         </button>
         <button
-          onClick={() => setActiveTab('updates')}
-          className={`px-4 py-2 text-xs font-semibold rounded flex items-center gap-1.5 ${activeTab === 'updates' ? 'bg-navy text-white' : 'bg-paper text-draft hover:text-ink'
-            }`}
-        >
-          <span>🔔 Activity &amp; Live Updates</span>
-          {activityUpdates.length > 0 && (
-            <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-blue-100 text-blue-800 border border-blue-200">
-              {activityUpdates.length}
-            </span>
-          )}
-        </button>
-        <button
+          type="button"
           onClick={() => setActiveTab('groups')}
-          className={`px-4 py-2 text-xs font-semibold rounded ${activeTab === 'groups' ? 'bg-navy text-white' : 'bg-paper text-draft hover:text-ink'
+          className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-md border transition-all whitespace-nowrap ${activeTab === 'groups'
+            ? 'bg-navy text-white border-navy shadow-xs'
+            : 'bg-white text-slate-700 border-rule hover:bg-slate-50 hover:text-ink hover:border-slate-300 shadow-2xs'
             }`}
         >
-          👥 Groups &amp; Guides ({groups.length})
+          <span className="text-sm">👥</span>
+          <span>Groups, Guides &amp; Mentors</span>
+          <span
+            className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${activeTab === 'groups'
+              ? 'bg-white/20 text-white'
+              : 'bg-slate-100 text-slate-600'
+              }`}
+          >
+            {groups.length}
+          </span>
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab('stages')}
-          className={`px-4 py-2 text-xs font-semibold rounded ${activeTab === 'stages' ? 'bg-navy text-white' : 'bg-paper text-draft hover:text-ink'
+          className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-md border transition-all whitespace-nowrap ${activeTab === 'stages'
+            ? 'bg-navy text-white border-navy shadow-xs'
+            : 'bg-white text-slate-700 border-rule hover:bg-slate-50 hover:text-ink hover:border-slate-300 shadow-2xs'
             }`}
         >
-          📝 Evaluation Stages ({stages.length})
+          <span className="text-sm">📝</span>
+          <span>Evaluation Stages</span>
+          <span
+            className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${activeTab === 'stages'
+              ? 'bg-white/20 text-white'
+              : 'bg-slate-100 text-slate-600'
+              }`}
+          >
+            {stages.length}
+          </span>
         </button>
         <button
-          onClick={() => setActiveTab('panels')}
-          className={`px-4 py-2 text-xs font-semibold rounded ${activeTab === 'panels' ? 'bg-navy text-white' : 'bg-paper text-draft hover:text-ink'
-            }`}
-        >
-          🛡️ Panel Assignments
-        </button>
-        <button
+          type="button"
           onClick={() => setActiveTab('governance')}
-          className={`px-4 py-2 text-xs font-semibold rounded ${activeTab === 'governance' ? 'bg-navy text-white' : 'bg-paper text-draft hover:text-ink'
+          className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-md border transition-all whitespace-nowrap ${activeTab === 'governance'
+            ? 'bg-navy text-white border-navy shadow-xs'
+            : 'bg-white text-slate-700 border-rule hover:bg-slate-50 hover:text-ink hover:border-slate-300 shadow-2xs'
             }`}
         >
-          🔓 Score Release &amp; Unlocks
+          <span className="text-sm">🔓</span>
+          <span>Score Release &amp; Unlocks</span>
         </button>
       </div>
 
       {/* TAB 1: OVERVIEW */}
       {activeTab === 'overview' && dashboardData && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="panel p-5">
               <span className="text-xs font-mono font-bold text-draft uppercase">Total Project Groups</span>
               <p className="font-serif text-3xl font-bold text-navy mt-1">
@@ -810,22 +846,9 @@ export default function HODProjectMgmt() {
               </p>
             </div>
             <div className="panel p-5">
-              <span className="text-xs font-mono font-bold text-draft uppercase">Confirmed Guide Groups</span>
+              <span className="text-xs font-mono font-bold text-draft uppercase">Assigned Guide Groups</span>
               <p className="font-serif text-3xl font-bold text-emerald-700 mt-1">
                 {dashboardData.stats?.guide_assigned_groups ?? (dashboardData.group_status_breakdown?.find((b) => b.status === 'ACTIVE')?.count || 0)}
-              </p>
-            </div>
-            <div
-              className="panel p-5 cursor-pointer hover:border-blue-300 transition-colors"
-              onClick={() => setActiveTab('updates')}
-              title="Click to view full Activity & Updates Feed"
-            >
-              <div className="flex items-center justify-between text-xs font-mono font-bold text-draft uppercase">
-                <span>Recent Updates</span>
-                <span className="text-blue-600 text-[10px]">View Feed →</span>
-              </div>
-              <p className="font-serif text-3xl font-bold text-blue-700 mt-1">
-                {activityUpdates.length}
               </p>
             </div>
             <div className="panel p-5">
@@ -836,214 +859,211 @@ export default function HODProjectMgmt() {
             </div>
           </div>
 
-          {/* Faculty Load Matrix */}
-          <div className="panel">
-            <div className="panel-header">
-              <h2 className="font-serif text-xl font-semibold">Faculty Workload Matrix (Guides &amp; Panel Mentors)</h2>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="result-table">
-                <thead>
-                  <tr>
-                    <th>Faculty Member</th>
-                    <th>Designation</th>
-                    <th className="numeric">Guided Groups (Max 5)</th>
-                    <th className="numeric">Panel Assignments</th>
-                    <th>Capacity Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dashboardData.faculty_load.map((fac) => (
-                    <tr key={fac.faculty_id}>
-                      <td className="font-bold text-sm text-ink">{fac.name}</td>
-                      <td className="text-xs text-draft">{fac.designation}</td>
-                      <td className="numeric font-mono font-bold text-navy">{fac.guided_groups} / 5</td>
-                      <td className="numeric font-mono font-bold text-navy">{fac.panel_assignments}</td>
-                      <td>
-                        {Number(fac.guided_groups) >= 5 ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-50 text-red-700 border border-red-200">
-                            At Max Capacity
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            Available ({5 - Number(fac.guided_groups)} open slots)
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Recent Activity Quick Preview Widget */}
-          <div className="panel">
-            <div className="panel-header flex items-center justify-between">
+          {/* Faculty Workload & Guide Designation Matrix */}
+          <div className="panel bg-white border border-rule rounded-xl shadow-xs overflow-hidden">
+            <div className="panel-header p-5 border-b border-rule flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
-                <h3 className="font-serif text-lg font-bold text-ink">Recent BE Project Activity Updates</h3>
-                <span className="text-xs text-draft font-mono">Live updates for AY {academicYear}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setActiveTab('updates')}
-                className="text-xs font-bold text-blue-700 hover:text-blue-900 transition-colors"
-              >
-                View Full Updates Feed ({activityUpdates.length}) →
-              </button>
-            </div>
-            <div className="p-4">
-              {activityUpdates.length === 0 ? (
-                <p className="text-xs text-draft italic py-4 text-center">No recent project activities recorded yet.</p>
-              ) : (
-                <div className="divide-y divide-rule text-xs">
-                  {activityUpdates.slice(0, 5).map((act, idx) => (
-                    <div key={idx} className="py-2.5 flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-2.5">
-                        <span className="text-sm">
-                          {act.type === 'GUIDE_ASSIGNED' ? '🎓' : act.type === 'EVALUATION_SUBMITTED' ? '📝' : act.type === 'SCORE_RELEASED' ? '📢' : '👥'}
-                        </span>
-                        <div>
-                          <p className="font-semibold text-ink">{act.summary || act.action}</p>
-                          {act.actor_name && <p className="text-[10px] text-draft">Action by: {act.actor_name}</p>}
-                        </div>
-                      </div>
-                      <div className="text-[11px] font-mono text-draft whitespace-nowrap">
-                        {new Date(act.timestamp).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}{' '}
-                        {new Date(act.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                      </div>
-                    </div>
-                  ))}
+                <div className="flex items-center gap-2.5">
+                  <h2 className="font-serif text-xl font-bold text-ink">
+                    Faculty Workload &amp; Guide Designation
+                  </h2>
                 </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB: LIVE ACTIVITY & UPDATES */}
-      {activeTab === 'updates' && (
-        <div className="space-y-6">
-          <div className="panel">
-            <div className="panel-header flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <h3 className="font-serif text-xl font-bold text-ink flex items-center gap-2">
-                  <span>🔔</span> BE Project Live Activity &amp; Updates Feed
-                </h3>
-                <p className="text-xs text-draft mt-0.5 font-medium">
-                  Real-time departmental updates of guide assignments, stage scores, panel evaluations, and student project actions for AY {academicYear}.
+                <p className="text-xs text-draft mt-1 font-medium">
+                  Designate which faculty members will serve as BE Project Guides.
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  disabled={loadingUpdates}
-                  onClick={fetchActivityUpdates}
-                  className="px-3.5 py-1.5 bg-navy hover:bg-navy/90 text-white rounded text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
+                  onClick={handleBatchAssignAllGuides}
+                  className="px-3.5 py-2 bg-navy text-white hover:bg-slate-800 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-2xs"
+                  title="Designate all eligible non-mentor faculty as Guides for this academic year"
                 >
-                  <span>🔄</span> {loadingUpdates ? 'Refreshing...' : 'Refresh Feed'}
+                  <span>✓</span> Assign All Eligible as Guides
                 </button>
               </div>
             </div>
 
-            {/* Filter Pills */}
-            <div className="p-4 bg-paper/60 border-b border-rule flex items-center gap-2 flex-wrap text-xs">
-              <span className="font-bold text-draft uppercase tracking-wider text-[11px] mr-1">Filter Events:</span>
-              {[
-                { id: 'ALL', label: 'All Activities', icon: '📋' },
-                { id: 'GUIDES', label: 'Guide Assignments', icon: '🎓' },
-                { id: 'EVALUATIONS', label: 'Panel Evaluations', icon: '📝' },
-                { id: 'SCORES', label: 'Score Releases', icon: '📢' },
-                { id: 'GROUPS', label: 'Group Registrations', icon: '👥' },
-              ].map((f) => (
+            {/* Filter & Search Bar */}
+            <div className="p-4 bg-paper/60 border-b border-rule space-y-3">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                {/* Search Bar matching user's exact specification */}
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    placeholder="Search faculty by name, employee ID, or designation…"
+                    value={facultySearch}
+                    onChange={(e) => setFacultySearch(e.target.value)}
+                    className="w-full px-3.5 py-2 pl-9 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-navy focus:border-navy outline-none transition-all placeholder:text-slate-400 font-medium"
+                  />
+                  <span className="absolute left-3 top-2.5 text-slate-400 text-sm">🔍</span>
+                  {facultySearch && (
+                    <button
+                      type="button"
+                      onClick={() => setFacultySearch('')}
+                      className="absolute right-3 top-2 text-slate-400 hover:text-slate-600 text-xs font-bold p-1 rounded-full hover:bg-slate-100"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                <div className="text-xs text-draft font-medium shrink-0">
+                  Showing <strong className="text-ink">{filteredFacultyLoad.length}</strong> of {dashboardData.faculty_load?.length || 0} faculty
+                </div>
+              </div>
+
+              {/* Filter Pills */}
+              <div className="flex items-center gap-2 overflow-x-auto pt-1">
                 <button
-                  key={f.id}
                   type="button"
-                  onClick={() => setUpdateFilter(f.id)}
-                  className={`px-3 py-1 rounded text-xs font-semibold transition-colors flex items-center gap-1 ${updateFilter === f.id
-                      ? 'bg-navy text-white shadow-xs'
-                      : 'bg-white hover:bg-gray-100 text-draft border border-rule'
+                  onClick={() => setFacultyFilter('ALL')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold border transition-all whitespace-nowrap ${facultyFilter === 'ALL'
+                    ? 'bg-navy text-white border-navy shadow-xs'
+                    : 'bg-white text-slate-700 border-rule hover:bg-slate-50'
                     }`}
                 >
-                  <span>{f.icon}</span> {f.label}
+                  All Faculty ({dashboardData.faculty_load?.length || 0})
                 </button>
-              ))}
-              <span className="ml-auto font-mono text-[11px] text-draft">
-                Showing {filteredUpdates.length} of {activityUpdates.length} events
-              </span>
+                <button
+                  type="button"
+                  onClick={() => setFacultyFilter('GUIDES')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold border transition-all whitespace-nowrap ${facultyFilter === 'GUIDES'
+                    ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
+                    : 'bg-white text-slate-700 border-rule hover:bg-slate-50'
+                    }`}
+                >
+                  Designated Guides ({guidesCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFacultyFilter('ELIGIBLE')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold border transition-all whitespace-nowrap ${facultyFilter === 'ELIGIBLE'
+                    ? 'bg-blue-700 text-white border-blue-700 shadow-xs'
+                    : 'bg-white text-slate-700 border-rule hover:bg-slate-50'
+                    }`}
+                >
+                  Available / Non-Guides ({eligibleCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFacultyFilter('MENTORS')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold border transition-all whitespace-nowrap ${facultyFilter === 'MENTORS'
+                    ? 'bg-purple-700 text-white border-purple-700 shadow-xs'
+                    : 'bg-white text-slate-700 border-rule hover:bg-slate-50'
+                    }`}
+                >
+                  Panel Mentors ({mentorsCount})
+                </button>
+              </div>
             </div>
 
-            {/* Timeline List */}
-            <div className="p-6">
-              {filteredUpdates.length === 0 ? (
-                <div className="text-center py-12 text-draft text-sm space-y-2">
-                  <p className="text-3xl">📭</p>
-                  <p className="font-semibold text-ink">No updates found for this filter.</p>
-                  <p className="text-xs">Events will show up here as guides are assigned, scores are published, or panel members evaluate.</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {filteredUpdates.map((item, idx) => {
-                    const isGuide = item.type === 'GUIDE_ASSIGNED' || item.type === 'PROJECT_GUIDE_ASSIGNED' || item.type === 'PROJECT_GUIDE_UNASSIGNED';
-                    const isEval = item.type === 'EVALUATION_SUBMITTED';
-                    const isScore = item.type === 'SCORE_RELEASED' || item.type === 'PROJECT_SCORE_RELEASED';
-                    const isGroup = item.type === 'GROUP_REGISTERED';
+            {/* Table */}
+            <div className="overflow-x-auto">
+              <table className="result-table">
+                <thead>
+                  <tr>
+                    <th>Faculty Member</th>
+                    <th>Designation &amp; Info</th>
+                    <th>Role &amp; Status</th>
+                    <th className="numeric">Guided Groups (Max 5)</th>
+                    <th className="numeric">Panel Assignments</th>
+                    <th className="text-right">Guide Assignment Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredFacultyLoad.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="text-center py-10 text-draft">
+                        No faculty matched your active search or role filters.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredFacultyLoad.map((fac) => {
+                      const isMentor = Number(fac.panel_assignments) > 0;
+                      const isGuide = Boolean(fac.is_designated_guide || Number(fac.guided_groups) > 0);
+                      const isToggling = togglingGuideId === fac.faculty_id;
 
-                    return (
-                      <div
-                        key={idx}
-                        className="p-4 rounded-lg border border-rule bg-white hover:border-blue-300 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs"
-                      >
-                        <div className="flex items-start gap-3">
-                          <span className={`w-9 h-9 rounded-full flex items-center justify-center text-base shrink-0 ${isGuide ? 'bg-blue-100 text-blue-800' :
-                              isEval ? 'bg-emerald-100 text-emerald-800' :
-                                isScore ? 'bg-purple-100 text-purple-800' :
-                                  isGroup ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-800'
-                            }`}>
-                            {isGuide ? '🎓' : isEval ? '📝' : isScore ? '📢' : isGroup ? '👥' : 'ℹ️'}
-                          </span>
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase ${isGuide ? 'bg-blue-50 text-blue-700 border border-blue-200' :
-                                  isEval ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                                    isScore ? 'bg-purple-50 text-purple-700 border border-purple-200' :
-                                      isGroup ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-gray-50 text-gray-700 border border-rule'
-                                }`}>
-                                {item.type.replace(/_/g, ' ')}
+                      return (
+                        <tr key={fac.faculty_id} className="hover:bg-slate-50/50 transition-colors">
+                          <td>
+                            <div className="font-bold text-sm text-ink">{fac.name}</div>
+                            <div className="text-[11px] text-draft font-mono">{fac.email}</div>
+                          </td>
+                          <td>
+                            <div className="text-xs text-ink font-medium">{fac.designation}</div>
+                            {fac.employee_id && (
+                              <div className="text-[10px] text-draft font-mono">ID: {fac.employee_id}</div>
+                            )}
+                          </td>
+                          <td>
+                            {isMentor ? (
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-purple-50 text-purple-800 border border-purple-200">
+                                <span>🛡️</span>
+                                <span>Panel Mentor</span>
                               </span>
-                              {item.group_code && (
-                                <span className="font-mono text-xs font-bold text-navy bg-paper px-2 py-0.5 rounded border border-rule">
-                                  {item.group_code}
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-sm font-semibold text-ink">{item.summary}</p>
-                            {item.actor_name && (
-                              <p className="text-xs text-draft">Recorded by: <strong className="text-ink">{item.actor_name}</strong></p>
+                            ) : isGuide ? (
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                <span>✓</span>
+                                <span>BE Project Guide</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                                <span>Eligible Faculty</span>
+                              </span>
                             )}
-                            {item.overall_remarks && (
-                              <p className="text-xs text-draft italic bg-paper p-1.5 rounded border border-rule mt-1 max-w-xl">
-                                Remarks: &ldquo;{item.overall_remarks}&rdquo;
-                              </p>
+                          </td>
+                          <td className="numeric font-mono font-bold text-navy">
+                            {fac.guided_groups} / 5
+                          </td>
+                          <td className="numeric font-mono font-bold text-purple-900">
+                            {fac.panel_assignments}
+                          </td>
+                          <td className="text-right">
+                            {isMentor ? (
+                              <span
+                                className="inline-flex items-center justify-center px-3.5 py-1.5 rounded-md text-xs font-bold italic bg-purple-100/80 text-purple-800 border border-purple-300 shadow-2xs"
+                                title="Faculty is assigned as a Panel Mentor"
+                              >
+                                Panel Mentor
+                              </span>
+                            ) : isGuide ? (
+                              <button
+                                type="button"
+                                disabled={isToggling || Number(fac.guided_groups) > 0}
+                                onClick={() => handleToggleDesignatedGuide(fac.faculty_id, true, fac.guided_groups, fac.panel_assignments)}
+                                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${Number(fac.guided_groups) > 0
+                                  ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+                                  : 'bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-red-50 hover:text-red-700 hover:border-red-300'
+                                  }`}
+                                title={
+                                  Number(fac.guided_groups) > 0
+                                    ? `Guiding ${fac.guided_groups} group(s). Reassign them first to remove guide status.`
+                                    : 'Click to remove guide designation'
+                                }
+                              >
+                                {isToggling ? 'Updating...' : Number(fac.guided_groups) > 0 ? '✓ Active (Guiding)' : '✓ Guide (Click to Remove)'}
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={isToggling}
+                                onClick={() => handleToggleDesignatedGuide(fac.faculty_id, false, fac.guided_groups, fac.panel_assignments)}
+                                className="px-3.5 py-1.5 text-xs font-bold bg-navy hover:bg-slate-800 text-white rounded-md transition-colors shadow-2xs"
+                              >
+                                {isToggling ? 'Updating...' : '+ Assign as Guide'}
+                              </button>
                             )}
-                          </div>
-                        </div>
-
-                        <div className="text-right shrink-0">
-                          <div className="text-xs font-mono font-semibold text-ink">
-                            {new Date(item.timestamp).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                          </div>
-                          <div className="text-[11px] font-mono text-draft">
-                            {new Date(item.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
+
         </div>
       )}
 
@@ -1052,15 +1072,22 @@ export default function HODProjectMgmt() {
         <div className="space-y-6">
           {/* Registration Form Governance Controls Card */}
           <div className="bg-white border border-rule rounded-lg p-6 space-y-6 shadow-xs">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-rule pb-4">
-              <div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-rule pb-4">
+              <div className="flex items-center gap-3 flex-wrap">
                 <h3 className="font-serif text-lg font-bold text-ink">Registration Form</h3>
-              </div>
-              <div className="flex items-center gap-2">
                 <span className={`px-3 py-1 rounded-full text-xs font-bold ${regSettings.is_open ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-red-100 text-red-800 border border-red-300'
                   }`}>
                   {regSettings.is_open ? '● Registration Form OPEN' : '● Registration Form CLOSED'}
                 </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleExportFormResponses}
+                  className="px-3.5 py-1.5 bg-indigo-700 hover:bg-indigo-800 text-white rounded text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
+                >
+                  <span>📥</span> Form Responses (Excel)
+                </button>
               </div>
             </div>
 
@@ -1143,7 +1170,7 @@ export default function HODProjectMgmt() {
                   </h4>
                   <p className="text-xs text-red-800 mt-2 leading-relaxed">
                     Delete all registered BE project group forms for Academic Year <strong>{academicYear}</strong> ({groups.length} registered groups).
-                    This will clear all registered group choices and student roster submissions.
+                    This will clear all registered group choices and student submissions.
                   </p>
                 </div>
 
@@ -1161,6 +1188,93 @@ export default function HODProjectMgmt() {
             </div>
           </div>
 
+          {/* Panel Mentors & Batch Allocation Controls */}
+          <div className="bg-white border border-rule rounded-lg p-5 shadow-xs space-y-4">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-rule pb-3">
+              <div>
+                <h3 className="font-serif text-base font-bold text-ink flex items-center gap-2">
+                  <span>🛡️</span> Evaluation Stage &amp; Batch Mentor Operations
+                </h3>
+                <p className="text-xs text-draft mt-0.5">
+                  Select an evaluation stage to view and manage panel mentors across groups, or use bulk allocation operations.
+                </p>
+              </div>
+
+              {/* Stage Selector */}
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-bold text-navy whitespace-nowrap">Stage for Mentors:</label>
+                <select
+                  value={panelMatrixStageId}
+                  onChange={(e) => {
+                    const sId = e.target.value;
+                    setPanelMatrixStageId(sId);
+                    setSelectedStageId(sId);
+                    fetchPanelMatrix(sId);
+                  }}
+                  className="input-field py-1.5 text-xs font-bold border-navy/30 focus:border-navy"
+                >
+                  {stages.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} (Stage #{s.sequence_order})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Bulk Action Buttons */}
+            <div className="flex flex-wrap items-center gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  const selStage = panelMatrixStageId || (stages.length > 0 ? String(stages[0].id) : '');
+                  setRangeStageId(selStage);
+                  if (sortedGroups.length > 0) {
+                    setRangeStartGroupId(String(sortedGroups[0].id));
+                    setRangeEndGroupId(String(sortedGroups[Math.min(4, sortedGroups.length - 1)].id));
+                  }
+                  setRangePanelistIds([]);
+                  setRangeAssignModal(true);
+                }}
+                className="px-3.5 py-2 bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold rounded flex items-center gap-1.5 shadow-xs transition-colors"
+              >
+                <span>🎯</span> Assign Mentors by Range / Domain
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (stages.length >= 2) {
+                    setCopySourceStageId(String(stages[0].id));
+                    setCopyTargetStageId(String(stages[1].id));
+                  }
+                  setCopyStageModal(true);
+                }}
+                className="px-3.5 py-2 bg-navy hover:bg-blue-900 text-white text-xs font-bold rounded flex items-center gap-1.5 shadow-xs transition-colors"
+              >
+                <span>📋</span> Copy Stage Panels
+              </button>
+              <button
+                type="button"
+                onClick={handleClearStagePanels}
+                className="px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold rounded flex items-center gap-1.5 shadow-xs transition-colors"
+              >
+                <span>🗑️</span> Clear Stage Panels
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedStageId(panelMatrixStageId);
+                  setSelectedGroupId('');
+                  setSelectedPanelistIds([]);
+                  setPanelModal(true);
+                }}
+                className="ml-auto px-3.5 py-2 bg-paper hover:bg-gray-100 text-ink border border-rule text-xs font-semibold rounded flex items-center gap-1.5 transition-colors"
+              >
+                <span>➕</span> Single Group Manual Panel
+              </button>
+            </div>
+          </div>
+
           <div className="panel">
             <div className="panel-header flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
@@ -1170,29 +1284,6 @@ export default function HODProjectMgmt() {
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleImportExcel}
-                  accept=".xlsx,.xls"
-                  className="hidden"
-                />
-                <button
-                  type="button"
-                  disabled={importingExcel}
-                  onClick={() => fileInputRef.current?.click()}
-                  className="px-3.5 py-1.5 bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white rounded text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
-                  title="Upload BE Project Topic Preferences Form Excel"
-                >
-                  <span>📤</span> {importingExcel ? 'Importing...' : 'Import Preferences (Excel)'}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleExportFormResponses}
-                  className="px-3.5 py-1.5 bg-indigo-700 hover:bg-indigo-800 text-white rounded text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
-                >
-                  <span>📥</span> Form Responses (Excel)
-                </button>
                 <button
                   type="button"
                   onClick={handleExportGuideAssignments}
@@ -1215,7 +1306,7 @@ export default function HODProjectMgmt() {
               <div className="flex-1 max-w-md relative">
                 <input
                   type="text"
-                  placeholder="Search by code, title, domain, student name, or PRN..."
+                  placeholder="Search by code, title, domain, guide, mentor, student..."
                   value={groupSearch}
                   onChange={(e) => setGroupSearch(e.target.value)}
                   className="input-field text-xs py-1.5 pl-8 pr-8 w-full"
@@ -1239,8 +1330,8 @@ export default function HODProjectMgmt() {
                     type="button"
                     onClick={() => setSelectedDivision(div)}
                     className={`px-2.5 py-1 text-xs font-semibold rounded transition-colors ${selectedDivision === div
-                        ? 'bg-navy text-white shadow-xs'
-                        : 'bg-white hover:bg-gray-100 text-draft border border-rule'
+                      ? 'bg-navy text-white shadow-xs'
+                      : 'bg-white hover:bg-gray-100 text-draft border border-rule'
                       }`}
                   >
                     {div === 'ALL' ? 'All Divisions' : div}
@@ -1256,8 +1347,9 @@ export default function HODProjectMgmt() {
                     <th>Group Code</th>
                     <th>Division</th>
                     <th>Title &amp; Domain</th>
-                    <th>Roster</th>
-                    <th>Guide Status</th>
+                    <th>List</th>
+                    <th>Assigned Guide</th>
+                    <th>Assigned Mentors</th>
                     <th>Group Status</th>
                     <th className="text-right">Action</th>
                   </tr>
@@ -1265,7 +1357,7 @@ export default function HODProjectMgmt() {
                 <tbody>
                   {filteredGroups.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="text-center py-8 text-draft text-sm">
+                      <td colSpan={8} className="text-center py-8 text-draft text-sm">
                         No BE project groups matched the search or filter criteria.
                       </td>
                     </tr>
@@ -1282,7 +1374,7 @@ export default function HODProjectMgmt() {
                                   type="button"
                                   onClick={() => setExpandedGroupId(isExpanded ? null : g.id)}
                                   className="text-[11px] text-draft hover:text-navy px-1 rounded bg-gray-100 hover:bg-blue-100 transition-colors"
-                                  title="View full topic choices and team roster"
+                                  title="View full topic choices and team"
                                 >
                                   {isExpanded ? '▲' : '▼'}
                                 </button>
@@ -1305,18 +1397,85 @@ export default function HODProjectMgmt() {
                             </td>
                             <td>
                               {g.guide_name ? (
-                                <div>
+                                <div className="space-y-1">
                                   <div className="font-bold text-emerald-800 text-xs">{g.guide_name}</div>
-                                  <div className="text-[10px] text-draft">{g.guide_designation}</div>
-                                  <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                    Assigned Guide
-                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setGuideModalSearch('');
+                                      setGuideModalGroup(g);
+                                      setSelectedGuideId(g.proposed_guide_faculty_id || g.guide_faculty_id ? String(g.proposed_guide_faculty_id || g.guide_faculty_id) : '');
+                                    }}
+                                    className="text-[10px] font-semibold text-navy hover:underline block"
+                                  >
+                                    Change Guide
+                                  </button>
                                 </div>
                               ) : (
-                                <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
-                                  Unassigned
-                                </span>
+                                <div className="space-y-1">
+                                  <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded inline-block">
+                                    Unassigned
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setGuideModalSearch('');
+                                      setGuideModalGroup(g);
+                                      setSelectedGuideId(g.proposed_guide_faculty_id || g.guide_faculty_id ? String(g.proposed_guide_faculty_id || g.guide_faculty_id) : '');
+                                    }}
+                                    className="px-2 py-0.5 bg-navy hover:bg-navy/90 text-white rounded text-[10px] font-bold block transition-colors"
+                                  >
+                                    + Assign Guide
+                                  </button>
+                                </div>
                               )}
+                            </td>
+                            <td>
+                              {(() => {
+                                const groupPanelists = groupPanelistsMap[g.id] || [];
+                                return groupPanelists.length > 0 ? (
+                                  <div className="space-y-1">
+                                    <div className="space-y-0.5">
+                                      {groupPanelists.map((p) => (
+                                        <div
+                                          key={p.faculty_id}
+                                          className="font-bold text-indigo-950 text-xs"
+                                        >
+                                          {p.name}
+                                        </div>
+                                      ))}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedStageId(panelMatrixStageId);
+                                        setSelectedGroupId(String(g.id));
+                                        setSelectedPanelistIds(groupPanelists.map((p) => String(p.faculty_id)));
+                                        setPanelModal(true);
+                                      }}
+                                      className="text-[10px] font-semibold text-indigo-700 hover:underline block"
+                                    >
+                                      Edit Mentors
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="space-y-1">
+                                    <span className="text-draft text-[11px] italic font-mono block">No mentors assigned</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedStageId(panelMatrixStageId);
+                                        setSelectedGroupId(String(g.id));
+                                        setSelectedPanelistIds([]);
+                                        setPanelModal(true);
+                                      }}
+                                      className="px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded text-[10px] font-bold block transition-colors"
+                                    >
+                                      + Assign Mentors
+                                    </button>
+                                  </div>
+                                );
+                              })()}
                             </td>
                             <td>
                               <span className={`badge ${g.status === 'ACTIVE' ? 'badge-published' : 'badge-draft'}`}>
@@ -1327,18 +1486,9 @@ export default function HODProjectMgmt() {
                               <button
                                 type="button"
                                 onClick={() => setExpandedGroupId(isExpanded ? null : g.id)}
-                                className="px-2 py-1 text-xs border border-rule rounded hover:bg-gray-100 text-draft hover:text-ink transition-colors"
+                                className="px-2.5 py-1 text-xs border border-rule rounded hover:bg-gray-100 text-draft hover:text-ink transition-colors"
                               >
                                 {isExpanded ? 'Hide' : 'Topics & Team'}
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setGuideModalGroup(g);
-                                  setSelectedGuideId(g.proposed_guide_faculty_id || g.guide_faculty_id ? String(g.proposed_guide_faculty_id || g.guide_faculty_id) : '');
-                                }}
-                                className="btn-secondary py-1 px-3 text-xs"
-                              >
-                                {g.guide_name ? 'Change Guide' : 'Assign Guide'}
                               </button>
                             </td>
                           </tr>
@@ -1346,34 +1496,34 @@ export default function HODProjectMgmt() {
                           {/* Expanded Details Row */}
                           {isExpanded && (
                             <tr className="bg-blue-50/20 border-b-2 border-blue-200">
-                              <td colSpan={7} className="p-4">
+                              <td colSpan={8} className="p-4">
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 bg-white p-4 rounded border border-blue-200 shadow-2xs">
                                   {/* 3 Project Topic Choices */}
                                   <div className="space-y-3">
-                                    <h4 className="text-xs font-bold uppercase tracking-wider text-navy flex items-center gap-1.5 border-b border-rule pb-2">
+                                    <h4 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-navy flex items-center gap-1.5 border-b border-rule pb-2">
                                       <span>📑</span> 3 Project Topic Preferences
                                     </h4>
-                                    <div className="space-y-2 text-xs">
-                                      <div className="p-2.5 rounded bg-blue-50/60 border border-blue-200/60">
-                                        <span className="font-bold text-navy block text-[10px] uppercase">Preference 1 (Primary Topic):</span>
-                                        <p className="text-ink font-semibold mt-0.5">{g.title}</p>
+                                    <div className="space-y-2">
+                                      <div className="p-2.5 rounded-md bg-blue-50/70 border border-blue-200">
+                                        <span className="font-bold text-navy block text-[11px] uppercase tracking-wide">Preference 1 (Primary Topic):</span>
+                                        <p className="text-[13px] sm:text-sm font-semibold text-ink leading-snug mt-0.5">{g.title}</p>
                                       </div>
                                       {g.title_2 && (
-                                        <div className="p-2.5 rounded bg-paper border border-rule">
-                                          <span className="font-bold text-draft block text-[10px] uppercase">Preference 2 (Secondary Topic):</span>
-                                          <p className="text-ink mt-0.5">{g.title_2}</p>
+                                        <div className="p-2.5 rounded-md bg-paper border border-rule">
+                                          <span className="font-bold text-draft block text-[11px] uppercase tracking-wide">Preference 2:</span>
+                                          <p className="text-[13px] sm:text-sm font-medium text-ink leading-snug mt-0.5">{g.title_2}</p>
                                         </div>
                                       )}
                                       {g.title_3 && (
-                                        <div className="p-2.5 rounded bg-paper border border-rule">
-                                          <span className="font-bold text-draft block text-[10px] uppercase">Preference 3 (Tertiary Topic):</span>
-                                          <p className="text-ink mt-0.5">{g.title_3}</p>
+                                        <div className="p-2.5 rounded-md bg-paper border border-rule">
+                                          <span className="font-bold text-draft block text-[11px] uppercase tracking-wide">Preference 3:</span>
+                                          <p className="text-[13px] sm:text-sm font-medium text-ink leading-snug mt-0.5">{g.title_3}</p>
                                         </div>
                                       )}
                                     </div>
                                   </div>
 
-                                  {/* Team Members Roster */}
+                                  {/* Team Members */}
                                   <div className="space-y-3">
                                     <h4 className="text-xs font-bold uppercase tracking-wider text-navy flex items-center gap-1.5 border-b border-rule pb-2">
                                       <span>👥</span> Student Team Members ({g.members?.length || 0})
@@ -1382,29 +1532,28 @@ export default function HODProjectMgmt() {
                                       <table className="w-full text-xs">
                                         <thead>
                                           <tr className="text-left text-[10px] text-draft uppercase border-b border-rule">
-                                            <th className="py-1">Role</th>
-                                            <th className="py-1">Student Name</th>
-                                            <th className="py-1">PRN</th>
-                                            <th className="py-1">Div</th>
-                                            <th className="py-1">Contact</th>
+                                            <th className="py-1.5 px-2 text-left whitespace-nowrap">Role</th>
+                                            <th className="py-1.5 px-2 text-left">Student Name</th>
+                                            <th className="py-1.5 px-2 text-left whitespace-nowrap">PRN</th>
+                                            <th className="py-1.5 px-3 text-center whitespace-nowrap">Division</th>
                                           </tr>
                                         </thead>
                                         <tbody className="divide-y divide-rule/60">
                                           {(g.members || []).map((m, mIdx) => (
                                             <tr key={mIdx} className="hover:bg-gray-50/60">
-                                              <td className="py-1.5 font-medium">
+                                              <td className="py-1.5 px-2 font-medium whitespace-nowrap">
                                                 {m.is_leader ? (
                                                   <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-navy text-white">Leader</span>
                                                 ) : (
                                                   <span className="text-draft text-[11px]">Member</span>
                                                 )}
                                               </td>
-                                              <td className="py-1.5 font-semibold text-ink">{m.name}</td>
-                                              <td className="py-1.5 font-mono text-draft">{m.roll_no}</td>
-                                              <td className="py-1.5 font-mono text-draft">{m.division || g.batch}</td>
-                                              <td className="py-1.5 text-draft text-[11px]">
-                                                <div>{m.email}</div>
-                                                {m.mobile_no && <div className="text-[10px] text-draft/80 font-mono">📱 {m.mobile_no}</div>}
+                                              <td className="py-1.5 px-2 font-semibold text-ink">{m.name}</td>
+                                              <td className="py-1.5 px-2 font-mono text-draft whitespace-nowrap">{m.roll_no}</td>
+                                              <td className="py-1.5 px-3 text-center whitespace-nowrap">
+                                                <span className="px-2 py-0.5 rounded text-[11px] font-bold font-mono bg-paper border border-rule text-ink whitespace-nowrap">
+                                                  {m.division || g.batch || 'BE-1'}
+                                                </span>
                                               </td>
                                             </tr>
                                           ))}
@@ -1433,9 +1582,6 @@ export default function HODProjectMgmt() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-rule pb-4">
             <div>
               <h2 className="font-serif text-xl font-bold text-ink">Continuous Assessment Evaluation Stages</h2>
-              <p className="text-xs text-draft mt-0.5">
-                Fully controlled &amp; configured by BE Project Coordinator — Create, order, and edit rubrics &amp; criteria.
-              </p>
             </div>
             <button
               onClick={() => {
@@ -1529,268 +1675,7 @@ export default function HODProjectMgmt() {
         </div>
       )}
 
-      {/* TAB 4: PANEL ASSIGNMENT & COI (BATCH & HIGH PERFORMANCE MATRIX) */}
-      {activeTab === 'panels' && (
-        <div className="space-y-6">
-          {/* Optimization Banners & One-Click Bulk Triggers */}
-          <div className="bg-white border border-rule rounded p-6 shadow-xs space-y-4">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-rule pb-4">
-              <div>
-                <h2 className="font-serif text-2xl font-bold text-ink mt-1">Batch Panel Assignments</h2>
-              </div>
 
-              {/* Bulk Quick Action Buttons */}
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const selStage = panelMatrixStageId || (stages.length > 0 ? String(stages[0].id) : '');
-                    setRangeStageId(selStage);
-                    if (sortedGroups.length > 0) {
-                      setRangeStartGroupId(String(sortedGroups[0].id));
-                      setRangeEndGroupId(String(sortedGroups[Math.min(4, sortedGroups.length - 1)].id));
-                    }
-                    setRangePanelistIds([]);
-                    setRangeAssignModal(true);
-                  }}
-                  className="px-4 py-2.5 bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold rounded flex items-center gap-2 shadow-xs transition-colors"
-                >
-                  <span>🎯</span> Assign by Range / Domain
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const selStage = panelMatrixStageId || (stages.length > 0 ? String(stages[0].id) : '');
-                    setAutoAssignStageId(selStage);
-                    setAutoAssignModal(true);
-                  }}
-                  className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded flex items-center gap-2 shadow-xs transition-colors"
-                >
-                  <span>⚡</span> Auto-Assign All Groups
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (stages.length >= 2) {
-                      setCopySourceStageId(String(stages[0].id));
-                      setCopyTargetStageId(String(stages[1].id));
-                    }
-                    setCopyStageModal(true);
-                  }}
-                  className="px-4 py-2.5 bg-navy hover:bg-blue-900 text-white text-xs font-bold rounded flex items-center gap-2 shadow-xs transition-colors"
-                >
-                  <span>📋</span> Copy Stage Panels
-                </button>
-                <button
-                  type="button"
-                  onClick={handleClearStagePanels}
-                  className="px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold rounded flex items-center gap-2 shadow-xs transition-colors"
-                >
-                  <span>🗑️</span> Clear Stage Panels
-                </button>
-              </div>
-            </div>
-
-            {/* Stage Selector & Search Filter Controls */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
-              <div className="flex items-center gap-3">
-                <label className="text-xs font-bold text-navy whitespace-nowrap">Select Stage Matrix:</label>
-                <select
-                  value={panelMatrixStageId}
-                  onChange={(e) => {
-                    const sId = e.target.value;
-                    setPanelMatrixStageId(sId);
-                    setSelectedStageId(sId);
-                    fetchPanelMatrix(sId);
-                  }}
-                  className="input-field py-1.5 text-xs font-bold border-navy/30 focus:border-navy"
-                >
-                  {stages.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} (Stage #{s.sequence_order})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="relative w-full sm:w-72">
-                <input
-                  type="text"
-                  placeholder="Filter by code, title, domain, or guide..."
-                  value={panelSearchQuery}
-                  onChange={(e) => setPanelSearchQuery(e.target.value)}
-                  className="input-field text-xs py-1.5 pl-8"
-                />
-                <span className="absolute left-2.5 top-2 text-xs text-draft">🔍</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Interactive Batch Panel Matrix Table */}
-          <div className="panel overflow-hidden">
-            <div className="panel-header flex items-center justify-between bg-paper/50">
-              <h3 className="font-serif text-lg font-bold text-ink">
-                Group Panel Assignment Matrix ({filteredMatrix.length} groups)
-              </h3>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedGroupId('');
-                  setSelectedPanelistIds([]);
-                  setPanelModal(true);
-                }}
-                className="btn-primary py-1.5 px-3 text-xs"
-              >
-                + Manual Single Group Assignment
-              </button>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="result-table text-xs">
-                <thead>
-                  <tr className="bg-paper border-b border-rule text-draft font-bold">
-                    <th className="p-3 w-28">Group Code</th>
-                    <th className="p-3 min-w-[220px]">Project Title &amp; Domain</th>
-                    <th className="p-3 min-w-[160px]">Assigned Guide</th>
-                    <th className="p-3 min-w-[240px]">Assigned Panel Mentors</th>
-                    <th className="p-3 text-right w-24">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-rule">
-                  {filteredMatrix.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="p-8 text-center text-draft">
-                        No project groups match your search filter.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredMatrix.map((g) => {
-                      const hasPanelists = g.panelists && g.panelists.length > 0;
-                      return (
-                        <tr key={g.id} className="hover:bg-paper/40 font-medium">
-                          <td className="p-3 font-mono font-bold text-navy whitespace-nowrap">{g.group_code}</td>
-                          <td className="p-3">
-                            <div className="font-semibold text-ink leading-snug">{g.title}</div>
-                            <div className="text-[10px] text-draft font-mono mt-0.5">{g.domain}</div>
-                          </td>
-                          <td className="p-3 whitespace-nowrap">
-                            {g.guide_name ? (
-                              <div>
-                                <span className="font-bold text-ink block">{g.guide_name}</span>
-                                <span className="text-[10px] text-draft block">{g.guide_designation}</span>
-                              </div>
-                            ) : (
-                              <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
-                                Guide Unassigned
-                              </span>
-                            )}
-                          </td>
-                          <td className="p-3">
-                            {hasPanelists ? (
-                              <div className="flex flex-wrap gap-1.5">
-                                {g.panelists.map((p) => (
-                                  <span
-                                    key={p.faculty_id}
-                                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[11px] font-mono font-semibold bg-blue-50 text-navy border border-blue-200"
-                                  >
-                                    {p.name}
-                                  </span>
-                                ))}
-                              </div>
-                            ) : (
-                              <span className="text-draft text-[11px] italic font-mono">No mentors assigned</span>
-                            )}
-                          </td>
-                          <td className="p-3 text-right whitespace-nowrap">
-                            <button
-                              onClick={() => {
-                                setSelectedStageId(panelMatrixStageId);
-                                setSelectedGroupId(String(g.id));
-                                setSelectedPanelistIds(g.panelists.map((p) => String(p.faculty_id)));
-                                setPanelModal(true);
-                              }}
-                              className="btn-secondary text-[11px] py-1 px-2.5"
-                            >
-                              Edit Panel
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* AUTO-ASSIGN MODAL */}
-      {autoAssignModal && createPortal(
-        <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded border border-rule max-w-md w-full p-6 shadow-2xl animate-fade-in">
-            <h3 className="font-serif text-xl font-bold text-ink border-b border-rule pb-3 mb-4 flex items-center gap-2">
-              <span className="text-emerald-700">⚡</span> One-Click Auto-Assign Panels
-            </h3>
-
-            <form onSubmit={handleAutoAssignPanels} className="space-y-4">
-              <div>
-                <label className="input-label">Target Evaluation Stage *</label>
-                <select
-                  value={autoAssignStageId}
-                  onChange={(e) => setAutoAssignStageId(e.target.value)}
-                  className="input-field text-sm"
-                  required
-                >
-                  <option value="">Select Stage...</option>
-                  {stages.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} (Stage #{s.sequence_order})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="input-label">Mentors per Panel Group *</label>
-                <select
-                  value={autoAssignPanelSize}
-                  onChange={(e) => setAutoAssignPanelSize(Number(e.target.value))}
-                  className="input-field text-sm font-mono"
-                >
-                  <option value={2}>2 Mentors per Panel</option>
-                  <option value={3}>3 Mentors per Panel</option>
-                </select>
-              </div>
-
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded text-xs text-emerald-900 space-y-1">
-                <p className="font-bold">Automated Distribution:</p>
-                <p className="leading-relaxed text-[11px]">
-                  Automatically distributes all {groups.length} project groups across available department faculty members balancing evaluation workloads.
-                </p>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-3 border-t border-rule">
-                <button
-                  type="button"
-                  onClick={() => setAutoAssignModal(false)}
-                  className="px-4 py-2 border border-rule rounded text-xs font-semibold"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="btn-primary py-2 px-5 text-xs font-bold bg-emerald-700 hover:bg-emerald-800"
-                >
-                  {submitting ? 'Running Auto-Assign...' : 'Run Auto-Assignment →'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>,
-        document.body
-      )}
 
       {/* COPY STAGE PANELS MODAL */}
       {copyStageModal && createPortal(
@@ -1862,29 +1747,30 @@ export default function HODProjectMgmt() {
 
       {/* RANGE & DOMAIN PANEL ASSIGNMENT MODAL */}
       {rangeAssignModal && createPortal(
-        <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded border border-rule max-w-xl w-full p-6 shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto space-y-4">
-            <h3 className="font-serif text-xl font-bold text-ink border-b border-rule pb-3 flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <span className="text-indigo-700">🎯</span> Assign Mentors by Range or Domain
-              </span>
+        <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6">
+          <div className="bg-white rounded-lg border border-rule max-w-4xl w-full p-6 sm:p-7 shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto space-y-5">
+            <div className="border-b border-rule pb-3.5 flex items-center justify-between">
+              <h3 className="font-serif text-2xl font-bold text-ink flex items-center gap-2.5">
+                Assign Mentors by Range or Domain
+              </h3>
               <button
                 type="button"
                 onClick={() => setRangeAssignModal(false)}
-                className="text-draft hover:text-ink font-bold text-base"
+                className="text-draft hover:text-ink font-bold text-xl p-1 rounded hover:bg-slate-100 transition-colors"
+                title="Close dialog"
               >
                 ✕
               </button>
-            </h3>
+            </div>
 
-            <form onSubmit={handleRangeAssignPanels} className="space-y-4">
+            <form onSubmit={handleRangeAssignPanels} className="space-y-5">
               {/* 1. Stage Selection */}
               <div>
-                <label className="input-label">Evaluation Stage *</label>
+                <label className="block text-sm font-bold text-ink mb-1.5">Evaluation Stage *</label>
                 <select
                   value={rangeStageId}
                   onChange={(e) => setRangeStageId(e.target.value)}
-                  className="input-field text-xs font-semibold"
+                  className="input-field text-sm font-semibold py-2 px-3 w-full"
                   required
                 >
                   <option value="">Select Stage...</option>
@@ -1897,15 +1783,15 @@ export default function HODProjectMgmt() {
               </div>
 
               {/* 2. Group Targeting Container */}
-              <div className="bg-paper p-4 rounded-md border border-rule space-y-3">
+              <div className="bg-paper p-5 rounded-lg border border-rule space-y-4">
                 {/* Mode Selector Tabs */}
-                <div className="flex border border-rule rounded-md p-1 bg-slate-100 gap-1">
+                <div className="flex border border-rule rounded-md p-1 bg-slate-100 gap-1.5">
                   <button
                     type="button"
                     onClick={() => setRangeTargetMode('RANGE')}
-                    className={`flex-1 py-1.5 px-3 rounded text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${rangeTargetMode === 'RANGE'
-                        ? 'bg-white text-navy shadow-xs border border-rule/60'
-                        : 'text-draft hover:text-ink'
+                    className={`flex-1 py-2 px-4 rounded text-sm font-bold transition-all flex items-center justify-center gap-2 ${rangeTargetMode === 'RANGE'
+                      ? 'bg-white text-navy shadow-xs border border-rule/60'
+                      : 'text-draft hover:text-ink'
                       }`}
                   >
                     <span>🎯</span> By Group Range
@@ -1918,9 +1804,9 @@ export default function HODProjectMgmt() {
                         handleSelectDomain(availableDomains[0].domain);
                       }
                     }}
-                    className={`flex-1 py-1.5 px-3 rounded text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${rangeTargetMode === 'DOMAIN'
-                        ? 'bg-white text-indigo-900 shadow-xs border border-rule/60'
-                        : 'text-draft hover:text-ink'
+                    className={`flex-1 py-2 px-4 rounded text-sm font-bold transition-all flex items-center justify-center gap-2 ${rangeTargetMode === 'DOMAIN'
+                      ? 'bg-white text-indigo-900 shadow-xs border border-rule/60'
+                      : 'text-draft hover:text-ink'
                       }`}
                   >
                     <span>🏷️</span> By Project Domain
@@ -1929,94 +1815,59 @@ export default function HODProjectMgmt() {
 
                 {/* MODE A: BY NUMERIC RANGE */}
                 {rangeTargetMode === 'RANGE' ? (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-ink uppercase tracking-wider">
+                      <label className="text-sm font-bold text-ink uppercase tracking-wider">
                         Numeric Group Range
                       </label>
-                      <span className="text-[11px] font-semibold text-draft">
+                      <span className="text-xs font-semibold text-draft">
                         Total {sortedGroups.length} groups available
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="text-[11px] font-bold text-navy block mb-1">From Group (Start) *</label>
+                        <label className="text-xs font-bold text-navy block mb-1.5">From Group (Start) *</label>
                         <select
                           value={rangeStartGroupId}
                           onChange={(e) => setRangeStartGroupId(e.target.value)}
-                          className="input-field text-xs font-mono font-bold"
+                          className="input-field text-sm font-mono font-bold py-2 px-3 w-full"
                           required
                         >
                           <option value="">Select Start Group...</option>
                           {sortedGroups.map((g, idx) => (
                             <option key={g.id} value={g.id}>
-                              #{idx + 1} {g.group_code} — {g.title?.substring(0, 24)}...
+                              #{idx + 1} {g.group_code} — {g.title?.substring(0, 48)}...
                             </option>
                           ))}
                         </select>
                       </div>
 
                       <div>
-                        <label className="text-[11px] font-bold text-navy block mb-1">To Group (End) *</label>
+                        <label className="text-xs font-bold text-navy block mb-1.5">To Group (End) *</label>
                         <select
                           value={rangeEndGroupId}
                           onChange={(e) => setRangeEndGroupId(e.target.value)}
-                          className="input-field text-xs font-mono font-bold"
+                          className="input-field text-sm font-mono font-bold py-2 px-3 w-full"
                           required
                         >
                           <option value="">Select End Group...</option>
                           {sortedGroups.map((g, idx) => (
                             <option key={g.id} value={g.id}>
-                              #{idx + 1} {g.group_code} — {g.title?.substring(0, 24)}...
+                              #{idx + 1} {g.group_code} — {g.title?.substring(0, 48)}...
                             </option>
                           ))}
                         </select>
                       </div>
                     </div>
 
-                    {/* Quick Range Presets */}
-                    {sortedGroups.length > 5 && (
-                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                        <span className="text-[10px] font-bold text-draft uppercase tracking-wider mr-1">Quick Sets:</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRangeStartGroupId(String(sortedGroups[0]?.id));
-                            setRangeEndGroupId(String(sortedGroups[sortedGroups.length - 1]?.id));
-                          }}
-                          className="px-2 py-0.5 rounded text-[10px] font-semibold bg-white border border-rule text-navy hover:bg-slate-100"
-                        >
-                          All Groups ({sortedGroups.length})
-                        </button>
-                        {Array.from({ length: Math.ceil(sortedGroups.length / 5) }).map((_, blockIdx) => {
-                          const startG = sortedGroups[blockIdx * 5];
-                          const endG = sortedGroups[Math.min((blockIdx + 1) * 5 - 1, sortedGroups.length - 1)];
-                          if (!startG || !endG) return null;
-                          return (
-                            <button
-                              key={blockIdx}
-                              type="button"
-                              onClick={() => {
-                                setRangeStartGroupId(String(startG.id));
-                                setRangeEndGroupId(String(endG.id));
-                              }}
-                              className="px-2 py-0.5 rounded text-[10px] font-semibold bg-white border border-rule text-draft hover:text-ink hover:bg-slate-100"
-                            >
-                              Groups {blockIdx * 5 + 1}–{Math.min((blockIdx + 1) * 5, sortedGroups.length)}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-
                     {/* Filter Within Range by Domain */}
-                    <div className="pt-2 border-t border-rule/70 flex items-center justify-between gap-2">
-                      <label className="text-[11px] font-semibold text-draft shrink-0">Filter within range by domain:</label>
+                    <div className="pt-2.5 border-t border-rule/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <label className="text-xs font-semibold text-draft shrink-0">Filter within range by domain:</label>
                       <select
                         value={rangeFilterDomain}
                         onChange={(e) => setRangeFilterDomain(e.target.value)}
-                        className="input-field py-1 text-xs"
+                        className="input-field py-1.5 px-3 text-sm max-w-xs"
                       >
                         <option value="ALL">All Domains in Range</option>
                         {availableDomains.map((d) => (
@@ -2029,22 +1880,22 @@ export default function HODProjectMgmt() {
                   </div>
                 ) : (
                   /* MODE B: BY PROJECT DOMAIN */
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-ink uppercase tracking-wider">
+                      <label className="text-sm font-bold text-ink uppercase tracking-wider">
                         Target Groups by Domain
                       </label>
-                      <span className="text-[11px] font-semibold text-draft">
+                      <span className="text-xs font-semibold text-draft">
                         {availableDomains.length} domains in AY {academicYear}
                       </span>
                     </div>
 
                     <div>
-                      <label className="text-[11px] font-bold text-navy block mb-1">Select Project Domain *</label>
+                      <label className="text-xs font-bold text-navy block mb-1.5">Select Project Domain *</label>
                       <select
                         value={rangeSelectedDomain}
                         onChange={(e) => handleSelectDomain(e.target.value)}
-                        className="input-field text-xs font-semibold"
+                        className="input-field text-sm font-semibold py-2 px-3 w-full"
                         required
                       >
                         <option value="">Select a Domain...</option>
@@ -2058,8 +1909,8 @@ export default function HODProjectMgmt() {
 
                     {/* Quick Domain Chips */}
                     {availableDomains.length > 0 && (
-                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                        <span className="text-[10px] font-bold text-draft uppercase tracking-wider mr-1">Popular:</span>
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <span className="text-xs font-bold text-draft uppercase tracking-wider mr-1">Popular:</span>
                         {availableDomains.slice(0, 5).map((d) => {
                           const isSelected = rangeSelectedDomain.trim().toLowerCase() === d.domain.trim().toLowerCase();
                           return (
@@ -2067,9 +1918,9 @@ export default function HODProjectMgmt() {
                               key={d.domain}
                               type="button"
                               onClick={() => handleSelectDomain(d.domain)}
-                              className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-colors ${isSelected
-                                  ? 'bg-indigo-100 border-indigo-400 text-indigo-950 font-bold'
-                                  : 'bg-white border-rule text-draft hover:text-ink hover:bg-slate-50'
+                              className={`px-3 py-1 rounded text-xs font-semibold border transition-colors ${isSelected
+                                ? 'bg-indigo-100 border-indigo-400 text-indigo-950 font-bold'
+                                : 'bg-white border-rule text-draft hover:text-ink hover:bg-slate-50'
                                 }`}
                             >
                               {d.domain} ({d.count})
@@ -2081,17 +1932,17 @@ export default function HODProjectMgmt() {
 
                     {/* Domain Group Checklist Header */}
                     {rangeSelectedDomain && (
-                      <div className="flex items-center justify-between pt-2 border-t border-rule text-xs">
+                      <div className="flex items-center justify-between pt-2.5 border-t border-rule text-sm">
                         <span className="font-bold text-ink">
                           {domainSelectedGroupIds.length} of {
                             sortedGroups.filter((g) => (g.domain || '').trim().toLowerCase() === rangeSelectedDomain.trim().toLowerCase()).length
                           } Groups Selected:
                         </span>
-                        <div className="flex gap-2">
+                        <div className="flex gap-3">
                           <button
                             type="button"
                             onClick={selectAllDomainGroups}
-                            className="text-[11px] text-navy font-semibold hover:underline"
+                            className="text-xs text-navy font-bold hover:underline"
                           >
                             Select All
                           </button>
@@ -2099,7 +1950,7 @@ export default function HODProjectMgmt() {
                           <button
                             type="button"
                             onClick={deselectAllDomainGroups}
-                            className="text-[11px] text-maroon font-semibold hover:underline"
+                            className="text-xs text-maroon font-bold hover:underline"
                           >
                             Deselect All
                           </button>
@@ -2110,26 +1961,26 @@ export default function HODProjectMgmt() {
                 )}
 
                 {/* Live Preview of Groups Targeted */}
-                <div className="pt-2 border-t border-rule">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[11px] font-bold text-ink">
+                <div className="pt-3 border-t border-rule">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-ink">
                       Targeted Groups ({selectedGroupsToAssign.length} Groups):
                     </span>
                     {selectedGroupsToAssign.length > 0 && (
-                      <span className="text-[10px] font-mono px-2 py-0.5 bg-indigo-50 text-indigo-900 border border-indigo-200 rounded font-bold">
+                      <span className="text-xs font-mono px-2.5 py-0.5 bg-indigo-50 text-indigo-900 border border-indigo-200 rounded font-bold">
                         {rangeTargetMode === 'DOMAIN' ? `Domain: ${rangeSelectedDomain}` : `${selectedGroupsToAssign[0]?.group_code} → ${selectedGroupsToAssign[selectedGroupsToAssign.length - 1]?.group_code}`}
                       </span>
                     )}
                   </div>
 
                   {selectedGroupsToAssign.length === 0 ? (
-                    <div className="text-xs text-draft italic py-2 text-center bg-white rounded border border-rule">
+                    <div className="text-sm text-draft italic py-3 text-center bg-white rounded border border-rule">
                       {rangeTargetMode === 'DOMAIN'
                         ? 'Please select a domain above to view and assign groups.'
                         : 'Please select valid Start and End groups above.'}
                     </div>
                   ) : (
-                    <div className="max-h-36 overflow-y-auto space-y-1 p-2 bg-white rounded border border-rule divide-y divide-rule/60">
+                    <div className="max-h-48 overflow-y-auto space-y-1.5 p-3 bg-white rounded-md border border-rule divide-y divide-rule/60">
                       {rangeTargetMode === 'DOMAIN' ? (
                         sortedGroups
                           .filter((g) => (g.domain || '').trim().toLowerCase() === rangeSelectedDomain.trim().toLowerCase())
@@ -2138,20 +1989,20 @@ export default function HODProjectMgmt() {
                             return (
                               <label
                                 key={g.id}
-                                className={`flex items-center justify-between text-xs py-1.5 px-2 rounded cursor-pointer transition-colors ${isChecked ? 'bg-indigo-50/60 font-medium' : 'opacity-60 hover:opacity-100'
+                                className={`flex items-center justify-between text-xs py-2 px-2.5 rounded cursor-pointer transition-colors ${isChecked ? 'bg-indigo-50/70 font-medium' : 'opacity-60 hover:opacity-100'
                                   }`}
                               >
-                                <div className="flex items-center gap-2 truncate pr-2">
+                                <div className="flex items-center gap-2.5 truncate pr-3">
                                   <input
                                     type="checkbox"
                                     checked={isChecked}
                                     onChange={() => toggleDomainGroup(String(g.id))}
-                                    className="rounded"
+                                    className="w-4 h-4 rounded text-indigo-600"
                                   />
-                                  <span className="font-mono font-bold text-navy text-[11px]">{g.group_code}</span>
-                                  <span className="truncate text-ink text-[11px]">{g.title}</span>
+                                  <span className="font-mono font-bold text-navy text-xs">{g.group_code}</span>
+                                  <span className="truncate text-ink text-xs">{g.title}</span>
                                 </div>
-                                <span className="text-[10px] text-draft whitespace-nowrap">
+                                <span className="text-xs text-draft whitespace-nowrap">
                                   Guide: <strong className="text-ink">{g.guide_name || 'Unassigned'}</strong>
                                 </span>
                               </label>
@@ -2159,12 +2010,12 @@ export default function HODProjectMgmt() {
                           })
                       ) : (
                         selectedGroupsToAssign.map((g) => (
-                          <div key={g.id} className="flex items-center justify-between text-xs py-1 first:pt-0 last:pb-0">
-                            <div className="flex items-center gap-2 truncate pr-2">
-                              <span className="font-mono font-bold text-navy text-[11px]">{g.group_code}</span>
-                              <span className="truncate text-ink text-[11px]">{g.title}</span>
+                          <div key={g.id} className="flex items-center justify-between text-xs py-1.5 px-1 first:pt-0 last:pb-0">
+                            <div className="flex items-center gap-2.5 truncate pr-3">
+                              <span className="font-mono font-bold text-navy text-xs">{g.group_code}</span>
+                              <span className="truncate text-ink text-xs">{g.title}</span>
                             </div>
-                            <span className="text-[10px] text-draft whitespace-nowrap">
+                            <span className="text-xs text-draft whitespace-nowrap">
                               Guide: <strong className="text-ink">{g.guide_name || 'Unassigned'}</strong>
                             </span>
                           </div>
@@ -2177,26 +2028,47 @@ export default function HODProjectMgmt() {
 
               {/* 3. Panel Mentors Selection */}
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="input-label">Select Panel Mentors for this Range (1 to 3) *</label>
-                  <span className="text-[11px] font-mono text-navy font-bold">
-                    {rangePanelistIds.length} selected
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-bold text-ink">Select Panel Mentors for this Range (1 to 3) *</label>
+                  <span className="text-xs font-mono text-navy font-bold bg-blue-50 px-2.5 py-0.5 rounded border border-blue-200">
+                    {rangePanelistIds.length} of 3 selected
                   </span>
                 </div>
 
-                <div className="space-y-1.5 max-h-48 overflow-y-auto p-3 border border-rule rounded bg-paper">
-                  {availableGuides.map((fac) => {
+                <div className="relative mb-2">
+                  <input
+                    type="text"
+                    placeholder="Search mentor by name, employee ID, or designation…"
+                    value={rangeMentorSearch}
+                    onChange={(e) => setRangeMentorSearch(e.target.value)}
+                    className="w-full px-3 py-1.5 pl-8 text-xs border border-slate-300 rounded-md focus:ring-1 focus:ring-navy outline-none placeholder:text-slate-400 font-medium"
+                  />
+                  <span className="absolute left-2.5 top-2 text-slate-400 text-xs">🔍</span>
+                  {rangeMentorSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setRangeMentorSearch('')}
+                      className="absolute right-2.5 top-1.5 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-56 overflow-y-auto p-3.5 border border-rule rounded-lg bg-paper">
+                  {filteredRangeMentors.map((fac) => {
                     const isChecked = rangePanelistIds.includes(String(fac.faculty_id));
                     return (
                       <label
                         key={fac.faculty_id}
-                        className={`flex items-center justify-between p-2 rounded text-xs cursor-pointer border transition-colors ${isChecked ? 'bg-indigo-50 border-indigo-300 text-indigo-950 font-medium' : 'bg-white border-rule text-ink hover:bg-slate-50'
+                        className={`flex items-center justify-between p-2.5 rounded-md text-xs cursor-pointer border transition-colors ${isChecked ? 'bg-indigo-50 border-indigo-400 text-indigo-950 font-semibold shadow-2xs' : 'bg-white border-rule text-ink hover:bg-slate-50'
                           }`}
                       >
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2.5 truncate pr-2">
                           <input
                             type="checkbox"
                             checked={isChecked}
+                            className="w-4 h-4 rounded text-indigo-600"
                             onChange={(e) => {
                               const idStr = String(fac.faculty_id);
                               if (e.target.checked) {
@@ -2206,9 +2078,14 @@ export default function HODProjectMgmt() {
                               }
                             }}
                           />
-                          <span>{fac.name} ({fac.designation})</span>
+                          <div className="truncate">
+                            <span className="font-bold text-sm block truncate">{fac.name}</span>
+                            <span className="text-[11px] text-draft block truncate">{fac.designation}</span>
+                          </div>
                         </div>
-                        <span className="text-[10px] font-mono text-draft">{fac.current_guided_groups} guided</span>
+                        <span className="text-[11px] font-mono text-draft bg-slate-100 px-2 py-0.5 rounded border border-rule shrink-0">
+                          {fac.guided_groups ?? fac.current_guided_groups ?? 0} guided
+                        </span>
                       </label>
                     );
                   })}
@@ -2216,35 +2093,35 @@ export default function HODProjectMgmt() {
               </div>
 
               {/* 4. Conflict of Interest (COI) Option & Live Warning Banner */}
-              <div className="space-y-2">
-                <label className="flex items-start gap-2 p-3 bg-amber-50/70 border border-amber-200 rounded text-xs cursor-pointer">
+              <div className="space-y-2.5">
+                <label className="flex items-start gap-3 p-3.5 bg-amber-50/70 border border-amber-200 rounded-lg text-xs cursor-pointer">
                   <input
                     type="checkbox"
                     checked={rangeSkipGuideConflict}
                     onChange={(e) => setRangeSkipGuideConflict(e.target.checked)}
-                    className="mt-0.5"
+                    className="w-4 h-4 rounded text-amber-600 mt-0.5"
                   />
                   <div>
-                    <span className="font-bold text-amber-900 block">
+                    <span className="font-bold text-amber-950 text-sm block">
                       Enforce Conflict of Interest (COI) Protection (Recommended)
                     </span>
-                    <span className="text-amber-800 text-[11px] block mt-0.5">
+                    <span className="text-amber-800 text-xs block mt-0.5">
                       Automatically excludes a mentor from evaluating their own guided group in this range.
                     </span>
                   </div>
                 </label>
 
                 {coiWarningsPreview.length > 0 && rangeSkipGuideConflict && (
-                  <div className="p-3 bg-blue-50 border border-blue-200 rounded text-xs text-navy space-y-1">
-                    <p className="font-bold flex items-center gap-1.5">
+                  <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-lg text-xs text-navy space-y-1.5">
+                    <p className="font-bold text-sm flex items-center gap-2">
                       <span>🛡️</span> Notice: {coiWarningsPreview.length} Group(s) with Guide Overlap
                     </p>
-                    <p className="text-[11px] text-draft leading-relaxed">
+                    <p className="text-xs text-draft leading-relaxed">
                       The following group(s) have their guide selected as a mentor. The guide will be automatically skipped for these groups to maintain academic evaluation integrity:
                     </p>
-                    <div className="flex flex-wrap gap-1 pt-1">
+                    <div className="flex flex-wrap gap-1.5 pt-1">
                       {coiWarningsPreview.map((w, idx) => (
-                        <span key={idx} className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-white border border-blue-200 text-navy">
+                        <span key={idx} className="px-2.5 py-1 rounded text-xs font-mono font-semibold bg-white border border-blue-200 text-navy shadow-2xs">
                           {w.group_code}: {w.guideName}
                         </span>
                       ))}
@@ -2258,14 +2135,14 @@ export default function HODProjectMgmt() {
                 <button
                   type="button"
                   onClick={() => setRangeAssignModal(false)}
-                  className="px-4 py-2 border border-rule rounded text-xs font-semibold"
+                  className="px-5 py-2.5 border border-rule rounded-md text-sm font-semibold hover:bg-slate-100 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting || selectedGroupsInRange.length === 0 || rangePanelistIds.length === 0}
-                  className="btn-primary py-2 px-5 text-xs font-bold bg-indigo-700 hover:bg-indigo-800 disabled:opacity-50"
+                  className="btn-primary py-2.5 px-6 text-sm font-bold bg-indigo-700 hover:bg-indigo-800 disabled:opacity-50 shadow-xs"
                 >
                   {submitting
                     ? 'Assigning Mentors...'
@@ -2285,7 +2162,7 @@ export default function HODProjectMgmt() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-rule pb-4">
               <div>
                 <h2 className="font-serif text-xl font-bold text-ink">Score Visibility Control (Release to Students)</h2>
-                <p className="text-xs text-draft mt-0.5">Publish continuous assessment marks &amp; panel remarks per stage or export formatted score excel.</p>
+                <p className="text-xs text-draft mt-0.5">Publish continuous assessment marks &amp; panel remarks directly to students per stage without requiring HOD approval.</p>
               </div>
               <button
                 type="button"
@@ -2318,90 +2195,68 @@ export default function HODProjectMgmt() {
       {guideModalGroup && createPortal(
         <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-lg border border-rule max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto animate-fade-in">
-            <h3 className="font-serif text-xl font-bold text-ink border-b border-rule pb-3 flex items-center justify-between">
-              <span>Assign Guide for {guideModalGroup.group_code}</span>
+            <div className="border-b border-rule pb-3 flex items-center justify-between">
+              <div>
+                <h3 className="font-serif text-lg font-bold text-ink">
+                  Assign Guide for {guideModalGroup.group_code}
+                </h3>
+                {guideModalGroup.domain && (
+                  <p className="text-xs text-draft mt-0.5">
+                    Domain: <span className="font-semibold text-indigo-900">{guideModalGroup.domain}</span>
+                  </p>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => setGuideModalGroup(null)}
-                className="text-draft hover:text-ink font-bold text-base"
+                className="text-draft hover:text-ink font-bold text-base p-1"
               >
                 ✕
               </button>
-            </h3>
-
-            {/* Group Details Section: Domain, Student Names, and 3 Project Topics */}
-            <div className="bg-paper p-4 rounded-md border border-rule space-y-3">
-              {/* 1. Project Domain */}
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-draft uppercase tracking-wider">Project Domain:</span>
-                <span className="px-2.5 py-0.5 rounded text-xs font-bold bg-indigo-50 text-indigo-900 border border-indigo-200">
-                  {guideModalGroup.domain || 'Not Specified'}
-                </span>
-              </div>
-
-              {/* 2. Students in Group (Each Student Name) */}
-              <div>
-                <span className="text-xs font-semibold text-draft uppercase tracking-wider block mb-1">
-                  Students in Group ({guideModalGroup.members?.length || 0}):
-                </span>
-                <div className="grid grid-cols-1 gap-1.5 text-xs">
-                  {guideModalGroup.members && guideModalGroup.members.length > 0 ? (
-                    guideModalGroup.members.map((m, idx) => (
-                      <div key={idx} className="flex items-center justify-between bg-white px-3 py-1.5 rounded border border-rule">
-                        <span className="font-semibold text-ink">
-                          {idx + 1}. {m.name || m.student_name || 'Student'}
-                          {m.is_leader && (
-                            <span className="ml-2 text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded">
-                              Leader
-                            </span>
-                          )}
-                        </span>
-                        {m.roll_no && <span className="font-mono text-[11px] text-draft">{m.roll_no}</span>}
-                      </div>
-                    ))
-                  ) : (
-                    <span className="text-draft italic">No student details available</span>
-                  )}
-                </div>
-              </div>
-
-              {/* 3. 3 Project Topics */}
-              <div>
-                <span className="text-xs font-semibold text-draft uppercase tracking-wider block mb-1">
-                  3 Project Topics:
-                </span>
-                <div className="space-y-1.5 text-xs">
-                  <div className="p-2.5 bg-white rounded border border-rule">
-                    <span className="font-bold text-navy text-[11px] block">Topic Preference 1:</span>
-                    <span className="text-ink font-semibold leading-tight block mt-0.5">{guideModalGroup.title || 'Not Specified'}</span>
-                  </div>
-                  <div className="p-2.5 bg-white rounded border border-rule">
-                    <span className="font-bold text-draft text-[11px] block">Topic Preference 2:</span>
-                    <span className="text-ink font-medium leading-tight block mt-0.5">{guideModalGroup.title_2 || <em className="text-draft">Not provided</em>}</span>
-                  </div>
-                  <div className="p-2.5 bg-white rounded border border-rule">
-                    <span className="font-bold text-draft text-[11px] block">Topic Preference 3:</span>
-                    <span className="text-ink font-medium leading-tight block mt-0.5">{guideModalGroup.title_3 || <em className="text-draft">Not provided</em>}</span>
-                  </div>
-                </div>
-              </div>
             </div>
 
             <form onSubmit={handleAssignGuide} className="space-y-4 pt-1">
               <div>
-                <label className="input-label">Select Faculty Guide *</label>
+                <label className="input-label mb-1.5 block">Select Faculty Guide *</label>
+
+                {/* Search Bar matching user's exact specification */}
+                <div className="relative mb-2.5">
+                  <input
+                    type="text"
+                    placeholder="Search faculty by name, employee ID, email, or designation…"
+                    value={guideModalSearch}
+                    onChange={(e) => setGuideModalSearch(e.target.value)}
+                    className="w-full px-3 py-2 pl-8 text-xs border border-slate-300 rounded-md focus:ring-1 focus:ring-navy outline-none placeholder:text-slate-400 font-medium"
+                  />
+                  <span className="absolute left-2.5 top-2 text-slate-400 text-xs">🔍</span>
+                  {guideModalSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setGuideModalSearch('')}
+                      className="absolute right-2.5 top-1.5 text-slate-400 hover:text-slate-600 text-xs font-bold p-0.5"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
                 <select
                   value={selectedGuideId}
                   onChange={(e) => setSelectedGuideId(e.target.value)}
-                  className="input-field font-semibold"
+                  className="input-field font-semibold text-sm"
+                  size={filteredModalGuides.length > 4 ? 6 : undefined}
                 >
                   <option value="">-- Leave Unassigned --</option>
-                  {availableGuides.map((g) => (
+                  {filteredModalGuides.map((g) => (
                     <option key={g.faculty_id} value={g.faculty_id}>
                       {g.name} ({g.designation}) — {g.current_guided_groups} guided
                     </option>
                   ))}
                 </select>
+
+                <div className="flex items-center justify-between text-[11px] text-draft mt-1.5 font-medium">
+                  <span>Showing {filteredModalGuides.length} designated guides</span>
+                </div>
               </div>
               <div className="flex justify-end gap-3 pt-3 border-t border-rule">
                 <button
@@ -2423,27 +2278,30 @@ export default function HODProjectMgmt() {
 
       {/* PANEL ASSIGNMENT MODAL (SINGLE GROUP) */}
       {panelModal && createPortal(
-        <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded border border-rule max-w-lg w-full p-6 shadow-2xl animate-fade-in">
-            <h3 className="font-serif text-xl font-bold text-ink border-b border-rule pb-3 mb-4 flex items-center justify-between">
-              <span>Assign Panel Evaluators</span>
+        <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6">
+          <div className="bg-white rounded-lg border border-rule max-w-3xl w-full p-6 sm:p-7 shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto space-y-5">
+            <div className="border-b border-rule pb-3.5 flex items-center justify-between">
+              <h3 className="font-serif text-2xl font-bold text-ink flex items-center gap-2">
+                <span>🛡️</span> Assign Panel Mentors
+              </h3>
               <button
                 type="button"
                 onClick={() => setPanelModal(false)}
-                className="text-draft hover:text-ink font-bold text-base"
+                className="text-draft hover:text-ink font-bold text-xl p-1 rounded hover:bg-slate-100 transition-colors"
+                title="Close dialog"
               >
                 ✕
               </button>
-            </h3>
+            </div>
 
-            <form onSubmit={handleAssignPanel} className="space-y-4">
+            <form onSubmit={handleAssignPanel} className="space-y-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="input-label">Select Evaluation Stage *</label>
+                  <label className="block text-sm font-bold text-ink mb-1.5">Select Evaluation Stage *</label>
                   <select
                     value={selectedStageId}
                     onChange={(e) => setSelectedStageId(e.target.value)}
-                    className="input-field text-xs"
+                    className="input-field text-sm font-semibold py-2 px-3 w-full"
                     required
                   >
                     <option value="">Select Stage...</option>
@@ -2456,7 +2314,7 @@ export default function HODProjectMgmt() {
                 </div>
 
                 <div>
-                  <label className="input-label">Select Project Group *</label>
+                  <label className="block text-sm font-bold text-ink mb-1.5">Select Project Group *</label>
                   <select
                     value={selectedGroupId}
                     onChange={(e) => {
@@ -2469,13 +2327,13 @@ export default function HODProjectMgmt() {
                         setSelectedPanelistIds([]);
                       }
                     }}
-                    className="input-field text-xs"
+                    className="input-field text-sm font-semibold py-2 px-3 w-full"
                     required
                   >
                     <option value="">Select Group...</option>
                     {groups.map((g) => (
                       <option key={g.id} value={g.id}>
-                        {g.group_code} — {g.title.substring(0, 30)}...
+                        {g.group_code} — {g.title?.substring(0, 40)}...
                       </option>
                     ))}
                   </select>
@@ -2483,22 +2341,52 @@ export default function HODProjectMgmt() {
               </div>
 
               {currentSelectedGroupObj && (
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded text-xs text-navy">
-                  <p><span className="font-bold">Group Guide:</span> {currentSelectedGroupObj.guide_name || 'Unassigned'}</p>
+                <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-lg text-sm text-navy">
+                  <p><span className="font-bold">Group Guide:</span> {currentSelectedGroupObj.guide_name || 'Unassigned'} ({currentSelectedGroupObj.domain || 'Domain'})</p>
                 </div>
               )}
 
               <div>
-                <label className="input-label">Select Panel Mentors (1 to 3) *</label>
-                <div className="space-y-2 mt-2 max-h-52 overflow-y-auto p-3 border border-rule rounded bg-paper">
-                  {availableGuides.map((fac) => (
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-bold text-ink">Select Panel Mentors (1 to 3) *</label>
+                  <span className="text-xs font-mono text-navy font-bold bg-blue-50 px-2.5 py-0.5 rounded border border-blue-200">
+                    {selectedPanelistIds.length} of 3 selected
+                  </span>
+                </div>
+
+                <div className="relative mb-2">
+                  <input
+                    type="text"
+                    placeholder="Search mentor by name, employee ID, or designation…"
+                    value={panelMentorSearch}
+                    onChange={(e) => setPanelMentorSearch(e.target.value)}
+                    className="w-full px-3 py-1.5 pl-8 text-xs border border-slate-300 rounded-md focus:ring-1 focus:ring-navy outline-none placeholder:text-slate-400 font-medium"
+                  />
+                  <span className="absolute left-2.5 top-2 text-slate-400 text-xs">🔍</span>
+                  {panelMentorSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setPanelMentorSearch('')}
+                      className="absolute right-2.5 top-1.5 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto p-3.5 border border-rule rounded-lg bg-paper">
+                  {filteredPanelMentors.map((fac) => (
                     <label
                       key={fac.faculty_id}
-                      className="flex items-center justify-between p-2 rounded text-xs cursor-pointer border bg-white border-rule text-ink hover:bg-slate-50"
+                      className={`flex items-center justify-between p-2.5 rounded-md text-xs cursor-pointer border transition-colors ${selectedPanelistIds.includes(String(fac.faculty_id))
+                        ? 'bg-indigo-50 border-indigo-400 text-indigo-950 font-semibold shadow-2xs'
+                        : 'bg-white border-rule text-ink hover:bg-slate-50'
+                        }`}
                     >
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2.5 truncate pr-2">
                         <input
                           type="checkbox"
+                          className="w-4 h-4 rounded text-indigo-600"
                           checked={selectedPanelistIds.includes(String(fac.faculty_id))}
                           onChange={(e) => {
                             const idStr = String(fac.faculty_id);
@@ -2509,9 +2397,14 @@ export default function HODProjectMgmt() {
                             }
                           }}
                         />
-                        <span>{fac.name} ({fac.designation})</span>
+                        <div className="truncate">
+                          <span className="font-bold text-sm block truncate">{fac.name}</span>
+                          <span className="text-[11px] text-draft block truncate">{fac.designation}</span>
+                        </div>
                       </div>
-                      <span className="text-[10px] font-mono text-draft">{fac.current_guided_groups} guided</span>
+                      <span className="text-[11px] font-mono text-draft bg-slate-100 px-2 py-0.5 rounded border border-rule shrink-0">
+                        {fac.guided_groups ?? fac.current_guided_groups ?? 0} guided
+                      </span>
                     </label>
                   ))}
                 </div>
@@ -2521,14 +2414,14 @@ export default function HODProjectMgmt() {
                 <button
                   type="button"
                   onClick={() => setPanelModal(false)}
-                  className="px-4 py-2 border border-rule rounded text-xs font-semibold"
+                  className="px-5 py-2.5 border border-rule rounded-md text-sm font-semibold hover:bg-slate-100 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="btn-primary py-2 px-5 text-xs font-bold"
+                  className="btn-primary py-2.5 px-6 text-sm font-bold shadow-xs"
                 >
                   {submitting ? 'Saving...' : 'Save Panel Assignment'}
                 </button>

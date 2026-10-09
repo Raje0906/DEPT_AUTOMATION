@@ -249,7 +249,7 @@ export default function Login() {
                         <span className="text-xs font-semibold text-ink flex items-center gap-1.5">
                           Dr. N. F. Shaikh <span className="text-[10px] bg-purple-100 text-purple-800 font-bold px-1.5 py-0.2 rounded">HOD</span>
                         </span>
-                        <span className="text-[11px] font-mono text-draft group-hover:text-navy">nfs (Dr. N. F. Shaikh)</span>
+                        <span className="text-[11px] font-mono text-draft group-hover:text-navy">nfs / hod · pw: faculty@123</span>
                       </div>
                       <span className="text-[11px] text-navy font-semibold uppercase group-hover:translate-x-0.5 transition-transform">Sign in →</span>
                     </button>
@@ -262,7 +262,7 @@ export default function Login() {
                         <span className="text-xs font-semibold text-amber-900 flex items-center gap-1.5">
                           Dr. S. S. Raskar <span className="text-[10px] bg-amber-200 text-amber-900 font-bold px-1.5 py-0.2 rounded">Coordinator</span>
                         </span>
-                        <span className="text-[11px] font-mono text-draft group-hover:text-amber-900">ssr (Dr. S. S. Raskar)</span>
+                        <span className="text-[11px] font-mono text-draft group-hover:text-amber-900">ssr / coordinator · pw: faculty@123</span>
                       </div>
                       <span className="text-[11px] text-amber-800 font-semibold uppercase group-hover:translate-x-0.5 transition-transform">Sign in →</span>
                     </button>
@@ -273,7 +273,7 @@ export default function Login() {
                     >
                       <div className="flex flex-col">
                         <span className="text-xs font-semibold text-ink">Dr. S. K. Wagh (Faculty / Guide)</span>
-                        <span className="text-[11px] font-mono text-draft group-hover:text-navy">skw (Dr. S. K. Wagh)</span>
+                        <span className="text-[11px] font-mono text-draft group-hover:text-navy">skw / faculty · pw: faculty@123</span>
                       </div>
                       <span className="text-[11px] text-navy font-semibold uppercase group-hover:translate-x-0.5 transition-transform">Sign in →</span>
                     </button>
@@ -284,7 +284,7 @@ export default function Login() {
                     >
                       <div className="flex flex-col">
                         <span className="text-xs font-semibold text-ink">Student (PRN: F23112050)</span>
-                        <span className="text-[11px] font-mono text-draft group-hover:text-navy">F23112050 · pw: student@123</span>
+                        <span className="text-[11px] font-mono text-draft group-hover:text-navy">F23112050 / student · pw: student@123</span>
                       </div>
                       <span className="text-[11px] text-navy font-semibold uppercase group-hover:translate-x-0.5 transition-transform">Sign in →</span>
                     </button>
