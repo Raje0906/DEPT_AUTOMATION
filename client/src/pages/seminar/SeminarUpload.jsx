@@ -200,13 +200,27 @@ export default function SeminarUpload() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-xs text-[var(--ink)]/50">
-        <Link to="/faculty/seminar" className="hover:text-[var(--navy)]">Sessions</Link>
-        <span>/</span>
-        <span className="text-[var(--ink)]/80 font-medium truncate">{session?.name}</span>
-        <span>/</span>
-        <span>Submissions &amp; Validation</span>
+      {/* Top-Left Back Button & Breadcrumb */}
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          id="btn-back-step"
+          onClick={() => navigate('/faculty/seminar')}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[var(--navy)] bg-white hover:bg-slate-100 border border-[var(--rule)] rounded-md transition-colors focus:outline-hidden focus:ring-2 focus:ring-[var(--navy)] shadow-xs"
+          aria-label="Back to Seminar Sessions"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+          </svg>
+          <span>Back</span>
+        </button>
+        <div className="flex items-center gap-2 text-xs text-[var(--ink)]/50">
+          <Link to="/faculty/seminar" className="hover:text-[var(--navy)]">Sessions</Link>
+          <span>/</span>
+          <span className="text-[var(--ink)]/80 font-medium truncate">{session?.name}</span>
+          <span>/</span>
+          <span>Step 1: Submissions &amp; Validation</span>
+        </div>
       </div>
 
       {/* Header & Controls */}
@@ -225,10 +239,10 @@ export default function SeminarUpload() {
             </span>
           </div>
           <h1 className="text-2xl font-bold text-[var(--navy)]">
-            Student Submissions &amp; Live Validation
+            Student Submissions
           </h1>
           <p className="text-xs text-[var(--ink)]/60 mt-0.5">
-            {groups.length} groups submitted · {unacknowledgedErrors.length} pending validation issues
+            {groups.length} groups submitted
           </p>
         </div>
 
@@ -289,23 +303,6 @@ export default function SeminarUpload() {
             }`}
           >
             Live Submissions ({groups.length})
-          </button>
-
-          <button
-            id="tab-validation"
-            onClick={() => setActiveTab('validation')}
-            className={`px-4 py-2 text-xs font-bold rounded-t-lg transition-colors border-b-2 -mb-1 flex items-center gap-1.5 ${
-              activeTab === 'validation'
-                ? 'border-[var(--navy)] text-[var(--navy)] bg-white'
-                : 'border-transparent text-[var(--ink)]/60 hover:text-[var(--ink)]'
-            }`}
-          >
-            Standing Validation
-            {unacknowledgedErrors.length > 0 && (
-              <span className="bg-red-500 text-white text-[10px] font-mono px-1.5 py-0.2 rounded-full">
-                {unacknowledgedErrors.length}
-              </span>
-            )}
           </button>
 
           <button

@@ -1,8 +1,7 @@
 const express = require('express');
 const pool = require('../db/pool');
 const { verifyToken, requireRole } = require('../middleware/auth');
-const { computeSGPA, computeCGPA } = require('../services/gradeCalculator');
-const { auditRecord } = require('../middleware/auditLogger');
+const { computeSGPA, computeCGPA, computeSubjectRollup } = require('../services/gradeCalculator');
 
 const router = express.Router();
 router.use(verifyToken, requireRole('hod'));
@@ -196,15 +195,6 @@ router.post('/approve/:subjectId', async (req, res) => {
       return res.status(400).json({ error: 'No submitted marks found to approve for this subject & division' });
     }
 
-    auditRecord({
-      tableName: 'student_exam_marks',
-      recordId: parseInt(subjectId, 10),
-      changedBy: req.user.id,
-      oldValue: { status: 'submitted' },
-      newValue: { status: 'approved' },
-      action: 'UPDATE',
-      reason: `HOD approved marks for subject ${subjectId} (${division})`,
-    });
 
     res.json({ message: `Approved ${updateResult.rows.length} mark entries. Marks are locked for faculty edits.` });
   } catch (err) {
@@ -233,15 +223,6 @@ router.post('/sendback/:subjectId', async (req, res) => {
       [subjectId, semester, academicYear, division]
     );
 
-    auditRecord({
-      tableName: 'student_exam_marks',
-      recordId: parseInt(subjectId, 10),
-      changedBy: req.user.id,
-      oldValue: { status: 'submitted' },
-      newValue: { status: 'draft' },
-      action: 'UPDATE',
-      reason: `HOD sent back for correction (${division}): ${comment}`,
-    });
 
     res.json({ message: `Sent back ${updateRes.rows.length} marks to faculty as draft.`, comment });
   } catch (err) {
@@ -282,15 +263,6 @@ router.post('/publish', async (req, res) => {
         [semester, academicYear, req.user.dept, division, req.user.id]
       );
 
-      auditRecord({
-        tableName: 'result_publish_status',
-        recordId: parseInt(semester, 10),
-        changedBy: req.user.id,
-        oldValue: { status: 'open' },
-        newValue: { status: 'published' },
-        action: 'UPDATE',
-        reason: `HOD published Semester ${semester} results for ${division}`,
-      });
 
       await client.query('COMMIT');
       res.json({ message: `Semester ${semester} results published for ${division} (${pubRes.rows.length} marks published). Students can now view their official results.` });
@@ -309,65 +281,146 @@ router.post('/publish', async (req, res) => {
 // ─── GET /api/hod/analytics ───────────────────────────────────────────────────
 router.get('/analytics', async (req, res) => {
   try {
-    const { semester, academicYear } = req.query;
+    const semester = req.query.semester ? parseInt(req.query.semester, 10) : null;
+    const academicYear = req.query.academic_year || req.query.academicYear || '2026-27';
 
-    const marksResult = await pool.query(
-      `SELECT m.grade, m.grade_points, m.total, m.is_backlog,
-              s.credits, s.semester AS sub_semester, u.name AS student_name, s2.roll_no
-       FROM marks m
-       JOIN students s2 ON s2.id = m.student_id
-       JOIN users u ON u.id = s2.user_id
-       JOIN subjects s ON s.id = m.subject_id
+    // 1. Fetch subjects for this department (and optional semester filter)
+    let subjectsQuery = `SELECT * FROM subjects WHERE department = $1`;
+    const subjectsParams = [req.user.dept];
+    if (semester) {
+      subjectsQuery += ` AND semester = $2`;
+      subjectsParams.push(semester);
+    }
+    const subjectsRes = await pool.query(subjectsQuery, subjectsParams);
+    const subjectsMap = {};
+    for (const s of subjectsRes.rows) {
+      subjectsMap[s.id] = s;
+    }
+
+    // 2. Fetch real-time student_exam_marks joined with students and exam types
+    const marksRes = await pool.query(
+      `SELECT sem.student_id, sem.subject_id, sem.marks_obtained, sem.is_absent, sem.status,
+              et.code AS exam_code, et.has_result_impact,
+              s2.roll_no, s2.division, s.credits, s.semester AS sub_semester
+       FROM student_exam_marks sem
+       JOIN exam_types et ON et.id = sem.exam_type_id
+       JOIN subjects s ON s.id = sem.subject_id
+       JOIN students s2 ON s2.id = sem.student_id
        WHERE s.department = $1
-         AND ($2::int IS NULL OR m.semester = $2)
-         AND ($3::text IS NULL OR m.academic_year = $3)
-         AND m.status = 'published'
-       ORDER BY m.semester, s2.roll_no`,
-      [req.user.dept, semester || null, academicYear || null]
+         AND ($2::text IS NULL OR sem.academic_year = $2)
+         AND ($3::int IS NULL OR sem.semester = $3)
+         AND sem.status = 'published'
+       ORDER BY sem.student_id, sem.subject_id`,
+      [req.user.dept, academicYear, semester]
     );
 
-    const rows = marksResult.rows;
-    const total = rows.length;
-    const passed = rows.filter(r => r.grade !== 'F').length;
-    const gradeDistribution = {};
-    for (const r of rows) {
-      gradeDistribution[r.grade] = (gradeDistribution[r.grade] || 0) + 1;
+    // Group marks by student -> subject -> examRows
+    const studentMap = {};
+    for (const r of marksRes.rows) {
+      if (!studentMap[r.student_id]) {
+        studentMap[r.student_id] = { roll_no: r.roll_no, division: r.division, subjects: {} };
+      }
+      if (!studentMap[r.student_id].subjects[r.subject_id]) {
+        studentMap[r.student_id].subjects[r.subject_id] = [];
+      }
+      studentMap[r.student_id].subjects[r.subject_id].push(r);
     }
 
-    // SGPA distribution for students
-    const studentSGPAs = {};
-    for (const r of rows) {
-      if (!studentSGPAs[r.roll_no]) studentSGPAs[r.roll_no] = { subjects: [] };
-      studentSGPAs[r.roll_no].subjects.push({ credits: r.credits, gradePoints: parseFloat(r.grade_points) || 0 });
+    let total = 0;
+    let passed = 0;
+    const gradeDistribution = { O: 0, 'A+': 0, A: 0, 'B+': 0, B: 0, C: 0, P: 0, F: 0 };
+    const studentSGPAs = [];
+
+    for (const [studentId, studData] of Object.entries(studentMap)) {
+      const studentSubjectsForSGPA = [];
+      for (const [subjectId, examRows] of Object.entries(studData.subjects)) {
+        const subject = subjectsMap[subjectId];
+        if (!subject) continue;
+        const rollup = computeSubjectRollup(subject, examRows);
+
+        if (rollup.hasAnyMark) {
+          total++;
+          if (rollup.grade !== 'F') {
+            passed++;
+          }
+          gradeDistribution[rollup.grade] = (gradeDistribution[rollup.grade] || 0) + 1;
+          studentSubjectsForSGPA.push({
+            credits: subject.credits,
+            gradePoints: rollup.gradePoints,
+          });
+        }
+      }
+      if (studentSubjectsForSGPA.length > 0) {
+        const sgpa = computeSGPA(studentSubjectsForSGPA);
+        studentSGPAs.push(sgpa);
+      }
     }
-    const sgpaValues = Object.values(studentSGPAs).map(s => computeSGPA(s.subjects));
-    const avgSGPA = sgpaValues.length > 0
-      ? Math.round((sgpaValues.reduce((a, b) => a + b, 0) / sgpaValues.length) * 100) / 100
+
+    // Fallback: If no real-time exam marks exist for the selection, check legacy marks table
+    if (total === 0) {
+      const legacyRes = await pool.query(
+        `SELECT m.grade, m.grade_points, s.credits, s2.roll_no
+         FROM marks m
+         JOIN students s2 ON s2.id = m.student_id
+         JOIN subjects s ON s.id = m.subject_id
+         WHERE s.department = $1
+           AND ($2::int IS NULL OR m.semester = $2)
+           AND ($3::text IS NULL OR m.academic_year = $3)
+           AND m.status = 'published'`,
+        [req.user.dept, semester, academicYear]
+      );
+      if (legacyRes.rows.length > 0) {
+        total = legacyRes.rows.length;
+        passed = legacyRes.rows.filter(r => r.grade !== 'F').length;
+        const legacyStudents = {};
+        for (const r of legacyRes.rows) {
+          gradeDistribution[r.grade] = (gradeDistribution[r.grade] || 0) + 1;
+          if (!legacyStudents[r.roll_no]) legacyStudents[r.roll_no] = [];
+          legacyStudents[r.roll_no].push({ credits: r.credits, gradePoints: parseFloat(r.grade_points) || 0 });
+        }
+        for (const list of Object.values(legacyStudents)) {
+          studentSGPAs.push(computeSGPA(list));
+        }
+      }
+    }
+
+    const failed = total - passed;
+    const passPercentage = total > 0 ? Math.round((passed / total) * 1000) / 10 : 0;
+    const avgSGPA = studentSGPAs.length > 0
+      ? Math.round((studentSGPAs.reduce((a, b) => a + b, 0) / studentSGPAs.length) * 100) / 100
       : 0;
 
-    // Faculty compliance
+    // Faculty submission compliance with live exam submissions
     const complianceResult = await pool.query(
       `SELECT u.name AS faculty_name, f.employee_id,
-              COUNT(fsm.id) AS total_subjects,
-              COUNT(fsm.id) FILTER (WHERE EXISTS (
-                SELECT 1 FROM marks m WHERE m.subject_id = fsm.subject_id
-                AND m.status IN ('submitted','approved','published')
+              COUNT(DISTINCT fsm.id) AS total_subjects,
+              COUNT(DISTINCT fsm.id) FILTER (WHERE EXISTS (
+                SELECT 1 FROM student_exam_marks sem
+                WHERE sem.subject_id = fsm.subject_id
+                  AND sem.semester = fsm.semester
+                  AND sem.academic_year = fsm.academic_year
+                  AND sem.status IN ('submitted','approved','published')
               )) AS submitted_count
        FROM faculty_subject_map fsm
        JOIN faculty f ON f.id = fsm.faculty_id
        JOIN users u ON u.id = f.user_id
        WHERE f.department = $1
-       GROUP BY u.name, f.employee_id`,
-      [req.user.dept]
+         AND ($2::int IS NULL OR fsm.semester = $2)
+         AND ($3::text IS NULL OR fsm.academic_year = $3)
+       GROUP BY u.name, f.employee_id
+       ORDER BY u.name`,
+      [req.user.dept, semester, academicYear]
     );
 
     res.json({
+      academicYear,
+      semester,
       total,
       passed,
-      failed: total - passed,
-      passPercentage: total > 0 ? Math.round((passed / total) * 1000) / 10 : 0,
+      failed,
+      passPercentage,
       gradeDistribution,
-      sgpaValues,
+      sgpaValues: studentSGPAs,
       averageSGPA: avgSGPA,
       facultyCompliance: complianceResult.rows,
     });
@@ -377,40 +430,6 @@ router.get('/analytics', async (req, res) => {
   }
 });
 
-// ─── GET /api/hod/audit-log ───────────────────────────────────────────────────
-router.get('/audit-log', async (req, res) => {
-  try {
-    const { page = 1, limit = 50 } = req.query;
-    const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
-
-    const result = await pool.query(
-      `SELECT a.id, a.table_name, a.record_id, a.action, a.old_value, a.new_value,
-              a.reason, a.created_at, a.ip_address, a.user_agent,
-              u.name AS changed_by_name, u.role AS changed_by_role
-       FROM audit_log a
-       LEFT JOIN users u ON u.id = a.changed_by
-       WHERE (u.department = $1 OR a.changed_by IS NULL)
-       ORDER BY a.created_at DESC
-       LIMIT $2 OFFSET $3`,
-      [req.user.dept, limit, offset]
-    );
-
-    const countResult = await pool.query(
-      `SELECT COUNT(*) FROM audit_log a LEFT JOIN users u ON u.id = a.changed_by WHERE (u.department = $1 OR a.changed_by IS NULL)`,
-      [req.user.dept]
-    );
-
-    res.json({
-      logs: result.rows,
-      total: parseInt(countResult.rows[0].count, 10),
-      page: parseInt(page, 10),
-      limit: parseInt(limit, 10),
-    });
-  } catch (err) {
-    console.error('[HOD] Audit log error:', err.message);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
 
 
 // ─── POST /api/hod/manual-override ────────────────────────────────────────────
@@ -451,17 +470,7 @@ router.post('/manual-override', async (req, res) => {
        computed.total, computed.grade, computed.gradePoints, computed.isBacklog, markId]
     );
 
-    auditRecord({
-      tableName: 'marks',
-      recordId: markId,
-      changedBy: req.user.id,
-      oldValue: { cie_marks: old.cie_marks, practical_marks: old.practical_marks, end_sem_marks: old.end_sem_marks, grade: old.grade },
-      newValue: { cie_marks: cie, practical_marks: practical, end_sem_marks: endSem, grade: computed.grade },
-      action: 'UPDATE',
-      reason: `HOD MANUAL OVERRIDE: ${typedReason}`,
-    });
-
-    res.json({ message: 'Manual override applied. Audit log updated.', computed });
+    res.json({ message: 'Manual override applied successfully.', computed });
   } catch (err) {
     console.error('[HOD] Manual override error:', err.message);
     res.status(500).json({ error: 'Internal server error' });
@@ -619,15 +628,6 @@ router.post('/teachers/assign', async (req, res) => {
         });
       }
 
-      auditRecord({
-        tableName: 'faculty_subject_map',
-        recordId: insertedIds[0] || parseInt(facultyId, 10),
-        changedBy: req.user.id,
-        oldValue: null,
-        newValue: { facultyId, insertedCount, academicYear: year, isClassTeacher, ctTargetClass },
-        action: 'INSERT',
-        reason: `HOD assigned ${insertedCount} course(s) to faculty #${facultyId}${isClassTeacher && ctTargetClass ? ` [Class Teacher for ${ctTargetClass}]` : ''}`,
-      });
 
       let msg = `Successfully assigned ${insertedCount} subject(s)!`;
       if (alreadyAssignedCount > 0) {
@@ -671,15 +671,6 @@ router.post('/teachers/set-class-teacher', async (req, res) => {
       [facultyId, className, year]
     );
 
-    auditRecord({
-      tableName: 'class_teachers',
-      recordId: parseInt(facultyId, 10),
-      changedBy: req.user.id,
-      oldValue: null,
-      newValue: { facultyId, className, year },
-      action: 'UPDATE',
-      reason: `HOD appointed faculty #${facultyId} as Class Teacher for ${className}`,
-    });
 
     res.json({ message: `Successfully appointed as Class Teacher for ${className}!` });
   } catch (err) {
@@ -712,15 +703,6 @@ router.delete('/teachers/unassign/:mappingId', async (req, res) => {
 
     await pool.query(`DELETE FROM faculty_subject_map WHERE id = $1`, [mappingId]);
 
-    auditRecord({
-      tableName: 'faculty_subject_map',
-      recordId: parseInt(mappingId, 10),
-      changedBy: req.user.id,
-      oldValue: existing.rows[0],
-      newValue: null,
-      action: 'DELETE',
-      reason: `HOD removed faculty subject mapping #${mappingId}`,
-    });
 
     res.json({ message: 'Assignment removed successfully' });
   } catch (err) {
@@ -937,15 +919,6 @@ router.post('/term-rollover/execute', async (req, res) => {
     }
 
     // Audit Log
-    auditRecord({
-      tableName: 'academic_term_rollover',
-      recordId: toSem,
-      changedBy: req.user.id,
-      oldValue: { fromSemester: fromSem, academicYear: ay },
-      newValue: { toSemester: toSem, updatedStudentsCount, facultyMappingsCount, divisions: divList },
-      action: 'UPDATE',
-      reason: `HOD executed Academic Term Rollover from Semester ${fromSem} to Semester ${toSem} (${ay})`,
-    });
 
     await client.query('COMMIT');
 
@@ -986,15 +959,6 @@ router.post('/term-rollover/switch-active-semester', async (req, res) => {
       [targetSem, divList]
     );
 
-    auditRecord({
-      tableName: 'students',
-      recordId: targetSem,
-      changedBy: req.user.id,
-      oldValue: null,
-      newValue: { targetSemester: targetSem, divisions: divList, count: result.rows.length },
-      action: 'UPDATE',
-      reason: `HOD switched active current_semester to ${targetSem} for divisions: ${divList.join(', ')}`,
-    });
 
     res.json({
       success: true,

@@ -117,33 +117,26 @@ export default function TermRollover() {
   };
 
   return (
-    <div className="p-6 lg:p-10 w-full max-w-7xl mx-auto space-y-8">
+    <div className="p-6 lg:p-8 w-full max-w-6xl mx-auto space-y-6">
       {/* Page Header */}
-      <div className="pb-6 border-b border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="pb-4 border-b border-rule flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3">
-            <span className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center text-xl shadow-2xs">
-              🔄
-            </span>
-            <div>
-              <h1 className="text-3xl font-serif font-bold text-gray-950">Academic Term Rollover</h1>
-              <p className="text-sm text-gray-500 font-medium mt-0.5">
-                Manage semester progression, auto-assign new semester subjects to faculty, and start fresh evaluation cycles.
-              </p>
-            </div>
-          </div>
+          <h1 className="text-2xl font-bold text-ink">Academic Term Rollover</h1>
+          <p className="text-xs text-draft font-medium mt-1">
+            Manage semester progression, allocate new semester course mappings to faculty, and start fresh evaluation cycles.
+          </p>
         </div>
 
         {/* Academic Year Selector */}
-        <div className="flex items-center gap-3 bg-white p-2 rounded-xl border border-gray-200 shadow-2xs">
-          <label htmlFor="ay-select" className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-2">
+        <div className="flex items-center gap-2.5">
+          <label htmlFor="ay-select" className="text-xs font-semibold text-draft uppercase tracking-wider">
             Academic Year:
           </label>
           <select
             id="ay-select"
             value={academicYear}
             onChange={(e) => setAcademicYear(e.target.value)}
-            className="px-3 py-1.5 bg-gray-50 border border-gray-300 rounded-lg text-sm font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="input-field w-auto py-1.5 text-xs font-bold font-mono"
           >
             {(statusData?.availableYears || ['2026-27', '2025-26', '2024-25']).map(yr => (
               <option key={yr} value={yr}>{yr}</option>
@@ -153,89 +146,89 @@ export default function TermRollover() {
       </div>
 
       {loading ? (
-        <div className="text-center py-20 text-gray-500 font-medium">Loading department semester state...</div>
+        <div className="text-center py-16 text-sm text-draft font-medium">Loading department semester state…</div>
       ) : (
         <>
           {/* ─── STATUS SUMMARY METRICS ─── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Metric 1 */}
-            <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs">
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Active Cohort Students</span>
-              <p className="text-3xl font-bold font-serif text-gray-900 mt-2">
+            <div className="panel p-5">
+              <span className="text-xs font-semibold text-draft uppercase tracking-wider">Active Cohort Students</span>
+              <p className="text-3xl font-bold font-mono text-ink mt-2 tabular-num">
                 {statusData?.studentBreakdown?.reduce((sum, r) => sum + parseInt(r.student_count, 10), 0) || 0}
               </p>
-              <div className="mt-2 flex flex-wrap gap-1.5">
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
                 {statusData?.studentBreakdown?.map((b, idx) => (
-                  <span key={idx} className="text-[11px] font-semibold bg-gray-100 text-gray-700 px-2 py-0.5 rounded">
-                    Sem {b.current_semester} ({b.division}): <strong>{b.student_count}</strong>
+                  <span key={idx} className="text-[11px] font-medium bg-paper text-ink px-2 py-0.5 rounded border border-rule">
+                    Sem {b.current_semester} ({b.division}): <strong className="font-mono">{b.student_count}</strong>
                   </span>
                 ))}
               </div>
             </div>
 
             {/* Metric 2 */}
-            <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs">
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Department Faculty</span>
-              <p className="text-3xl font-bold font-serif text-indigo-700 mt-2">
-                {statusData?.totalFaculty || 0} Teachers
+            <div className="panel p-5">
+              <span className="text-xs font-semibold text-draft uppercase tracking-wider">Department Faculty</span>
+              <p className="text-3xl font-bold font-mono text-navy mt-2 tabular-num">
+                {statusData?.totalFaculty || 0}
               </p>
-              <p className="text-xs text-gray-500 mt-2">Available for allocation across TE &amp; BE divisions</p>
+              <p className="text-xs text-draft mt-2">Available academic teaching staff</p>
             </div>
 
             {/* Metric 3 */}
-            <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs">
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Sem 5 vs Sem 6 Subjects</span>
-              <p className="text-3xl font-bold font-serif text-emerald-700 mt-2">
-                {statusData?.subjects?.filter(s => s.semester === 5).length || 0} vs {statusData?.subjects?.filter(s => s.semester === 6).length || 0}
+            <div className="panel p-5">
+              <span className="text-xs font-semibold text-draft uppercase tracking-wider">Sem 5 vs Sem 6 Subjects</span>
+              <p className="text-3xl font-bold font-mono text-pass mt-2 tabular-num">
+                {statusData?.subjects?.filter(s => s.semester === 5).length || 0} / {statusData?.subjects?.filter(s => s.semester === 6).length || 0}
               </p>
-              <p className="text-xs text-gray-500 mt-2">Core Theory, Elective I, &amp; Lab Practical Courses</p>
+              <p className="text-xs text-draft mt-2">Core Theory, Elective I &amp; Practicals</p>
             </div>
 
             {/* Metric 4 */}
-            <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs">
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Sem 1 Result Status</span>
-              <div className="mt-2">
+            <div className="panel p-5">
+              <span className="text-xs font-semibold text-draft uppercase tracking-wider">Sem 5 Result Status</span>
+              <div className="mt-2 space-y-1">
                 {statusData?.publishStatuses?.filter(p => p.semester === 5).map((p, i) => (
                   <div key={i} className="flex items-center justify-between text-xs py-0.5">
-                    <span className="font-semibold text-gray-700">{p.division}:</span>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    <span className="font-medium text-ink">{p.division}:</span>
+                    <span className="badge-published text-[10px] uppercase font-bold">
                       {p.status}
                     </span>
                   </div>
                 ))}
                 {(!statusData?.publishStatuses || statusData?.publishStatuses?.length === 0) && (
-                  <span className="text-xs text-gray-400">No publish record</span>
+                  <span className="text-xs text-draft italic">No published records</span>
                 )}
               </div>
             </div>
           </div>
 
           {/* ─── MAIN ROLLOVER CONFIGURATION WIZARD ─── */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="p-6 bg-gradient-to-r from-navy to-slate-900 text-white flex items-center justify-between">
+          <div className="panel overflow-hidden">
+            <div className="px-6 py-4 bg-navy text-white flex items-center justify-between border-b border-navy">
               <div>
-                <h2 className="font-serif font-bold text-xl">Semester Transition Wizard</h2>
-                <p className="text-xs text-blue-200 mt-1">
+                <h2 className="text-lg font-bold text-white tracking-tight">Semester Transition Wizard</h2>
+                <p className="text-xs text-blue-200 mt-0.5 font-normal">
                   Transition from your completed semester (e.g. Sem 5) to the upcoming semester (e.g. Sem 6).
                 </p>
               </div>
-              <span className="px-3 py-1 bg-white/10 rounded-full text-xs font-semibold border border-white/20 text-blue-200">
+              <span className="px-3 py-1 bg-white/10 rounded text-xs font-mono font-medium text-white border border-white/20">
                 Academic Year {academicYear}
               </span>
             </div>
 
-            <div className="p-6 lg:p-8 space-y-8">
+            <div className="p-6 space-y-6">
               {/* Step 1: Semester Selectors */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-6 border-b border-gray-100">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pb-6 border-b border-rule">
                 {/* Source Semester */}
-                <div className="space-y-2">
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                <div className="space-y-1.5">
+                  <label className="input-label">
                     Step 1: Current Completed Semester (Source)
                   </label>
                   <select
                     value={fromSem}
                     onChange={(e) => setFromSem(parseInt(e.target.value, 10))}
-                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="input-field font-semibold"
                   >
                     {[1, 2, 3, 4, 5, 6, 7].map(s => (
                       <option key={s} value={s}>
@@ -243,20 +236,20 @@ export default function TermRollover() {
                       </option>
                     ))}
                   </select>
-                  <p className="text-xs text-gray-400">
-                    Existing marks &amp; records for this semester will be safely preserved in history.
+                  <p className="text-xs text-draft">
+                    Existing marks and records for this semester will be safely preserved in history.
                   </p>
                 </div>
 
                 {/* Target Semester */}
-                <div className="space-y-2">
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                <div className="space-y-1.5">
+                  <label className="input-label">
                     Step 2: Upcoming New Semester (Target)
                   </label>
                   <select
                     value={toSem}
                     onChange={(e) => setToSem(parseInt(e.target.value, 10))}
-                    className="w-full px-4 py-2.5 bg-indigo-50/70 border-2 border-indigo-300 rounded-xl text-sm font-bold text-indigo-950 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="input-field font-semibold border-navy"
                   >
                     {[2, 3, 4, 5, 6, 7, 8].map(s => (
                       <option key={s} value={s}>
@@ -264,18 +257,18 @@ export default function TermRollover() {
                       </option>
                     ))}
                   </select>
-                  <p className="text-xs text-indigo-600 font-medium">
+                  <p className="text-xs text-navy font-medium">
                     Fresh evaluations, marks sheets, and assignment trackers will open for this semester.
                   </p>
                 </div>
               </div>
 
               {/* Step 2: Target Divisions */}
-              <div className="space-y-3 pb-6 border-b border-gray-100">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+              <div className="space-y-2 pb-6 border-b border-rule">
+                <label className="input-label">
                   Target Class Divisions
                 </label>
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap gap-2.5">
                   {['TE 1', 'TE 2', 'TE 3'].map(div => {
                     const isSelected = selectedDivisions.includes(div);
                     return (
@@ -283,14 +276,13 @@ export default function TermRollover() {
                         key={div}
                         type="button"
                         onClick={() => toggleDivision(div)}
-                        className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all flex items-center gap-2 ${
+                        className={`px-4 py-2 text-xs font-semibold rounded border transition-colors ${
                           isSelected
-                            ? 'bg-indigo-600 text-white border-indigo-700 shadow-2xs'
-                            : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                            ? 'bg-navy text-white border-navy'
+                            : 'bg-white text-ink border-rule hover:bg-paper'
                         }`}
                       >
-                        <span>{isSelected ? '✓' : '+'}</span>
-                        Class {div}
+                        {isSelected ? '✓ ' : '+ '}Class {div}
                       </button>
                     );
                   })}
@@ -298,54 +290,54 @@ export default function TermRollover() {
               </div>
 
               {/* Step 3: Automated Actions Checklist */}
-              <div className="space-y-4 pb-6 border-b border-gray-100">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+              <div className="space-y-3 pb-6 border-b border-rule">
+                <label className="input-label">
                   Automated Rollover Actions
                 </label>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
                   {/* Action 1 */}
-                  <label className="p-4 bg-gray-50 hover:bg-indigo-50/40 border border-gray-200 rounded-xl cursor-pointer flex items-start gap-3 transition-colors">
+                  <label className="p-3.5 bg-paper/60 hover:bg-paper border border-rule rounded cursor-pointer flex items-start gap-3 transition-colors">
                     <input
                       type="checkbox"
                       checked={advanceStudents}
                       onChange={(e) => setAdvanceStudents(e.target.checked)}
-                      className="mt-1 w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                      className="mt-0.5 rounded text-navy focus:ring-navy"
                     />
                     <div>
-                      <span className="text-sm font-bold text-gray-900 block">Promote Students</span>
-                      <p className="text-xs text-gray-500 mt-1">
+                      <span className="text-xs font-bold text-ink block">Promote Students</span>
+                      <p className="text-xs text-draft mt-1 leading-normal">
                         Advances all {previewData?.eligibleStudentsCount || 0} students from Sem {fromSem} to Sem {toSem}.
                       </p>
                     </div>
                   </label>
 
                   {/* Action 2 */}
-                  <label className="p-4 bg-gray-50 hover:bg-indigo-50/40 border border-gray-200 rounded-xl cursor-pointer flex items-start gap-3 transition-colors">
+                  <label className="p-3.5 bg-paper/60 hover:bg-paper border border-rule rounded cursor-pointer flex items-start gap-3 transition-colors">
                     <input
                       type="checkbox"
                       checked={autoAssignFaculty}
                       onChange={(e) => setAutoAssignFaculty(e.target.checked)}
-                      className="mt-1 w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                      className="mt-0.5 rounded text-navy focus:ring-navy"
                     />
                     <div>
-                      <span className="text-sm font-bold text-gray-900 block">Allocate Faculty</span>
-                      <p className="text-xs text-gray-500 mt-1">
+                      <span className="text-xs font-bold text-ink block">Allocate Faculty</span>
+                      <p className="text-xs text-draft mt-1 leading-normal">
                         Maps department teachers to Sem {toSem} subjects across {selectedDivisions.join(', ')}.
                       </p>
                     </div>
                   </label>
 
                   {/* Action 3 */}
-                  <label className="p-4 bg-gray-50 hover:bg-indigo-50/40 border border-gray-200 rounded-xl cursor-pointer flex items-start gap-3 transition-colors">
+                  <label className="p-3.5 bg-paper/60 hover:bg-paper border border-rule rounded cursor-pointer flex items-start gap-3 transition-colors">
                     <input
                       type="checkbox"
                       checked={initPublishStatus}
                       onChange={(e) => setInitPublishStatus(e.target.checked)}
-                      className="mt-1 w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                      className="mt-0.5 rounded text-navy focus:ring-navy"
                     />
                     <div>
-                      <span className="text-sm font-bold text-gray-900 block">Initialize Clean Sheets</span>
-                      <p className="text-xs text-gray-500 mt-1">
+                      <span className="text-xs font-bold text-ink block">Initialize Clean Sheets</span>
+                      <p className="text-xs text-draft mt-1 leading-normal">
                         Prepares fresh marks sheets in 'draft' mode ready for evaluation.
                       </p>
                     </div>
@@ -355,35 +347,34 @@ export default function TermRollover() {
 
               {/* Step 4: Preview Diff Box */}
               {loadingPreview ? (
-                <div className="text-center py-6 text-sm text-gray-500">Calculating transition impact...</div>
+                <div className="text-center py-4 text-xs text-draft">Calculating transition impact…</div>
               ) : previewData ? (
-                <div className="bg-blue-50/60 border border-blue-200 rounded-2xl p-5">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-lg">📋</span>
-                    <h3 className="text-sm font-bold text-blue-950 uppercase tracking-wide">
+                <div className="bg-blue-50/70 border border-blue-200 rounded p-4">
+                  <div className="mb-2">
+                    <h3 className="text-xs font-bold text-navy uppercase tracking-wider">
                       Simulation Preview: Transition to Semester {toSem}
                     </h3>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-blue-900">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-ink">
                     <div>
-                      <span className="font-bold">Students to Promote:</span>{' '}
-                      <span className="text-blue-950 font-bold text-sm">{previewData.eligibleStudentsCount}</span>
-                      <p className="text-gray-500 mt-0.5">from {selectedDivisions.join(', ')}</p>
+                      <span className="font-semibold text-draft">Students to Promote:</span>{' '}
+                      <span className="text-ink font-bold font-mono text-sm ml-1">{previewData.eligibleStudentsCount}</span>
+                      <p className="text-draft text-[11px] mt-0.5">from {selectedDivisions.join(', ')}</p>
                     </div>
 
                     <div>
-                      <span className="font-bold">New Semester Subjects:</span>{' '}
-                      <span className="text-blue-950 font-bold text-sm">{previewData.targetSubjectsCount} Courses</span>
-                      <p className="text-gray-500 mt-0.5">
-                        {previewData.targetSubjects?.map(s => s.code).join(', ') || 'No subjects registered yet'}
+                      <span className="font-semibold text-draft">New Semester Subjects:</span>{' '}
+                      <span className="text-ink font-bold font-mono text-sm ml-1">{previewData.targetSubjectsCount} Courses</span>
+                      <p className="text-draft text-[11px] mt-0.5 truncate">
+                        {previewData.targetSubjects?.map(s => s.code).join(', ') || 'None registered'}
                       </p>
                     </div>
 
                     <div>
-                      <span className="font-bold">Target Evaluation Sheets:</span>{' '}
-                      <span className={`font-bold text-sm ${previewData.existingTargetMarksCount > 0 ? 'text-amber-800' : 'text-emerald-700'}`}>
-                        {previewData.existingTargetMarksCount > 0 ? `${previewData.existingTargetMarksCount} marks recorded` : '100% Fresh & Clean (0 marks)'}
+                      <span className="font-semibold text-draft">Target Evaluation Sheets:</span>{' '}
+                      <span className={`font-bold font-mono text-sm ml-1 ${previewData.existingTargetMarksCount > 0 ? 'text-amber-800' : 'text-pass'}`}>
+                        {previewData.existingTargetMarksCount > 0 ? `${previewData.existingTargetMarksCount} records` : '100% Fresh (0 marks)'}
                       </span>
                     </div>
                   </div>
@@ -392,51 +383,36 @@ export default function TermRollover() {
 
               {/* Execute Rollover Button */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
-                <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <span>🔒</span>
-                  <span>All Sem {fromSem} mark sheets and result transcripts remain intact and viewable anytime.</span>
-                </div>
+                <p className="text-xs text-draft">
+                  All Sem {fromSem} mark sheets and result transcripts remain intact and viewable anytime.
+                </p>
 
                 <button
                   type="button"
                   onClick={handleExecute}
                   disabled={executing || fromSem === toSem}
-                  className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white rounded-xl text-sm font-bold transition-all shadow-md flex items-center justify-center gap-2"
+                  className="btn-primary text-xs flex items-center justify-center gap-2"
                 >
-                  {executing ? (
-                    <>
-                      <span className="animate-spin">⏳</span>
-                      <span>Executing Rollover...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>🚀</span>
-                      <span>Execute Rollover to Semester {toSem}</span>
-                    </>
-                  )}
+                  {executing ? 'Executing Rollover…' : `Execute Rollover to Semester ${toSem}`}
                 </button>
               </div>
             </div>
           </div>
 
           {/* ─── QUICK ACTIVE SEMESTER TOGGLE UTILITY ─── */}
-          <div className="bg-gray-50 rounded-2xl border border-gray-200 p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="panel p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <div className="flex items-center gap-2">
-                <span className="text-base">⚡</span>
-                <h3 className="font-serif font-bold text-base text-gray-900">Active Working Semester Switcher</h3>
-              </div>
-              <p className="text-xs text-gray-500 mt-1 max-w-2xl">
-                Need to quickly review Semester 5 evaluation sheets or toggle students back and forth during moderation?
-                You can instantly switch the active cohort's semester without re-running rollover.
+              <h3 className="text-sm font-bold text-ink">Active Working Semester Switcher</h3>
+              <p className="text-xs text-draft mt-0.5 max-w-xl">
+                Quickly toggle active review between Semester 5 and Semester 6 evaluation sheets without re-running rollover.
               </p>
             </div>
 
-            <div className="flex items-center gap-3 flex-shrink-0">
+            <div className="flex items-center gap-2.5 flex-shrink-0">
               <select
                 value={quickSwitchSem}
                 onChange={(e) => setQuickSwitchSem(parseInt(e.target.value, 10))}
-                className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm font-bold text-gray-800"
+                className="input-field w-auto py-1.5 text-xs font-semibold"
               >
                 <option value={5}>Semester 5 (TE Sem 1)</option>
                 <option value={6}>Semester 6 (TE Sem 2)</option>
@@ -448,9 +424,9 @@ export default function TermRollover() {
                 type="button"
                 onClick={handleQuickSwitch}
                 disabled={switching}
-                className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs"
+                className="btn-secondary text-xs"
               >
-                {switching ? 'Switching...' : `Set Active to Sem ${quickSwitchSem}`}
+                {switching ? 'Switching…' : `Set Active to Sem ${quickSwitchSem}`}
               </button>
             </div>
           </div>

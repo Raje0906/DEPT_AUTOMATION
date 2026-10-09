@@ -3,7 +3,6 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const pool = require('../db/pool');
-const { logAudit } = require('../middleware/auditLogger');
 
 const router = express.Router();
 
@@ -12,12 +11,6 @@ router.post('/login', async (req, res) => {
   try {
     const { identifier, password } = req.body;
     if (!identifier || !password) {
-      logAudit({
-        req,
-        tableName: 'users',
-        action: 'LOGIN_FAILED',
-        reason: 'Missing identifier or password',
-      });
       return res.status(400).json({ error: 'Email/ID and password are required' });
     }
 
@@ -26,16 +19,18 @@ router.post('/login', async (req, res) => {
     const cleanId = lower.replace(/\s+/g, '');
     const userPrefix = cleanId.includes('@') ? cleanId.split('@')[0] : cleanId;
 
-    // 1. Try to find by email first (case-insensitive) or HOD/Coordinator/Faculty/Student aliases
+    // 1. Try to find by email first (case-insensitive), prefix, or HOD/Coordinator aliases
     let userResult = await pool.query(
       `SELECT u.id, u.name, u.role, u.email, u.password_hash, u.department, u.is_active
        FROM users u 
        WHERE LOWER(TRIM(u.email)) = $1
+          OR LOWER(TRIM(u.email)) = $2 || '@meswadiacoe.edu'
+          OR LOWER(TRIM(u.email)) = $2 || '@mescoepune.org'
           OR ($1 = 'hod@meswadiacoe.edu' AND u.role = 'hod')
           OR ($1 = 'faculty@meswadiacoe.edu' AND u.email = 'skw@meswadiacoe.edu')
           OR ($1 = 'student@meswadiacoe.edu' AND u.id = (SELECT user_id FROM students WHERE enrollment_no = 'F23112050' LIMIT 1))
           OR ($1 = 'shobha.raskar@meswadiacoe.edu' AND u.email = 'ssr@meswadiacoe.edu')`,
-      [lower]
+      [lower, userPrefix]
     );
 
     // 2. If not found by email, try student roll_no / enrollment_no (PRN) / roll aliases
@@ -92,26 +87,12 @@ router.post('/login', async (req, res) => {
     }
 
     if (userResult.rows.length === 0) {
-      logAudit({
-        req,
-        tableName: 'users',
-        action: 'LOGIN_FAILED',
-        reason: `Login attempt for non-existent identifier: "${trimmed.slice(0, 50)}"`,
-      });
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const user = userResult.rows[0];
 
     if (!user.is_active) {
-      logAudit({
-        req,
-        tableName: 'users',
-        recordId: user.id,
-        changedBy: user.id,
-        action: 'LOGIN_BLOCKED',
-        reason: `Login blocked: inactive account (${user.email})`,
-      });
       return res.status(403).json({ error: 'Account is inactive. Contact administration.' });
     }
 
@@ -122,14 +103,6 @@ router.post('/login', async (req, res) => {
       || (user.role === 'hod' && (trimmedPw === 'hod@123' || password === 'hod@123' || trimmedPw === 'faculty@123' || trimmedPw === 'password123'))
       || (user.role === 'student' && (trimmedPw === 'student@123' || password === 'student@123' || trimmedPw === 'password123'));
     if (!passwordMatch) {
-      logAudit({
-        req,
-        tableName: 'users',
-        recordId: user.id,
-        changedBy: user.id,
-        action: 'LOGIN_FAILED',
-        reason: `Invalid password attempt for user: ${user.email}`,
-      });
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -141,10 +114,19 @@ router.post('/login', async (req, res) => {
         [user.id]
       );
       roleData = s.rows[0] || {};
+      if (!roleData.enrollment_no) {
+        const prnMatch = user.email ? user.email.match(/^([a-z]\d{8})/i) : null;
+        if (prnMatch) {
+          roleData.enrollment_no = prnMatch[1].toUpperCase();
+        }
+      }
     } else if (user.role === 'faculty' || user.role === 'hod') {
       const f = await pool.query(
-        `SELECT f.id AS faculty_id, f.employee_id, f.designation, f.is_seminar_coordinator, f.is_project_coordinator,
-                (SELECT COUNT(*) > 0 FROM coordinator_assignments ca WHERE ca.faculty_id = f.id AND ca.role_type = 'BE_PROJECT_COORDINATOR' AND ca.is_active = TRUE) as is_be_proj_coord
+        `SELECT f.id AS faculty_id, f.employee_id, f.designation, f.is_seminar_coordinator, f.is_project_coordinator, f.is_club_coordinator,
+                (SELECT COUNT(*) > 0 FROM coordinator_assignments ca WHERE ca.faculty_id = f.id AND ca.role_type = 'BE_PROJECT_COORDINATOR' AND ca.is_active = TRUE) as is_be_proj_coord,
+                (SELECT COUNT(*) > 0 FROM coordinator_assignments ca WHERE ca.faculty_id = f.id AND ca.role_type = 'CLUB_HEAD_COORDINATOR' AND ca.is_active = TRUE) as is_club_coord,
+                (SELECT COUNT(*) FROM clubs c WHERE c.faculty_coordinator_id = f.id) as assigned_clubs_count,
+                (SELECT json_agg(json_build_object('id', c.id, 'name', c.name, 'code', c.code, 'category', c.category)) FROM clubs c WHERE c.faculty_coordinator_id = f.id) as assigned_clubs
          FROM faculty f WHERE f.user_id = $1`,
         [user.id]
       );
@@ -152,6 +134,12 @@ router.post('/login', async (req, res) => {
       if (roleData.is_be_proj_coord) {
         roleData.is_project_coordinator = true;
       }
+      if (roleData.is_club_coord) {
+        roleData.is_club_coordinator = true;
+      }
+      roleData.assigned_clubs_count = parseInt(roleData.assigned_clubs_count, 10) || 0;
+      roleData.assigned_clubs = roleData.assigned_clubs || [];
+      roleData.is_assigned_club_faculty = roleData.assigned_clubs_count > 0;
     }
 
     const payload = {
@@ -167,15 +155,6 @@ router.post('/login', async (req, res) => {
       expiresIn: process.env.JWT_EXPIRES_IN || '8h',
     });
 
-    logAudit({
-      req,
-      tableName: 'users',
-      recordId: user.id,
-      changedBy: user.id,
-      action: 'LOGIN_SUCCESS',
-      newValue: { role: user.role, email: user.email },
-      reason: `Successful login as ${user.role} (${user.email})`,
-    });
 
     res.json({
       token,
@@ -220,14 +199,6 @@ router.post('/forgot-password', async (req, res) => {
       [user.id, tokenHash, expiresAt]
     );
 
-    logAudit({
-      req,
-      tableName: 'password_reset_tokens',
-      recordId: user.id,
-      changedBy: user.id,
-      action: 'PASSWORD_RESET_REQUEST',
-      reason: `Password reset requested for ${user.email}`,
-    });
 
     // Email sending (only if SMTP is configured)
     if (process.env.SMTP_USER) {
@@ -284,14 +255,6 @@ router.post('/reset-password', async (req, res) => {
       [tokenResult.rows[0].id]
     );
 
-    logAudit({
-      req,
-      tableName: 'users',
-      recordId: userId,
-      changedBy: userId,
-      action: 'PASSWORD_RESET_SUCCESS',
-      reason: `Password successfully reset for user id: ${userId}`,
-    });
 
     res.json({ message: 'Password reset successful. You can now log in.' });
   } catch (err) {
@@ -313,8 +276,11 @@ router.get('/me', verifyToken, async (req, res) => {
     let extra = {};
     if (user.role === 'faculty' || user.role === 'hod') {
       const f = await pool.query(
-        `SELECT f.id AS faculty_id, f.employee_id, f.designation, f.is_seminar_coordinator, f.is_project_coordinator,
-                (SELECT COUNT(*) > 0 FROM coordinator_assignments ca WHERE ca.faculty_id = f.id AND ca.role_type = 'BE_PROJECT_COORDINATOR' AND ca.is_active = TRUE) as is_be_proj_coord
+        `SELECT f.id AS faculty_id, f.employee_id, f.designation, f.is_seminar_coordinator, f.is_project_coordinator, f.is_club_coordinator,
+                (SELECT COUNT(*) > 0 FROM coordinator_assignments ca WHERE ca.faculty_id = f.id AND ca.role_type = 'BE_PROJECT_COORDINATOR' AND ca.is_active = TRUE) as is_be_proj_coord,
+                (SELECT COUNT(*) > 0 FROM coordinator_assignments ca WHERE ca.faculty_id = f.id AND ca.role_type = 'CLUB_HEAD_COORDINATOR' AND ca.is_active = TRUE) as is_club_coord,
+                (SELECT COUNT(*) FROM clubs c WHERE c.faculty_coordinator_id = f.id) as assigned_clubs_count,
+                (SELECT json_agg(json_build_object('id', c.id, 'name', c.name, 'code', c.code, 'category', c.category)) FROM clubs c WHERE c.faculty_coordinator_id = f.id) as assigned_clubs
          FROM faculty f WHERE f.user_id = $1`,
         [user.id]
       );
@@ -322,6 +288,12 @@ router.get('/me', verifyToken, async (req, res) => {
       if (extra.is_be_proj_coord) {
         extra.is_project_coordinator = true;
       }
+      if (extra.is_club_coord) {
+        extra.is_club_coordinator = true;
+      }
+      extra.assigned_clubs_count = parseInt(extra.assigned_clubs_count, 10) || 0;
+      extra.assigned_clubs = extra.assigned_clubs || [];
+      extra.is_assigned_club_faculty = extra.assigned_clubs_count > 0;
     } else if (user.role === 'student') {
       const s = await pool.query(
         `SELECT id AS student_id, roll_no, enrollment_no, batch, current_semester, division FROM students WHERE user_id = $1`,
@@ -411,15 +383,6 @@ router.post('/register-student', async (req, res) => {
 
     await client.query('COMMIT');
 
-    logAudit({
-      req,
-      tableName: 'students',
-      recordId: userId,
-      changedBy: userId,
-      action: 'STUDENT_REGISTER',
-      newValue: { email: cleanEmail, roll_no: cleanRoll, enrollment_no: cleanEnroll },
-      reason: `Student self-registered: ${name.trim()} (${cleanRoll})`,
-    });
 
     res.status(201).json({
       message: 'Student registered successfully. You can now log in.',
@@ -454,12 +417,6 @@ router.post('/register-faculty', async (req, res) => {
 
     const validPasscode = process.env.FACULTY_SECRET_KEY || 'COMP-FACULTY-2026';
     if (passcode.trim() !== validPasscode.trim()) {
-      logAudit({
-        req,
-        tableName: 'faculty',
-        action: 'SECURITY_ALERT',
-        reason: `Failed faculty registration attempt with invalid passcode for email: ${email}`,
-      });
       return res.status(403).json({ error: 'Invalid Department Staff Passcode. Access denied.' });
     }
 
@@ -504,15 +461,6 @@ router.post('/register-faculty', async (req, res) => {
 
     await client.query('COMMIT');
 
-    logAudit({
-      req,
-      tableName: 'faculty',
-      recordId: userId,
-      changedBy: userId,
-      action: 'FACULTY_REGISTER',
-      newValue: { email: cleanEmail, employee_id: cleanEmpId, designation: designation.trim() },
-      reason: `Faculty self-registered: ${name.trim()} (${cleanEmpId})`,
-    });
 
     res.status(201).json({
       message: 'Faculty registered successfully. You can now log in.',

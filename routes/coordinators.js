@@ -2,7 +2,6 @@
 const express = require('express');
 const pool = require('../db/pool');
 const { verifyToken, requireRole } = require('../middleware/auth');
-const { auditRecord } = require('../middleware/auditLogger');
 
 const router = express.Router();
 
@@ -31,6 +30,10 @@ async function ensureCoordinatorSchema() {
       ALTER TABLE coordinator_assignments ADD COLUMN IF NOT EXISTS academic_year VARCHAR(20) NOT NULL DEFAULT '2026-27';
       ALTER TABLE coordinator_assignments ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
       ALTER TABLE coordinator_assignments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+      ALTER TABLE faculty ADD COLUMN IF NOT EXISTS is_club_coordinator BOOLEAN DEFAULT FALSE;
+      ALTER TABLE coordinator_assignments DROP CONSTRAINT IF EXISTS coordinator_assignments_role_type_check;
+      ALTER TABLE coordinator_assignments ADD CONSTRAINT coordinator_assignments_role_type_check
+        CHECK (role_type IN ('BE_PROJECT_COORDINATOR', 'TE_SEMINAR_COORDINATOR', 'CLUB_HEAD_COORDINATOR'));
       CREATE INDEX IF NOT EXISTS idx_coord_assign ON coordinator_assignments (role_type, academic_year, is_active);
     `);
   } catch (err) {
@@ -50,7 +53,8 @@ router.get('/', verifyToken, requireRole('hod', 'faculty'), async (req, res) => 
     // 1. Get faculty list
     const facultyRes = await pool.query(`
       SELECT f.id, f.user_id, f.employee_id, f.designation, f.department,
-             f.is_seminar_coordinator, u.name, u.email
+             f.is_seminar_coordinator, f.is_project_coordinator, f.is_club_coordinator,
+             u.name, u.email
       FROM faculty f
       JOIN users u ON u.id = f.user_id
       ORDER BY u.name ASC
@@ -71,8 +75,9 @@ router.get('/', verifyToken, requireRole('hod', 'faculty'), async (req, res) => 
 
     let beCoordinator = assignRes.rows.find(r => r.role_type === 'BE_PROJECT_COORDINATOR') || null;
     let teCoordinator = assignRes.rows.find(r => r.role_type === 'TE_SEMINAR_COORDINATOR') || null;
+    let clubCoordinator = assignRes.rows.find(r => r.role_type === 'CLUB_HEAD_COORDINATOR') || null;
 
-    // Fallback: If no assignment record yet, check faculty is_seminar_coordinator flag
+    // Fallback: If no assignment record yet, check faculty flags
     if (!teCoordinator) {
       const flagCoord = facultyRes.rows.find(f => f.is_seminar_coordinator);
       if (flagCoord) {
@@ -83,6 +88,38 @@ router.get('/', verifyToken, requireRole('hod', 'faculty'), async (req, res) => 
           designation: flagCoord.designation,
           department: flagCoord.department,
           role_type: 'TE_SEMINAR_COORDINATOR',
+          academic_year: academicYear,
+          is_active: true,
+        };
+      }
+    }
+
+    if (!beCoordinator) {
+      const flagCoord = facultyRes.rows.find(f => f.is_project_coordinator);
+      if (flagCoord) {
+        beCoordinator = {
+          faculty_id: flagCoord.id,
+          faculty_name: flagCoord.name,
+          faculty_email: flagCoord.email,
+          designation: flagCoord.designation,
+          department: flagCoord.department,
+          role_type: 'BE_PROJECT_COORDINATOR',
+          academic_year: academicYear,
+          is_active: true,
+        };
+      }
+    }
+
+    if (!clubCoordinator) {
+      const flagCoord = facultyRes.rows.find(f => f.is_club_coordinator);
+      if (flagCoord) {
+        clubCoordinator = {
+          faculty_id: flagCoord.id,
+          faculty_name: flagCoord.name,
+          faculty_email: flagCoord.email,
+          designation: flagCoord.designation,
+          department: flagCoord.department,
+          role_type: 'CLUB_HEAD_COORDINATOR',
           academic_year: academicYear,
           is_active: true,
         };
@@ -106,6 +143,7 @@ router.get('/', verifyToken, requireRole('hod', 'faculty'), async (req, res) => 
       academicYear,
       beCoordinator,
       teCoordinator,
+      clubCoordinator,
       facultyList: facultyRes.rows,
       history: historyRes.rows,
     });
@@ -128,8 +166,8 @@ router.post('/assign', verifyToken, requireRole('hod'), async (req, res) => {
       return res.status(400).json({ error: 'facultyId and roleType are required' });
     }
 
-    if (!['BE_PROJECT_COORDINATOR', 'TE_SEMINAR_COORDINATOR'].includes(roleType)) {
-      return res.status(400).json({ error: 'Invalid roleType. Must be BE_PROJECT_COORDINATOR or TE_SEMINAR_COORDINATOR' });
+    if (!['BE_PROJECT_COORDINATOR', 'TE_SEMINAR_COORDINATOR', 'CLUB_HEAD_COORDINATOR'].includes(roleType)) {
+      return res.status(400).json({ error: 'Invalid roleType. Must be BE_PROJECT_COORDINATOR, TE_SEMINAR_COORDINATOR, or CLUB_HEAD_COORDINATOR' });
     }
 
     await client.query('BEGIN');
@@ -166,21 +204,20 @@ router.post('/assign', verifyToken, requireRole('hod'), async (req, res) => {
     } else if (roleType === 'BE_PROJECT_COORDINATOR') {
       await client.query('UPDATE faculty SET is_project_coordinator = FALSE');
       await client.query('UPDATE faculty SET is_project_coordinator = TRUE WHERE id = $1', [facultyId]);
+    } else if (roleType === 'CLUB_HEAD_COORDINATOR') {
+      await client.query('UPDATE faculty SET is_club_coordinator = FALSE');
+      await client.query('UPDATE faculty SET is_club_coordinator = TRUE WHERE id = $1', [facultyId]);
     }
 
     await client.query('COMMIT');
 
-    const roleLabel = roleType === 'BE_PROJECT_COORDINATOR' ? 'BE Project Coordinator' : 'TE Seminar Coordinator';
+    const roleLabels = {
+      BE_PROJECT_COORDINATOR: 'BE Project Coordinator',
+      TE_SEMINAR_COORDINATOR: 'TE Seminar Coordinator',
+      CLUB_HEAD_COORDINATOR: 'Club Head Coordinator',
+    };
+    const roleLabel = roleLabels[roleType] || roleType;
 
-    await auditRecord({
-      tableName: 'coordinator_assignments',
-      recordId: insertRes.rows[0].id,
-      changedBy: req.user.id,
-      action: `APPOINT_${roleType}`,
-      oldValue: null,
-      newValue: { facultyId, name: faculty.name, roleType, academicYear },
-      reason: `HOD appointed ${faculty.name} as ${roleLabel} for AY ${academicYear}`,
-    });
 
     res.json({
       message: `${faculty.name} has been appointed as ${roleLabel} for AY ${academicYear}`,
@@ -235,6 +272,13 @@ router.post('/remove', verifyToken, requireRole('hod'), async (req, res) => {
         await client.query('UPDATE faculty SET is_project_coordinator = FALSE WHERE id = $1', [facultyId]);
       } else if (target?.faculty_id) {
         await client.query('UPDATE faculty SET is_project_coordinator = FALSE WHERE id = $1', [target.faculty_id]);
+      }
+    }
+    if (roleType === 'CLUB_HEAD_COORDINATOR' || target?.role_type === 'CLUB_HEAD_COORDINATOR') {
+      if (facultyId) {
+        await client.query('UPDATE faculty SET is_club_coordinator = FALSE WHERE id = $1', [facultyId]);
+      } else if (target?.faculty_id) {
+        await client.query('UPDATE faculty SET is_club_coordinator = FALSE WHERE id = $1', [target.faculty_id]);
       }
     }
 

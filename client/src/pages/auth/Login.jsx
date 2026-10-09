@@ -147,14 +147,14 @@ export default function Login() {
                 <div className="mb-7">
                   <h2 className="font-serif text-2xl font-bold text-ink tracking-tight">Sign in</h2>
                   <p className="text-xs sm:text-sm text-draft mt-1.5">
-                    Use your Email address, PRN / Enrollment No, Roll No, or Employee ID
+                    Students: use your <strong>PRN</strong> with <code>student@123</code> &bull; Faculty: use your <strong>Initials</strong> with <code>faculty@123</code>
                   </p>
                 </div>
 
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div>
                     <label htmlFor="identifier" className="input-label">
-                      Email / PRN / Roll No / Employee ID
+                      PRN / Faculty Initials / Email / Roll No
                     </label>
                     <input
                       id="identifier"
@@ -162,7 +162,7 @@ export default function Login() {
                       autoComplete="username"
                       value={identifier}
                       onChange={(e) => setIdentifier(e.target.value)}
-                      placeholder="e.g. F23112050, 72312799K, CE6A001, or email"
+                      placeholder="e.g. F24123002, F23113022, or SSR"
                       className="input-field"
                       required
                       disabled={loading}

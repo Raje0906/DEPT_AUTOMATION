@@ -1360,7 +1360,7 @@ router.patch('/hod/groups/:id/guide', verifyToken, requireProjectCoordinatorOrHO
       const groupCode = updateRes.rows[0]?.group_code || `Group #${groupId}`;
 
       await pool.query(
-        `INSERT INTO audit_log (table_name, record_id, changed_by, action, reason)
+        `INSERT INTO audit_logs (entity_type, entity_id, user_id, action, details)
          VALUES ($1, $2, $3, $4, $5)`,
         [
           'project_groups',
@@ -1389,7 +1389,7 @@ router.patch('/hod/groups/:id/guide', verifyToken, requireProjectCoordinatorOrHO
       const groupCode = updateRes.rows[0]?.group_code || `Group #${groupId}`;
 
       await pool.query(
-        `INSERT INTO audit_log (table_name, record_id, changed_by, action, reason)
+        `INSERT INTO audit_logs (entity_type, entity_id, user_id, action, details)
          VALUES ($1, $2, $3, $4, $5)`,
         [
           'project_groups',
@@ -1491,7 +1491,7 @@ router.post('/hod/groups/clear-guides', verifyToken, requireProjectCoordinatorOr
     );
 
     await pool.query(
-      `INSERT INTO audit_log (table_name, record_id, changed_by, action, reason)
+      `INSERT INTO audit_logs (entity_type, entity_id, user_id, action, details)
        VALUES ($1, $2, $3, $4, $5)`,
       [
         'project_groups',
@@ -2020,10 +2020,10 @@ router.post('/hod/evaluations/:id/unlock', verifyToken, requireProjectCoordinato
     );
 
     await pool.query(
-      `INSERT INTO audit_log (table_name, record_id, changed_by, action, reason)
+      `INSERT INTO audit_logs (entity_type, entity_id, user_id, action, details)
        VALUES ('project_evaluations', $1, $2, 'UPDATE', $3)`,
       [evalId, req.user.id, `Unlocked evaluation: ${unlock_reason}`]
-    );
+    ).catch(() => {});
 
     res.json({ message: 'Evaluation unlocked for re-editing' });
   } catch (err) {
@@ -2067,7 +2067,7 @@ router.post('/hod/score-releases', verifyToken, requireProjectCoordinatorOrHOD, 
     const stageName = stageRes.rows[0]?.name || `Stage #${stage_id}`;
 
     await pool.query(
-      `INSERT INTO audit_log (table_name, record_id, changed_by, action, reason)
+      `INSERT INTO audit_logs (entity_type, entity_id, user_id, action, details)
        VALUES ($1, $2, $3, $4, $5)`,
       [
         'project_score_releases',
@@ -2133,6 +2133,92 @@ router.get('/hod/pending-approvals', verifyToken, requireProjectCoordinatorOrHOD
   });
 });
 
+/**
+ * GET /api/projects/hod/activity-updates
+ * Real-time activity feed and status updates regarding BE Projects.
+ * Accessible by HOD and BE Project Coordinator.
+ */
+router.get('/hod/activity-updates', verifyToken, requireProjectCoordinatorOrHOD, async (req, res) => {
+  try {
+    const acadYear = req.query.academic_year || '2026-27';
+
+    // 1. Guide assignments & changes
+    const guideUpdates = await pool.query(
+      `SELECT g.id as record_id, g.group_code, g.title as group_title, g.domain,
+              u.name as guide_name, f.designation as guide_designation,
+              req_u.name as actor_name, g.guide_decided_at as timestamp,
+              'GUIDE_ASSIGNED' as type,
+              CONCAT('Guide ', u.name, ' assigned to group ', g.group_code) as summary
+       FROM project_groups g
+       JOIN faculty f ON g.guide_id = f.id
+       JOIN users u ON f.user_id = u.id
+       LEFT JOIN users req_u ON g.guide_requested_by = req_u.id
+       WHERE g.academic_year = $1 AND g.guide_decided_at IS NOT NULL
+       ORDER BY g.guide_decided_at DESC LIMIT 25`,
+      [acadYear]
+    );
+
+    // 2. Score releases
+    const scoreUpdates = await pool.query(
+      `SELECT sr.id as record_id, g.group_code, s.name as stage_name,
+              u.name as actor_name, sr.released_at as timestamp,
+              'SCORE_RELEASED' as type,
+              CONCAT('Scores released for stage "', s.name, '"', CASE WHEN g.group_code IS NOT NULL THEN CONCAT(' (', g.group_code, ')') ELSE ' (All Groups)' END) as summary
+       FROM project_score_releases sr
+       JOIN project_evaluation_stages s ON sr.stage_id = s.id
+       LEFT JOIN project_groups g ON sr.group_id = g.id
+       LEFT JOIN users u ON sr.released_by = u.id
+       WHERE s.academic_year = $1
+       ORDER BY sr.released_at DESC LIMIT 25`,
+      [acadYear]
+    );
+
+    // 3. Evaluations submitted by panel examiners
+    const evalUpdates = await pool.query(
+      `SELECT pe.id as record_id, g.group_code, s.name as stage_name,
+              u.name as actor_name, pe.submitted_at as timestamp,
+              'EVALUATION_SUBMITTED' as type,
+              CONCAT(u.name, ' submitted evaluation marks for ', g.group_code, ' in stage "', s.name, '"') as summary,
+              pe.overall_remarks
+       FROM project_evaluations pe
+       JOIN project_panel_assignments pa ON pe.panel_assignment_id = pa.id
+       JOIN project_groups g ON pa.group_id = g.id
+       JOIN project_evaluation_stages s ON pa.stage_id = s.id
+       JOIN faculty f ON pa.panel_member_id = f.id
+       JOIN users u ON f.user_id = u.id
+       WHERE s.academic_year = $1 AND pe.status IN ('SUBMITTED','LOCKED') AND pe.submitted_at IS NOT NULL
+       ORDER BY pe.submitted_at DESC LIMIT 25`,
+      [acadYear]
+    );
+
+    // 4. Group registrations / imports
+    const groupUpdates = await pool.query(
+      `SELECT g.id as record_id, g.group_code, g.batch, g.domain, g.created_at as timestamp,
+              'GROUP_REGISTERED' as type,
+              CONCAT('BE Project Group ', g.group_code, ' (', g.batch, ') registered in domain "', g.domain, '"') as summary
+       FROM project_groups g
+       WHERE g.academic_year = $1
+       ORDER BY g.created_at DESC, g.id DESC LIMIT 25`,
+      [acadYear]
+    );
+
+    // Merge and sort by timestamp DESC
+    const allUpdates = [
+      ...guideUpdates.rows,
+      ...scoreUpdates.rows,
+      ...evalUpdates.rows,
+      ...groupUpdates.rows
+    ]
+      .filter(item => item.timestamp)
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+      .slice(0, 50);
+
+    res.json(allUpdates);
+  } catch (err) {
+    console.error('[Activity Updates Error]', err);
+    res.status(500).json({ error: 'Failed to fetch BE project activity updates' });
+  }
+});
 
 /**
  * GET /api/projects/hod/reports/export

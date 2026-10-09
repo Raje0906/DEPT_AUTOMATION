@@ -17,6 +17,7 @@ import CGPAView          from './pages/student/CGPAView'
 import StudentProject    from './pages/student/StudentProject'
 import SeminarGroupRegistration from './pages/student/SeminarGroupRegistration'
 import StudentMagazine   from './pages/student/StudentMagazine'
+import StudentClubActivities from './pages/student/StudentClubActivities'
 
 // Faculty
 import FacultyDashboard  from './pages/faculty/FacultyDashboard'
@@ -31,6 +32,7 @@ import CreateMagazineForm from './pages/faculty/magazine/CreateMagazineForm'
 import MagazineEditor    from './pages/faculty/magazine/MagazineEditor'
 import MagazinePreview   from './pages/faculty/magazine/MagazinePreview'
 import OnlineMagazineViewer from './pages/faculty/magazine/OnlineMagazineViewer'
+import ManageClubs       from './pages/faculty/ManageClubs'
 
 // HOD
 import HODDashboard   from './pages/hod/HODDashboard'
@@ -40,7 +42,6 @@ import MarksApproval  from './pages/hod/MarksApproval'
 import PublishResults from './pages/hod/PublishResults'
 import HODAnalytics   from './pages/hod/HODAnalytics'
 import HODProjectView from './pages/hod/HODProjectView'
-import AuditLog       from './pages/hod/AuditLog'
 import HODMagazineApprovals from './pages/hod/HODMagazineApprovals'
 import TermRollover   from './pages/hod/TermRollover'
 
@@ -50,7 +51,6 @@ import SeminarUpload        from './pages/seminar/SeminarUpload'
 import SeminarAssignment    from './pages/seminar/SeminarAssignment'
 import SeminarReview        from './pages/seminar/SeminarReview'
 import SeminarGuideView     from './pages/seminar/SeminarGuideView'
-import SeminarAuditLog      from './pages/seminar/SeminarAuditLog'
 import SeminarEvaluation    from './pages/seminar/SeminarEvaluation'
 import SeminarMarksOverview from './pages/seminar/SeminarMarksOverview'
 
@@ -103,6 +103,7 @@ export default function App() {
           <Route path="/student/seminar" element={<StudentLayout><SeminarGroupRegistration /></StudentLayout>} />
           <Route path="/student/magazine" element={<StudentLayout><StudentMagazine /></StudentLayout>} />
           <Route path="/student/magazine/view/:id" element={<ProtectedRoute role="student"><OnlineMagazineViewer /></ProtectedRoute>} />
+          <Route path="/student/clubs" element={<StudentLayout><StudentClubActivities /></StudentLayout>} />
 
           {/* Faculty */}
           <Route path="/faculty" element={<FacultyLayout><FacultyDashboard /></FacultyLayout>} />
@@ -117,13 +118,14 @@ export default function App() {
           <Route path="/faculty/magazines/editor/:id" element={<MagazineEditor />} />
           <Route path="/faculty/magazines/preview/:id" element={<MagazinePreview />} />
           <Route path="/faculty/magazines/view/:id" element={<OnlineMagazineViewer />} />
+          <Route path="/faculty/clubs" element={<FacultyLayout><ManageClubs /></FacultyLayout>} />
+          <Route path="/hod/clubs" element={<Navigate to="/hod" replace />} />
 
           {/* Seminar Tool — Coordinator */}
           <Route path="/faculty/seminar"                    element={<CoordinatorLayout><SeminarSessions /></CoordinatorLayout>} />
           <Route path="/faculty/seminar/:id/upload"         element={<CoordinatorLayout><SeminarUpload /></CoordinatorLayout>} />
           <Route path="/faculty/seminar/:id/assign"         element={<CoordinatorLayout><SeminarAssignment /></CoordinatorLayout>} />
           <Route path="/faculty/seminar/:id/review"         element={<CoordinatorLayout><SeminarReview /></CoordinatorLayout>} />
-          <Route path="/faculty/seminar/:id/audit"          element={<CoordinatorLayout><SeminarAuditLog /></CoordinatorLayout>} />
           <Route path="/faculty/seminar/:id/marks-overview" element={<CoordinatorLayout><SeminarMarksOverview /></CoordinatorLayout>} />
           {/* Seminar Tool — Guide view and Evaluation */}
           <Route path="/faculty/seminar/my-groups"          element={<FacultyLayout><SeminarGuideView /></FacultyLayout>} />
@@ -144,7 +146,6 @@ export default function App() {
           <Route path="/hod/rollover" element={<HODLayout><TermRollover /></HODLayout>} />
           <Route path="/hod/analytics" element={<HODLayout><HODAnalytics /></HODLayout>} />
           <Route path="/hod/projects" element={<HODLayout><HODProjectView /></HODLayout>} />
-          <Route path="/hod/audit" element={<HODLayout><AuditLog /></HODLayout>} />
 
           {/* Alumni */}
           <Route path="/alumni/feedback"      element={<AnyLayout><AlumniFeedback /></AnyLayout>} />
