@@ -122,8 +122,11 @@ router.post('/login', async (req, res) => {
       roleData = s.rows[0] || {};
     } else if (user.role === 'faculty' || user.role === 'hod') {
       const f = await pool.query(
-        `SELECT f.id AS faculty_id, f.employee_id, f.designation, f.is_seminar_coordinator, f.is_project_coordinator,
-                (SELECT COUNT(*) > 0 FROM coordinator_assignments ca WHERE ca.faculty_id = f.id AND ca.role_type = 'BE_PROJECT_COORDINATOR' AND ca.is_active = TRUE) as is_be_proj_coord
+        `SELECT f.id AS faculty_id, f.employee_id, f.designation, f.is_seminar_coordinator, f.is_project_coordinator, f.is_club_coordinator,
+                (SELECT COUNT(*) > 0 FROM coordinator_assignments ca WHERE ca.faculty_id = f.id AND ca.role_type = 'BE_PROJECT_COORDINATOR' AND ca.is_active = TRUE) as is_be_proj_coord,
+                (SELECT COUNT(*) > 0 FROM coordinator_assignments ca WHERE ca.faculty_id = f.id AND ca.role_type = 'CLUB_HEAD_COORDINATOR' AND ca.is_active = TRUE) as is_club_coord,
+                (SELECT COUNT(*) FROM clubs c WHERE c.faculty_coordinator_id = f.id) as assigned_clubs_count,
+                (SELECT json_agg(json_build_object('id', c.id, 'name', c.name, 'code', c.code, 'category', c.category)) FROM clubs c WHERE c.faculty_coordinator_id = f.id) as assigned_clubs
          FROM faculty f WHERE f.user_id = $1`,
         [user.id]
       );
@@ -131,6 +134,12 @@ router.post('/login', async (req, res) => {
       if (roleData.is_be_proj_coord) {
         roleData.is_project_coordinator = true;
       }
+      if (roleData.is_club_coord) {
+        roleData.is_club_coordinator = true;
+      }
+      roleData.assigned_clubs_count = parseInt(roleData.assigned_clubs_count, 10) || 0;
+      roleData.assigned_clubs = roleData.assigned_clubs || [];
+      roleData.is_assigned_club_faculty = roleData.assigned_clubs_count > 0;
     }
 
     const payload = {
@@ -292,8 +301,11 @@ router.get('/me', verifyToken, async (req, res) => {
     let extra = {};
     if (user.role === 'faculty' || user.role === 'hod') {
       const f = await pool.query(
-        `SELECT f.id AS faculty_id, f.employee_id, f.designation, f.is_seminar_coordinator, f.is_project_coordinator,
-                (SELECT COUNT(*) > 0 FROM coordinator_assignments ca WHERE ca.faculty_id = f.id AND ca.role_type = 'BE_PROJECT_COORDINATOR' AND ca.is_active = TRUE) as is_be_proj_coord
+        `SELECT f.id AS faculty_id, f.employee_id, f.designation, f.is_seminar_coordinator, f.is_project_coordinator, f.is_club_coordinator,
+                (SELECT COUNT(*) > 0 FROM coordinator_assignments ca WHERE ca.faculty_id = f.id AND ca.role_type = 'BE_PROJECT_COORDINATOR' AND ca.is_active = TRUE) as is_be_proj_coord,
+                (SELECT COUNT(*) > 0 FROM coordinator_assignments ca WHERE ca.faculty_id = f.id AND ca.role_type = 'CLUB_HEAD_COORDINATOR' AND ca.is_active = TRUE) as is_club_coord,
+                (SELECT COUNT(*) FROM clubs c WHERE c.faculty_coordinator_id = f.id) as assigned_clubs_count,
+                (SELECT json_agg(json_build_object('id', c.id, 'name', c.name, 'code', c.code, 'category', c.category)) FROM clubs c WHERE c.faculty_coordinator_id = f.id) as assigned_clubs
          FROM faculty f WHERE f.user_id = $1`,
         [user.id]
       );
@@ -301,6 +313,12 @@ router.get('/me', verifyToken, async (req, res) => {
       if (extra.is_be_proj_coord) {
         extra.is_project_coordinator = true;
       }
+      if (extra.is_club_coord) {
+        extra.is_club_coordinator = true;
+      }
+      extra.assigned_clubs_count = parseInt(extra.assigned_clubs_count, 10) || 0;
+      extra.assigned_clubs = extra.assigned_clubs || [];
+      extra.is_assigned_club_faculty = extra.assigned_clubs_count > 0;
     } else if (user.role === 'student') {
       const s = await pool.query(
         `SELECT id AS student_id, roll_no, enrollment_no, batch, current_semester, division FROM students WHERE user_id = $1`,
