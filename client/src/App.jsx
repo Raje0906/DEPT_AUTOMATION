@@ -75,6 +75,9 @@ function HODLayout({ children }) {
 function CoordinatorLayout({ children }) {
   return <ProtectedRoute role="faculty" requireCoordinator={true}><Layout>{children}</Layout></ProtectedRoute>
 }
+function MagazineCreatorLayout({ children }) {
+  return <ProtectedRoute role="faculty" requireMagazineCreator={true}><Layout>{children}</Layout></ProtectedRoute>
+}
 // Alumni pages are accessible to any authenticated user (no role restriction)
 function AnyLayout({ children }) {
   return <ProtectedRoute><Layout>{children}</Layout></ProtectedRoute>
@@ -116,7 +119,7 @@ export default function App() {
           <Route path="/faculty/project-eval" element={<FacultyLayout><ProjectEval /></FacultyLayout>} />
           <Route path="/faculty/project-coordination" element={<FacultyLayout><HODProjectMgmt /></FacultyLayout>} />
           <Route path="/faculty/magazines" element={<FacultyLayout><Magazines /></FacultyLayout>} />
-          <Route path="/faculty/magazines/create" element={<FacultyLayout><CreateMagazineForm /></FacultyLayout>} />
+          <Route path="/faculty/magazines/create" element={<MagazineCreatorLayout><CreateMagazineForm /></MagazineCreatorLayout>} />
           <Route path="/faculty/magazines/editor/:id" element={<MagazineEditor />} />
           <Route path="/faculty/magazines/preview/:id" element={<MagazinePreview />} />
           <Route path="/faculty/magazines/view/:id" element={<OnlineMagazineViewer />} />

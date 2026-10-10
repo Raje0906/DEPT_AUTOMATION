@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMagazine } from '../../../contexts/MagazineContext';
+import { useAuth } from '../../../contexts/AuthContext';
+import { isAuthorizedMagazineCreator } from '../../../utils/magazinePermissions';
 import { TemplateSelectorGrid } from '../../../components/magazine/TemplateSelectorModal';
 import { getTemplate } from '../../../utils/magazineTemplates';
 import toast from 'react-hot-toast';
@@ -18,7 +20,29 @@ const DEPARTMENTS = [
 
 export default function CreateMagazineForm() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { createMagazine } = useMagazine();
+
+  useEffect(() => {
+    if (user && !isAuthorizedMagazineCreator(user)) {
+      toast.error('Access denied: Only Dr. (Mrs.) S. S. Raskar (SSR) is authorized to create magazines.');
+      navigate('/faculty/magazines', { replace: true });
+    }
+  }, [user, navigate]);
+
+  if (!isAuthorizedMagazineCreator(user)) {
+    return (
+      <div className="p-8 max-w-xl mx-auto text-center mt-12 bg-white border border-red-200 rounded-sm shadow-sm">
+        <h2 className="text-xl font-bold text-red-600 mb-2">Access Forbidden (403)</h2>
+        <p className="text-sm text-draft mb-4">
+          Magazine creation is restricted to <strong>Dr. (Mrs.) S. S. Raskar (SSR)</strong>.
+        </p>
+        <button onClick={() => navigate('/faculty/magazines')} className="btn-secondary">
+          Return to Magazines
+        </button>
+      </div>
+    );
+  }
 
   const [form, setForm] = useState({
     title: 'Reflection',

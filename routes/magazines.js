@@ -4,6 +4,15 @@ const jwt = require('jsonwebtoken');
 
 const router = express.Router();
 
+// Helper: Check if user is the authorized faculty member Dr. (Mrs.) S. S. Raskar (SSR)
+function isAuthorizedMagazineCreator(user) {
+  if (!user) return false;
+  const isMatchId = user.id === 10;
+  const isMatchEmail = typeof user.email === 'string' && user.email.toLowerCase() === 'ssr@meswadiacoe.edu';
+  const isMatchEmp = typeof user.employee_id === 'string' && user.employee_id.toUpperCase() === 'SSR';
+  return isMatchId || isMatchEmail || isMatchEmp;
+}
+
 // Helper: optional token check so student or unauthenticated previews still work seamlessly
 function optionalAuth(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -126,8 +135,27 @@ router.get('/:id', optionalAuth, async (req, res) => {
 });
 
 // ─── POST /api/magazines ───────────────────────────────────────────────────────
-// Create a new magazine issue
-router.post('/', optionalAuth, async (req, res) => {
+// Create a new magazine issue (Strictly restricted to Dr. (Mrs.) S. S. Raskar - SSR)
+router.post('/', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  const token = authHeader.split(' ')[1];
+  let decodedUser;
+  try {
+    decodedUser = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decodedUser;
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+
+  if (!isAuthorizedMagazineCreator(decodedUser)) {
+    return res.status(403).json({
+      error: 'Access denied: Only Dr. (Mrs.) S. S. Raskar (SSR) is authorized to create magazines.'
+    });
+  }
+
   try {
     const body = req.body || {};
     const id = body.id || `MAG-${Date.now()}`;

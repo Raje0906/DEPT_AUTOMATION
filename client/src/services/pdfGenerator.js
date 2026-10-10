@@ -89,7 +89,7 @@ export async function generateMagazinePDF({
       windowWidth: 794,
     });
 
-    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+    const imgData = canvas.toDataURL('image/jpeg', 0.98);
     if (typeof window !== 'undefined' && window.__ENABLE_PDF_DEBUG) {
       window.__pdfCanvasImages = window.__pdfCanvasImages || [];
       window.__pdfCanvasImages.push({ page: i + 1, data: imgData });
@@ -99,13 +99,15 @@ export async function generateMagazinePDF({
       pdf.addPage('a4', 'portrait');
     }
 
-    pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+    pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'SLOW');
   }
 
   onProgress?.('Saving PDF file...');
   const safeTitle = (magazineTitle || 'Reflection').replace(/[^a-zA-Z0-9_-]/g, '_');
-  const filename = `${safeTitle}_Issue_${issueNumber || '32'}.pdf`;
-  pdf.save(filename);
+  const filename = `${safeTitle}_Issue_${issueNumber || '33'}.pdf`;
+  if (typeof window !== 'undefined' && typeof window.document !== 'undefined') {
+    pdf.save(filename);
+  }
 
-  return filename;
+  return { filename, pdf };
 }
