@@ -102,7 +102,7 @@ export default function HODSeminarMgmt() {
   const handleBulkApprove = async () => {
     const pendingCount = groups.filter((g) => g.status === 'AWAITING_HOD_APPROVAL').length;
     if (pendingCount === 0) return toast('No pending guide allocations to approve');
-    if (!window.confirm(`Approve all ${pendingCount} pending guide allocation(s)? Once approved, guides will become active and visible to students and faculty rosters.`)) {
+    if (!window.confirm(`Approve all ${pendingCount} pending guide allocation(s)? Once approved, guides will become active and visible to students and faculty.`)) {
       return;
     }
     setSubmitting(true);

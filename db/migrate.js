@@ -712,6 +712,132 @@ async function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_project_eval_stages_acad_year ON project_evaluation_stages(academic_year);
       CREATE INDEX IF NOT EXISTS idx_project_stage_criteria_stage_id ON project_stage_criteria(stage_id);
       CREATE INDEX IF NOT EXISTS idx_project_panel_assignments_stage_id ON project_panel_assignments(stage_id);
+
+      -- ─── CLUB ACTIVITIES & OFFICE BEARERS MIGRATION ────────────────────────────
+      CREATE TABLE IF NOT EXISTS clubs (
+        id                      SERIAL PRIMARY KEY,
+        name                    VARCHAR(255) NOT NULL,
+        code                    VARCHAR(50) NOT NULL,
+        category                VARCHAR(100) NOT NULL,
+        department              VARCHAR(100) DEFAULT 'Computer Engineering',
+        description             TEXT,
+        faculty_coordinator_id  INTEGER REFERENCES faculty(id) ON DELETE SET NULL,
+        student_lead_name       VARCHAR(150),
+        student_lead_email      VARCHAR(200),
+        student_lead_phone      VARCHAR(50),
+        student_lead_division   VARCHAR(50),
+        academic_year           VARCHAR(20) DEFAULT '2026-27',
+        status                  VARCHAR(50) DEFAULT 'Active',
+        founded_year            VARCHAR(20) DEFAULT '2020',
+        website_or_link         VARCHAR(255),
+        created_at              TIMESTAMPTZ DEFAULT NOW(),
+        updated_at              TIMESTAMPTZ DEFAULT NOW(),
+        mentor_faculty_id       INTEGER REFERENCES faculty(id) ON DELETE SET NULL,
+        mentor_name             VARCHAR(150),
+        mentor_email            VARCHAR(200),
+        mentor_designation      VARCHAR(100),
+        mentor_type             VARCHAR(100) DEFAULT 'Faculty Mentor',
+        mentor_phone            VARCHAR(50),
+        student_lead_prn        VARCHAR(50),
+        vice_president_name     VARCHAR(150),
+        vice_president_prn      VARCHAR(50),
+        vice_president_phone    VARCHAR(50),
+        vice_president_division VARCHAR(50),
+        motto                   TEXT,
+        logo_url                TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS club_events (
+        id                      SERIAL PRIMARY KEY,
+        club_id                 INTEGER NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+        title                   VARCHAR(255) NOT NULL,
+        event_type              VARCHAR(100) NOT NULL,
+        academic_year           VARCHAR(20) NOT NULL DEFAULT '2026-27',
+        start_date              DATE NOT NULL,
+        end_date                DATE,
+        time                    VARCHAR(100),
+        venue                   VARCHAR(255) NOT NULL,
+        mode                    VARCHAR(50) DEFAULT 'Offline',
+        proposed_budget         NUMERIC DEFAULT 0,
+        approved_budget         NUMERIC DEFAULT 0,
+        expected_participants   INTEGER DEFAULT 0,
+        actual_participants     INTEGER DEFAULT 0,
+        speaker_or_trainer      VARCHAR(255),
+        description             TEXT,
+        status                  VARCHAR(50) DEFAULT 'Approved',
+        coordinator_remarks     TEXT,
+        created_by_faculty_id   INTEGER REFERENCES faculty(id) ON DELETE SET NULL,
+        created_at              TIMESTAMPTZ DEFAULT NOW(),
+        updated_at              TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS club_members (
+        id            SERIAL PRIMARY KEY,
+        club_id       INTEGER NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+        student_id    INTEGER REFERENCES students(id) ON DELETE SET NULL,
+        student_name  VARCHAR(150) NOT NULL,
+        roll_no       VARCHAR(50),
+        division      VARCHAR(50),
+        class_year    VARCHAR(20) DEFAULT 'TE',
+        role          VARCHAR(100) DEFAULT 'Member',
+        academic_year VARCHAR(20) DEFAULT '2026-27',
+        is_core       BOOLEAN DEFAULT FALSE,
+        joined_at     TIMESTAMPTZ DEFAULT NOW(),
+        prn           VARCHAR(50)
+      );
+
+      CREATE TABLE IF NOT EXISTS club_event_registrations (
+        id            SERIAL PRIMARY KEY,
+        event_id      INTEGER NOT NULL REFERENCES club_events(id) ON DELETE CASCADE,
+        user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        student_id    INTEGER REFERENCES students(id) ON DELETE SET NULL,
+        student_name  VARCHAR(150) NOT NULL,
+        prn           VARCHAR(50),
+        roll_no       VARCHAR(50),
+        division      VARCHAR(50),
+        class_year    VARCHAR(20) DEFAULT 'TE',
+        email         VARCHAR(200),
+        contact_no    VARCHAR(50),
+        status        VARCHAR(50) DEFAULT 'Registered',
+        registered_at TIMESTAMPTZ DEFAULT NOW(),
+        notes         TEXT,
+        UNIQUE(event_id, user_id)
+      );
+
+      -- Dedicated Club Office Bearers table
+      CREATE TABLE IF NOT EXISTS club_office_bearers (
+        id            SERIAL PRIMARY KEY,
+        club_id       INTEGER NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+        student_id    INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+        user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        role          VARCHAR(50) NOT NULL CHECK (role IN ('President', 'Vice President')),
+        academic_year VARCHAR(20) NOT NULL DEFAULT '2026-27',
+        assigned_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        assigned_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (club_id, role, academic_year),
+        UNIQUE (club_id, student_id, academic_year)
+      );
+
+      -- Alter club_events to track student submissions and approval workflow
+      ALTER TABLE club_events ADD COLUMN IF NOT EXISTS submitted_by_student_id INTEGER REFERENCES students(id) ON DELETE SET NULL;
+      ALTER TABLE club_events ADD COLUMN IF NOT EXISTS submitted_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+      ALTER TABLE club_events ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ;
+      ALTER TABLE club_events ADD COLUMN IF NOT EXISTS approved_by INTEGER REFERENCES users(id) ON DELETE SET NULL;
+      ALTER TABLE club_events ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ;
+      ALTER TABLE club_events ADD COLUMN IF NOT EXISTS rejection_remark TEXT;
+
+      -- Update club_events status check constraint to include PENDING, APPROVED, REJECTED
+      ALTER TABLE club_events DROP CONSTRAINT IF EXISTS club_events_status_check;
+      ALTER TABLE club_events ADD CONSTRAINT club_events_status_check 
+        CHECK (status IN ('Draft', 'Submitted', 'Approved', 'Completed', 'Cancelled', 'PENDING', 'APPROVED', 'REJECTED', 'Pending', 'Rejected'));
+
+      -- Indexes for fast office bearer and event lookups
+      CREATE INDEX IF NOT EXISTS idx_club_office_bearers_student ON club_office_bearers(student_id);
+      CREATE INDEX IF NOT EXISTS idx_club_office_bearers_user ON club_office_bearers(user_id);
+      CREATE INDEX IF NOT EXISTS idx_club_office_bearers_club ON club_office_bearers(club_id, academic_year);
+      CREATE INDEX IF NOT EXISTS idx_club_events_club_status ON club_events(club_id, status);
     `);
 
     await client.query('COMMIT');

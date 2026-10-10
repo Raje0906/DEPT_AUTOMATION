@@ -332,7 +332,7 @@ export default function SeminarUpload() {
         )}
       </div>
 
-      {/* ─── TAB 1: LIVE SUBMISSIONS ROSTER ─────────────────────────────────── */}
+      {/* ─── TAB 1: LIVE SUBMISSIONS ─────────────────────────────────── */}
       {activeTab === 'submissions' && (
         <div className="bg-white border border-[var(--rule)] rounded-xl overflow-hidden shadow-xs">
           {groups.length === 0 ? (
