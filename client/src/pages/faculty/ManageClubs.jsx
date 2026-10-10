@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../api/axios';
 import { useAuth } from '../../contexts/AuthContext';
+import ClubOfficeBearers from './ClubOfficeBearers';
+import ClubEventApprovals from './ClubEventApprovals';
 
 // Helper: Normalize & extract class string like TE-B, TE-A, BE-A
 export function formatStudentClass(classYear, rawDivision) {
@@ -188,8 +190,9 @@ export default function ManageClubs() {
     },
   });
 
-  const [activeTab, setActiveTab] = useState('allocation'); // 'allocation' | 'my_club' | 'clubs' | 'events'
+  const [activeTab, setActiveTab] = useState('allocation'); // 'allocation' | 'office_bearers' | 'event_approvals' | 'my_club' | 'clubs' | 'events'
   const [facultyList, setFacultyList] = useState([]);
+  const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -507,9 +510,22 @@ export default function ManageClubs() {
     if (isClubHead) {
       setActiveTab('allocation');
     } else if (isAssignedFaculty) {
-      setActiveTab('my_club');
+      setActiveTab('office_bearers');
     }
   }, [isClubHead, isAssignedFaculty]);
+
+  // Check pending approvals count for coordinator
+  useEffect(() => {
+    const targetClubs = isClubHead ? data.clubs : myAssignedClubs;
+    if (targetClubs.length > 0) {
+      Promise.all(targetClubs.map(c => api.get(`/clubs/${c.id}/event-approvals`).catch(() => ({ data: { pendingEvents: [] } }))))
+        .then(resps => {
+          const total = resps.reduce((acc, r) => acc + (r.data?.pendingEvents?.length || 0), 0);
+          setPendingApprovalsCount(total);
+        })
+        .catch(() => {});
+    }
+  }, [academicYear, data.clubs, myAssignedClubs.length, isClubHead]);
 
   // Handle Faculty Assignment
   const handleSaveFacultyAssignment = async (club) => {
@@ -1065,6 +1081,39 @@ export default function ManageClubs() {
           </button>
         )}
 
+        {canAccess && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('office_bearers')}
+            className={`pb-3 px-4 text-sm font-bold border-b-2 transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+              activeTab === 'office_bearers'
+                ? 'border-maroon text-maroon'
+                : 'border-transparent text-draft hover:text-ink'
+            }`}
+          >
+            <span>Manage Club Office Bearers</span>
+          </button>
+        )}
+
+        {canAccess && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('event_approvals')}
+            className={`pb-3 px-4 text-sm font-bold border-b-2 transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+              activeTab === 'event_approvals'
+                ? 'border-maroon text-maroon'
+                : 'border-transparent text-draft hover:text-ink'
+            }`}
+          >
+            <span>Event Approvals</span>
+            {pendingApprovalsCount > 0 && (
+              <span className="badge badge-pending text-[10px] py-0 px-1.5 font-mono font-bold animate-pulse">
+                {pendingApprovalsCount} Pending
+              </span>
+            )}
+          </button>
+        )}
+
         {isAssignedFaculty && (
           <button
             type="button"
@@ -1387,6 +1436,32 @@ export default function ManageClubs() {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* ─── FEATURE: MANAGE CLUB OFFICE BEARERS ────────────────────────────── */}
+      {canAccess && activeTab === 'office_bearers' && (
+        <div className="mb-8">
+          <ClubOfficeBearers
+            user={user}
+            academicYear={academicYear}
+            clubs={isClubHead ? data.clubs : myAssignedClubs}
+            isClubHead={isClubHead}
+            onRefresh={fetchData}
+          />
+        </div>
+      )}
+
+      {/* ─── FEATURE: EVENT APPROVALS WORKFLOW ──────────────────────────────── */}
+      {canAccess && activeTab === 'event_approvals' && (
+        <div className="mb-8">
+          <ClubEventApprovals
+            user={user}
+            academicYear={academicYear}
+            clubs={isClubHead ? data.clubs : myAssignedClubs}
+            isClubHead={isClubHead}
+            onCountChange={setPendingApprovalsCount}
+          />
         </div>
       )}
 

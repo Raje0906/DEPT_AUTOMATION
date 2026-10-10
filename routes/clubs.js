@@ -48,6 +48,42 @@ async function getClubPermissions(user) {
   };
 }
 
+// Helper to check if user is coordinator of a specific club (or HOD/Head Coordinator)
+async function isCoordinatorOfClub(user, clubId) {
+  if (!user) return false;
+  const permissions = await getClubPermissions(user);
+  if (permissions.canManageAll) return true;
+  if (!permissions.facultyId) return false;
+  const clubRes = await pool.query('SELECT faculty_coordinator_id FROM clubs WHERE id = $1', [clubId]);
+  if (clubRes.rows.length === 0) return false;
+  return Number(clubRes.rows[0].faculty_coordinator_id) === Number(permissions.facultyId);
+}
+
+// ─── GET /api/clubs/my-office-bearer-roles (Dynamic roles for current student) ─
+router.get('/my-office-bearer-roles', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const academicYear = req.query.academicYear || '2026-27';
+
+    const result = await pool.query(`
+      SELECT cob.id, cob.club_id, cob.role, cob.academic_year, cob.assigned_at,
+             c.name AS club_name, c.code AS club_code, c.category AS club_category, c.status AS club_status,
+             c.description AS club_description
+      FROM club_office_bearers cob
+      JOIN clubs c ON c.id = cob.club_id
+      LEFT JOIN students s ON s.id = cob.student_id
+      WHERE (cob.user_id = $1 OR s.user_id = $1)
+        AND cob.academic_year = $2
+      ORDER BY cob.assigned_at DESC
+    `, [userId, academicYear]);
+
+    res.json({ roles: result.rows });
+  } catch (err) {
+    console.error('[Clubs] Error fetching student office bearer roles:', err);
+    res.status(500).json({ error: 'Failed to fetch office bearer roles' });
+  }
+});
+
 // ─── GET /api/clubs/faculty-list ──────────────────────────────────────────────
 router.get('/faculty-list', verifyToken, async (req, res) => {
   try {
@@ -545,6 +581,14 @@ router.get('/events', verifyToken, async (req, res) => {
       query += ` AND ce.club_id = $${params.length}`;
     }
 
+    // Only approved events are visible to students in the common activities view
+    if (req.user?.role === 'student') {
+      query += ` AND (ce.status = 'Approved' OR UPPER(ce.status) = 'APPROVED')`;
+    } else if (req.query.status) {
+      params.push(req.query.status);
+      query += ` AND UPPER(ce.status) = UPPER($${params.length})`;
+    }
+
     query += ` ORDER BY ce.start_date DESC, ce.id DESC`;
 
     const result = await pool.query(query, params);
@@ -980,6 +1024,529 @@ router.delete('/members/:id', verifyToken, async (req, res) => {
   } catch (err) {
     console.error('[Clubs] Error removing member:', err);
     res.status(500).json({ error: 'Failed to remove member' });
+  }
+});
+
+// ─── GET /api/clubs/:id/office-bearers (Get President & VP for Club) ──────────
+router.get('/:id/office-bearers', verifyToken, async (req, res) => {
+  try {
+    const clubId = parseInt(req.params.id, 10);
+    const academicYear = req.query.academicYear || '2026-27';
+
+    const result = await pool.query(`
+      SELECT cob.*,
+             u.name AS student_name,
+             u.email AS student_email,
+             s.roll_no,
+             s.enrollment_no AS prn,
+             s.division,
+             s.class_year,
+             s.mobile,
+             assigned_u.name AS assigned_by_name
+      FROM club_office_bearers cob
+      JOIN students s ON s.id = cob.student_id
+      JOIN users u ON u.id = cob.user_id
+      LEFT JOIN users assigned_u ON assigned_u.id = cob.assigned_by
+      WHERE cob.club_id = $1 AND cob.academic_year = $2
+      ORDER BY CASE WHEN cob.role = 'President' THEN 1 ELSE 2 END
+    `, [clubId, academicYear]);
+
+    res.json({ officeBearers: result.rows });
+  } catch (err) {
+    console.error('[Clubs] Error fetching office bearers:', err);
+    res.status(500).json({ error: 'Failed to fetch office bearers' });
+  }
+});
+
+// ─── POST /api/clubs/:id/office-bearers (Assign President or VP) ─────────────
+router.post('/:id/office-bearers', verifyToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const clubId = parseInt(req.params.id, 10);
+    const isCoord = await isCoordinatorOfClub(req.user, clubId);
+    if (!isCoord) {
+      return res.status(403).json({ error: 'You are not authorized to manage office bearers for this club.' });
+    }
+
+    const { student_id, role, academic_year = '2026-27' } = req.body;
+    if (!student_id || !role) {
+      return res.status(400).json({ error: 'Student and role are required.' });
+    }
+    if (role !== 'President' && role !== 'Vice President') {
+      return res.status(400).json({ error: 'Role must be either President or Vice President.' });
+    }
+
+    // Fetch student & user details
+    const stRes = await client.query(`
+      SELECT s.id, s.user_id, s.roll_no, s.enrollment_no, s.division, s.class_year, s.mobile,
+             u.name, u.email
+      FROM students s
+      JOIN users u ON u.id = s.user_id
+      WHERE s.id = $1
+    `, [student_id]);
+
+    if (stRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Student not found in records.' });
+    }
+    const student = stRes.rows[0];
+
+    // Check: A student can hold only one office bearer role per club
+    const existingStudentRole = await client.query(`
+      SELECT role FROM club_office_bearers 
+      WHERE club_id = $1 AND student_id = $2 AND academic_year = $3 AND role != $4
+    `, [clubId, student_id, academic_year, role]);
+
+    if (existingStudentRole.rows.length > 0) {
+      return res.status(400).json({
+        error: `This student is already designated as ${existingStudentRole.rows[0].role} for this club. A student can hold only one office bearer role per club.`
+      });
+    }
+
+    await client.query('BEGIN');
+
+    // Remove any previous bearer for this role in this club and academic year
+    await client.query(`
+      DELETE FROM club_office_bearers
+      WHERE club_id = $1 AND role = $2 AND academic_year = $3
+    `, [clubId, role, academic_year]);
+
+    // Insert new office bearer
+    const insRes = await client.query(`
+      INSERT INTO club_office_bearers (
+        club_id, student_id, user_id, role, academic_year, assigned_by, assigned_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      RETURNING *
+    `, [clubId, student.id, student.user_id, role, academic_year, req.user.id]);
+
+    // Sync to clubs table columns
+    const formattedDiv = student.division 
+      ? (student.division.startsWith(student.class_year || 'TE') ? student.division : `${student.class_year || 'TE'}-${student.division}`)
+      : 'TE-A';
+
+    if (role === 'President') {
+      await client.query(`
+        UPDATE clubs SET
+          student_lead_name = $1,
+          student_lead_email = $2,
+          student_lead_phone = $3,
+          student_lead_division = $4,
+          student_lead_prn = $5,
+          updated_at = NOW()
+        WHERE id = $6
+      `, [student.name, student.email, student.mobile || null, formattedDiv, student.enrollment_no, clubId]);
+    } else if (role === 'Vice President') {
+      await client.query(`
+        UPDATE clubs SET
+          vice_president_name = $1,
+          vice_president_phone = $2,
+          vice_president_division = $3,
+          vice_president_prn = $4,
+          updated_at = NOW()
+        WHERE id = $5
+      `, [student.name, student.mobile || null, formattedDiv, student.enrollment_no, clubId]);
+    }
+
+    // Also sync to club_members
+    await client.query(`
+      DELETE FROM club_members
+      WHERE club_id = $1 AND academic_year = $2 AND role = $3
+    `, [clubId, academic_year, role]);
+
+    await client.query(`
+      INSERT INTO club_members (
+        club_id, student_id, student_name, roll_no, prn, division, class_year, role, academic_year, is_core, joined_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, TRUE, NOW())
+    `, [clubId, student.id, student.name, student.roll_no, student.enrollment_no, formattedDiv, student.class_year || 'TE', role, academic_year]);
+
+    await client.query('COMMIT');
+
+    res.status(201).json({
+      message: `${role} assigned successfully for this club.`,
+      officeBearer: insRes.rows[0]
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[Clubs] Error assigning office bearer:', err);
+    res.status(500).json({ error: err.message || 'Failed to assign office bearer' });
+  } finally {
+    client.release();
+  }
+});
+
+// ─── DELETE /api/clubs/:id/office-bearers/:bearerId (Revoke Role) ─────────────
+router.delete('/:id/office-bearers/:bearerId', verifyToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const clubId = parseInt(req.params.id, 10);
+    const bearerId = parseInt(req.params.bearerId, 10);
+
+    const isCoord = await isCoordinatorOfClub(req.user, clubId);
+    if (!isCoord) {
+      return res.status(403).json({ error: 'You are not authorized to revoke office bearers for this club.' });
+    }
+
+    const curRes = await client.query('SELECT * FROM club_office_bearers WHERE id = $1 AND club_id = $2', [bearerId, clubId]);
+    if (curRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Office bearer record not found.' });
+    }
+    const current = curRes.rows[0];
+
+    await client.query('BEGIN');
+
+    await client.query('DELETE FROM club_office_bearers WHERE id = $1', [bearerId]);
+
+    if (current.role === 'President') {
+      await client.query(`
+        UPDATE clubs SET
+          student_lead_name = NULL,
+          student_lead_email = NULL,
+          student_lead_phone = NULL,
+          student_lead_division = NULL,
+          student_lead_prn = NULL,
+          updated_at = NOW()
+        WHERE id = $1
+      `, [clubId]);
+    } else if (current.role === 'Vice President') {
+      await client.query(`
+        UPDATE clubs SET
+          vice_president_name = NULL,
+          vice_president_phone = NULL,
+          vice_president_division = NULL,
+          vice_president_prn = NULL,
+          updated_at = NOW()
+        WHERE id = $1
+      `, [clubId]);
+    }
+
+    // Remove role from club_members
+    await client.query(`
+      DELETE FROM club_members
+      WHERE club_id = $1 AND academic_year = $2 AND role = $3
+    `, [clubId, current.academic_year, current.role]);
+
+    await client.query('COMMIT');
+
+    res.json({ message: `${current.role} revoked successfully.` });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[Clubs] Error revoking office bearer:', err);
+    res.status(500).json({ error: 'Failed to revoke office bearer' });
+  } finally {
+    client.release();
+  }
+});
+
+// ─── POST /api/clubs/:id/propose-event (President / VP Submits Event) ─────────
+router.post('/:id/propose-event', verifyToken, async (req, res) => {
+  try {
+    const clubId = parseInt(req.params.id, 10);
+    const userId = req.user.id;
+
+    // Verify user is President or Vice President of THIS club
+    const bearerRes = await pool.query(`
+      SELECT cob.*, c.name AS club_name
+      FROM club_office_bearers cob
+      JOIN clubs c ON c.id = cob.club_id
+      LEFT JOIN students s ON s.id = cob.student_id
+      WHERE (cob.user_id = $1 OR s.user_id = $1) AND cob.club_id = $2
+    `, [userId, clubId]);
+
+    if (bearerRes.rows.length === 0) {
+      return res.status(403).json({ error: 'Only the President or Vice President of this club can propose events.' });
+    }
+    const bearer = bearerRes.rows[0];
+
+    const {
+      title,
+      event_type,
+      start_date,
+      end_date,
+      time,
+      venue,
+      mode = 'Offline',
+      description,
+      expected_participants = 60,
+      speaker_or_trainer,
+      academic_year = '2026-27'
+    } = req.body;
+
+    // Required field validation
+    if (!title || !title.trim()) return res.status(400).json({ error: 'Event Title is required.' });
+    if (!event_type) return res.status(400).json({ error: 'Event Type is required.' });
+    if (!start_date) return res.status(400).json({ error: 'Event Date is required.' });
+    if (!time || !time.trim()) return res.status(400).json({ error: 'Event Time is required.' });
+    if (!venue || !venue.trim()) return res.status(400).json({ error: 'Event Venue / Platform is required.' });
+    if (!description || !description.trim()) return res.status(400).json({ error: 'Event Description is required.' });
+
+    // Validate mode
+    if (mode !== 'Offline' && mode !== 'Online') {
+      return res.status(400).json({ error: 'Mode must be either Offline or Online.' });
+    }
+
+    // Validate description length
+    if (description.trim().length > 2500) {
+      return res.status(400).json({ error: 'Description must not exceed 2500 characters.' });
+    }
+
+    // Validate date cannot be in the past
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (start_date < todayStr) {
+      return res.status(400).json({ error: 'Event date cannot be in the past.' });
+    }
+
+    // Find student_id
+    const stRes = await pool.query('SELECT id FROM students WHERE user_id = $1', [userId]);
+    const studentId = stRes.rows.length > 0 ? stRes.rows[0].id : bearer.student_id;
+
+    const insRes = await pool.query(`
+      INSERT INTO club_events (
+        club_id, title, event_type, academic_year, start_date, end_date,
+        time, venue, mode, description, expected_participants, speaker_or_trainer,
+        status, submitted_by_student_id, submitted_by_user_id, submitted_at, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'PENDING', $13, $14, NOW(), NOW(), NOW())
+      RETURNING *
+    `, [
+      clubId,
+      title.trim(),
+      event_type.trim(),
+      academic_year,
+      start_date,
+      end_date || null,
+      time.trim(),
+      venue.trim(),
+      mode,
+      description.trim(),
+      parseInt(expected_participants, 10) || 60,
+      speaker_or_trainer ? speaker_or_trainer.trim() : null,
+      studentId,
+      userId
+    ]);
+
+    res.status(201).json({
+      message: 'Event submitted successfully for Coordinator approval.',
+      event: insRes.rows[0]
+    });
+  } catch (err) {
+    console.error('[Clubs] Error proposing event:', err);
+    res.status(500).json({ error: err.message || 'Failed to propose event' });
+  }
+});
+
+// ─── GET /api/clubs/:id/my-club-events (For President/VP & Coordinator) ───────
+router.get('/:id/my-club-events', verifyToken, async (req, res) => {
+  try {
+    const clubId = parseInt(req.params.id, 10);
+    const userId = req.user.id;
+    const academicYear = req.query.academicYear || '2026-27';
+
+    // Verify access: Coordinator, HOD, or President/VP of this club
+    const isCoord = await isCoordinatorOfClub(req.user, clubId);
+    let isBearer = false;
+    if (!isCoord) {
+      const bRes = await pool.query(`
+        SELECT cob.id FROM club_office_bearers cob
+        LEFT JOIN students s ON s.id = cob.student_id
+        WHERE (cob.user_id = $1 OR s.user_id = $1) AND cob.club_id = $2
+      `, [userId, clubId]);
+      isBearer = bRes.rows.length > 0;
+    }
+
+    if (!isCoord && !isBearer) {
+      return res.status(403).json({ error: 'Access restricted to club office bearers and faculty coordinator.' });
+    }
+
+    const eventsRes = await pool.query(`
+      SELECT ce.*, c.name AS club_name, c.code AS club_code,
+             u_sub.name AS submitted_by_name,
+             u_app.name AS approved_by_name
+      FROM club_events ce
+      JOIN clubs c ON c.id = ce.club_id
+      LEFT JOIN users u_sub ON u_sub.id = ce.submitted_by_user_id
+      LEFT JOIN users u_app ON u_app.id = ce.approved_by
+      WHERE ce.club_id = $1 AND ce.academic_year = $2
+      ORDER BY ce.created_at DESC
+    `, [clubId, academicYear]);
+
+    res.json({ events: eventsRes.rows });
+  } catch (err) {
+    console.error('[Clubs] Error fetching my club events:', err);
+    res.status(500).json({ error: 'Failed to fetch club events' });
+  }
+});
+
+// ─── PUT /api/clubs/:id/events/:eventId/resubmit (Edit and Resubmit Event) ─────
+router.put('/:id/events/:eventId/resubmit', verifyToken, async (req, res) => {
+  try {
+    const clubId = parseInt(req.params.id, 10);
+    const eventId = parseInt(req.params.eventId, 10);
+    const userId = req.user.id;
+
+    // Verify user is President or Vice President of this club
+    const bearerRes = await pool.query(`
+      SELECT cob.id FROM club_office_bearers cob
+      LEFT JOIN students s ON s.id = cob.student_id
+      WHERE (cob.user_id = $1 OR s.user_id = $1) AND cob.club_id = $2
+    `, [userId, clubId]);
+
+    if (bearerRes.rows.length === 0) {
+      return res.status(403).json({ error: 'Only club office bearers can edit and resubmit events.' });
+    }
+
+    const evRes = await pool.query('SELECT * FROM club_events WHERE id = $1 AND club_id = $2', [eventId, clubId]);
+    if (evRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Event not found.' });
+    }
+
+    const {
+      title,
+      event_type,
+      start_date,
+      end_date,
+      time,
+      venue,
+      mode = 'Offline',
+      description,
+      expected_participants = 60,
+      speaker_or_trainer
+    } = req.body;
+
+    // Validation
+    if (!title || !title.trim()) return res.status(400).json({ error: 'Event Title is required.' });
+    if (!event_type) return res.status(400).json({ error: 'Event Type is required.' });
+    if (!start_date) return res.status(400).json({ error: 'Event Date is required.' });
+    if (!time || !time.trim()) return res.status(400).json({ error: 'Event Time is required.' });
+    if (!venue || !venue.trim()) return res.status(400).json({ error: 'Event Venue / Platform is required.' });
+    if (!description || !description.trim()) return res.status(400).json({ error: 'Event Description is required.' });
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (start_date < todayStr) {
+      return res.status(400).json({ error: 'Event date cannot be in the past.' });
+    }
+
+    const updateRes = await pool.query(`
+      UPDATE club_events SET
+        title = $1,
+        event_type = $2,
+        start_date = $3,
+        end_date = $4,
+        time = $5,
+        venue = $6,
+        mode = $7,
+        description = $8,
+        expected_participants = $9,
+        speaker_or_trainer = $10,
+        status = 'PENDING',
+        rejection_remark = NULL,
+        coordinator_remarks = NULL,
+        submitted_by_user_id = $11,
+        submitted_at = NOW(),
+        updated_at = NOW()
+      WHERE id = $12 AND club_id = $13
+      RETURNING *
+    `, [
+      title.trim(),
+      event_type.trim(),
+      start_date,
+      end_date || null,
+      time.trim(),
+      venue.trim(),
+      mode,
+      description.trim(),
+      parseInt(expected_participants, 10) || 60,
+      speaker_or_trainer ? speaker_or_trainer.trim() : null,
+      userId,
+      eventId,
+      clubId
+    ]);
+
+    res.json({
+      message: 'Event updated and resubmitted for Coordinator approval.',
+      event: updateRes.rows[0]
+    });
+  } catch (err) {
+    console.error('[Clubs] Error resubmitting event:', err);
+    res.status(500).json({ error: 'Failed to resubmit event' });
+  }
+});
+
+// ─── GET /api/clubs/:id/event-approvals (Pending events for Coordinator) ──────
+router.get('/:id/event-approvals', verifyToken, async (req, res) => {
+  try {
+    const clubId = parseInt(req.params.id, 10);
+    const isCoord = await isCoordinatorOfClub(req.user, clubId);
+    if (!isCoord) {
+      return res.status(403).json({ error: 'You are not authorized to view event approvals for this club.' });
+    }
+
+    const result = await pool.query(`
+      SELECT ce.*, c.name AS club_name, c.code AS club_code,
+             u.name AS submitted_by_name, u.email AS submitted_by_email,
+             s.roll_no AS submitted_by_roll_no, s.enrollment_no AS submitted_by_prn,
+             s.division AS submitted_by_division
+      FROM club_events ce
+      JOIN clubs c ON c.id = ce.club_id
+      LEFT JOIN users u ON u.id = ce.submitted_by_user_id
+      LEFT JOIN students s ON s.user_id = u.id
+      WHERE ce.club_id = $1 AND (ce.status = 'PENDING' OR ce.status = 'Submitted')
+      ORDER BY ce.submitted_at ASC, ce.id ASC
+    `, [clubId]);
+
+    res.json({ pendingEvents: result.rows });
+  } catch (err) {
+    console.error('[Clubs] Error fetching pending event approvals:', err);
+    res.status(500).json({ error: 'Failed to fetch pending event approvals' });
+  }
+});
+
+// ─── PATCH /api/clubs/:id/events/:eventId/approval (Approve / Reject Event) ───
+router.patch('/:id/events/:eventId/approval', verifyToken, async (req, res) => {
+  try {
+    const clubId = parseInt(req.params.id, 10);
+    const eventId = parseInt(req.params.eventId, 10);
+
+    const isCoord = await isCoordinatorOfClub(req.user, clubId);
+    if (!isCoord) {
+      return res.status(403).json({ error: 'You are not authorized to approve or reject events for this club.' });
+    }
+
+    const rawAction = (req.body.action || req.body.decision || '').toUpperCase();
+    const action = rawAction === 'APPROVED' ? 'APPROVE' : (rawAction === 'REJECTED' ? 'REJECT' : rawAction);
+    const { remark } = req.body;
+    if (action !== 'APPROVE' && action !== 'REJECT') {
+      return res.status(400).json({ error: 'Action must be either APPROVE or REJECT.' });
+    }
+
+    if (action === 'REJECT' && (!remark || !remark.trim())) {
+      return res.status(400).json({ error: 'A remark is required when rejecting an event.' });
+    }
+
+    const evRes = await pool.query('SELECT * FROM club_events WHERE id = $1 AND club_id = $2', [eventId, clubId]);
+    if (evRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Event not found.' });
+    }
+
+    const newStatus = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+    const cleanRemark = remark ? remark.trim() : null;
+
+    const updateRes = await pool.query(`
+      UPDATE club_events SET
+        status = $1,
+        coordinator_remarks = $2,
+        rejection_remark = $3,
+        approved_by = $4,
+        approved_at = NOW(),
+        updated_at = NOW()
+      WHERE id = $5 AND club_id = $6
+      RETURNING *
+    `, [newStatus, cleanRemark, cleanRemark, req.user.id, eventId, clubId]);
+
+    res.json({
+      message: `Event has been ${action === 'APPROVE' ? 'Approved' : 'Rejected'} successfully.`,
+      event: updateRes.rows[0]
+    });
+  } catch (err) {
+    console.error('[Clubs] Error processing event approval:', err);
+    res.status(500).json({ error: 'Failed to process event approval' });
   }
 });
 

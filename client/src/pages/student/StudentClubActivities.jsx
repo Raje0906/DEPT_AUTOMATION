@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import api from '../../api/axios';
 import { useAuth } from '../../contexts/AuthContext';
 import { ClubLogo } from '../faculty/ManageClubs';
+import StudentMyClubPortal from './StudentMyClubPortal';
 
 export default function StudentClubActivities() {
   const { user } = useAuth();
@@ -15,6 +16,10 @@ export default function StudentClubActivities() {
   const [selectedTypeFilter, setSelectedTypeFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('upcoming'); // 'upcoming' | 'registered' | 'all' | 'clubs'
+
+  // Office Bearer status (President / Vice President)
+  const [officeBearerRoles, setOfficeBearerRoles] = useState([]);
+  const [mainTab, setMainTab] = useState('all_activities'); // 'all_activities' | 'my_club'
 
   // Modal detail view
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -41,12 +46,18 @@ export default function StudentClubActivities() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [eventsRes, clubsRes] = await Promise.all([
+      const [eventsRes, clubsRes, rolesRes] = await Promise.all([
         api.get(`/clubs/events?academicYear=${academicYear}`),
         api.get(`/clubs?academicYear=${academicYear}`),
+        api.get(`/clubs/my-office-bearer-roles?academicYear=${academicYear}`).catch(() => ({ data: { roles: [] } })),
       ]);
       setEvents(eventsRes.data.events || []);
       setClubs(clubsRes.data.clubs || []);
+      const myRoles = rolesRes.data?.roles || [];
+      setOfficeBearerRoles(myRoles);
+      if (myRoles.length === 0 && mainTab === 'my_club') {
+        setMainTab('all_activities');
+      }
     } catch (err) {
       console.error('Failed to load club activities', err);
       toast.error('Failed to load club activities');
@@ -274,7 +285,46 @@ export default function StudentClubActivities() {
         </div>
       </div>
 
-      {/* KPI Stats Strip */}
+      {/* Top-Level Tabs for Club Office Bearers (shown only if student holds President/VP role) */}
+      {officeBearerRoles.length > 0 && (
+        <div className="flex items-center gap-2 border-b-2 border-rule mb-6">
+          <button
+            type="button"
+            onClick={() => setMainTab('all_activities')}
+            className={`pb-3 px-4 text-sm font-bold border-b-2 -mb-[2px] transition-all flex items-center gap-2 ${
+              mainTab === 'all_activities'
+                ? 'border-maroon text-maroon'
+                : 'border-transparent text-draft hover:text-ink'
+            }`}
+          >
+            <span>All Club Activities</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMainTab('my_club')}
+            className={`pb-3 px-4 text-sm font-bold border-b-2 -mb-[2px] transition-all flex items-center gap-2 ${
+              mainTab === 'my_club'
+                ? 'border-navy text-navy'
+                : 'border-transparent text-draft hover:text-ink'
+            }`}
+          >
+            <span>My Club</span>
+            <span className="bg-navy/10 text-navy font-mono text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider">
+              {officeBearerRoles.map((r) => `${r.role} (${r.club_name})`).join(', ')}
+            </span>
+          </button>
+        </div>
+      )}
+
+      {mainTab === 'my_club' && officeBearerRoles.length > 0 ? (
+        <StudentMyClubPortal
+          roles={officeBearerRoles}
+          academicYear={academicYear}
+          onEventCreated={loadData}
+        />
+      ) : (
+        <>
+          {/* KPI Stats Strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <div className="panel p-4 bg-white border border-rule">
           <p className="text-[11px] uppercase tracking-wider text-draft font-semibold">Upcoming Activities</p>
@@ -753,6 +803,8 @@ export default function StudentClubActivities() {
             })}
           </div>
         </div>
+      )}
+        </>
       )}
 
       {/* ─── MODAL: EVENT REGISTRATION ───────────────────────────────────────── */}

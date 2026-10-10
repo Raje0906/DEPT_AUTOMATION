@@ -69,10 +69,10 @@ export default function SeminarAssignment() {
   const [customQuota, setCustomQuota]         = useState(4);
   const [addingGuide, setAddingGuide]         = useState(false);
 
-  // Guide roster management
+  // Guide list management
   const handleAddGuide = async (facultyId) => {
     if (!facultyId) return;
-    if (guides.find(g => String(g.faculty_id) === String(facultyId))) return toast.error('Already in roster');
+    if (guides.find(g => String(g.faculty_id) === String(facultyId))) return toast.error('Already added');
     try {
       await api.post(`/seminar/sessions/${id}/guides`, { faculty_id: facultyId, quota: 4, display_order: guides.length + 1 });
       await load();
@@ -96,7 +96,7 @@ export default function SeminarAssignment() {
       setCustomQuota(4);
       setShowCustomGuide(false);
       await load();
-      toast.success('Guide added to roster');
+      toast.success('Guide added');
     } catch (err) {
       toast.error(err?.response?.data?.error || 'Failed to add guide');
     } finally {
@@ -245,11 +245,11 @@ export default function SeminarAssignment() {
       )}
 
       <div className="grid grid-cols-[320px_1fr] gap-6">
-        {/* Left: Guide Roster */}
+        {/* Left: Faculty Guides */}
         <div>
           <div className="bg-white border border-[var(--rule)] rounded-xl overflow-hidden">
             <div className="px-4 py-3 border-b border-[var(--rule)] flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-[var(--ink)]">Guide Roster</h3>
+              <h3 className="text-sm font-semibold text-[var(--ink)]">Faculty Guides</h3>
               <span className="text-xs text-[var(--ink)]/40">Total quota: {totalQuota}</span>
             </div>
             <div className="divide-y divide-[var(--rule)]">

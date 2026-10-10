@@ -1434,7 +1434,7 @@ router.patch('/sessions/:id/assignments/:groupId', verifyToken, requireCoordinat
          WHERE sg.id = $1 AND sg.session_id = $2`,
         [parseInt(guide_id, 10), req.params.id]
       );
-      if (!guideRes.rows.length) return res.status(404).json({ error: 'Guide not found in session roster' });
+      if (!guideRes.rows.length) return res.status(404).json({ error: 'Guide not found in session' });
       const g = guideRes.rows[0];
 
       await pool.query(
@@ -1651,7 +1651,7 @@ router.patch('/hod/groups/:id/reject', verifyToken, requireRole('hod'), async (r
 // ─── Seminar Evaluation & Marks Entry System ───────────────────────────────
 
 // GET /api/seminar/groups/:groupId/evaluation
-// Fetch group details, member roster, rubric structure, and existing marks
+// Fetch group details, member list, rubric structure, and existing marks
 router.get('/groups/:groupId/evaluation', verifyToken, requireRole('faculty', 'hod'), async (req, res) => {
   try {
     const groupId = parseInt(req.params.groupId, 10);
