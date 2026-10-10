@@ -363,36 +363,19 @@ export default function StudentMyClubPortal({ roles = [], academicYear = '2026-2
                 />
               </div>
 
-              {/* Expected Pax & Speaker */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label htmlFor="event-pax-input" className="block text-[11px] font-bold text-[var(--ink)] uppercase mb-1">
-                    Expected Pax
-                  </label>
-                  <input
-                    id="event-pax-input"
-                    type="number"
-                    min="5"
-                    max="500"
-                    value={formData.expected_participants}
-                    onChange={(e) => setFormData({ ...formData, expected_participants: e.target.value })}
-                    className="w-full border border-[var(--rule)] rounded px-2.5 py-2 text-xs focus:ring-1 focus:ring-[var(--navy)] bg-white font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="event-speaker-input" className="block text-[11px] font-bold text-[var(--ink)] uppercase mb-1">
-                    Speaker / Trainer
-                  </label>
-                  <input
-                    id="event-speaker-input"
-                    type="text"
-                    placeholder="Optional expert name"
-                    value={formData.speaker_or_trainer}
-                    onChange={(e) => setFormData({ ...formData, speaker_or_trainer: e.target.value })}
-                    className="w-full border border-[var(--rule)] rounded px-2.5 py-2 text-xs focus:ring-1 focus:ring-[var(--navy)] bg-white"
-                  />
-                </div>
+              {/* Speaker / Trainer */}
+              <div>
+                <label htmlFor="event-speaker-input" className="block text-[11px] font-bold text-[var(--ink)] uppercase mb-1">
+                  Speaker / Trainer / Industry Expert (Optional)
+                </label>
+                <input
+                  id="event-speaker-input"
+                  type="text"
+                  placeholder="Optional expert or guest speaker name"
+                  value={formData.speaker_or_trainer}
+                  onChange={(e) => setFormData({ ...formData, speaker_or_trainer: e.target.value })}
+                  className="w-full border border-[var(--rule)] rounded px-3 py-2 text-xs focus:ring-1 focus:ring-[var(--navy)] bg-white"
+                />
               </div>
 
               {/* Description */}

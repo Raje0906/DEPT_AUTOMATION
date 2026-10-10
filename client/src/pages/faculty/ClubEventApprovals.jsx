@@ -241,9 +241,6 @@ export default function ClubEventApprovals({ user, academicYear, clubs = [], isC
                           <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 font-semibold border border-slate-200">
                             {ev.event_type}
                           </span>
-                          <span className="text-[10px] text-[var(--ink)]/50">
-                            Exp: {ev.expected_participants || 60} pax
-                          </span>
                         </div>
                       </td>
                       <td className="p-3 align-top whitespace-nowrap">
