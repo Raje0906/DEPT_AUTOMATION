@@ -14,6 +14,8 @@ const projectRoutes     = require('./routes/projects');
 const seminarRoutes     = require('./routes/seminar');
 const coordinatorRoutes = require('./routes/coordinators');
 const clubRoutes        = require('./routes/clubs');
+const notificationRoutes = require('./routes/notifications');
+const whatsappService   = require('./services/whatsappService');
 
 const app = express();
 
@@ -43,6 +45,7 @@ app.use('/api/projects',     projectRoutes);
 app.use('/api/seminar',      seminarRoutes);
 app.use('/api/coordinators', coordinatorRoutes);
 app.use('/api/clubs',        clubRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // ─── Health check ────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
@@ -78,6 +81,12 @@ async function start() {
     const server = app.listen(PORT, () => {
       console.log(`[Server] Running on http://localhost:${PORT}`);
       console.log(`[Server] Environment: ${process.env.NODE_ENV}`);
+
+      if (process.env.WHATSAPP_ENABLED !== 'false') {
+        whatsappService.initWhatsApp().catch(err => {
+          console.warn('[WhatsApp] Startup warning:', err.message);
+        });
+      }
     });
 
     server.on('error', (err) => {

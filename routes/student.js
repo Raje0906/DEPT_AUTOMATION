@@ -65,10 +65,11 @@ router.get('/results/:semester', async (req, res) => {
     // Check publication status for this semester & division
     const pubCheck = await pool.query(
       `SELECT status FROM result_publish_status 
-       WHERE semester = 5 AND academic_year = '2026-27' AND division = $1`,
+       WHERE semester = 5 AND academic_year = '2026-27' 
+         AND (division = $1 OR division = REPLACE($1, ' Comp ', ' ') OR REPLACE(division, ' Comp ', ' ') = $1)`,
       [student.division]
     );
-    const isPublished = pubCheck.rows.length > 0 && pubCheck.rows[0].status === 'published';
+    const isPublished = pubCheck.rows.length > 0 && pubCheck.rows.some(r => r.status === 'published');
 
     // Fetch student's marks across all exam types
     const marksResult = await pool.query(
@@ -158,10 +159,11 @@ router.get('/results', async (req, res) => {
     // Check publication for TE Sem 1 (Semester 5)
     const pubCheck = await pool.query(
       `SELECT status FROM result_publish_status 
-       WHERE semester = 5 AND academic_year = '2026-27' AND division = $1`,
+       WHERE semester = 5 AND academic_year = '2026-27' 
+         AND (division = $1 OR division = REPLACE($1, ' Comp ', ' ') OR REPLACE(division, ' Comp ', ' ') = $1)`,
       [student.division]
     );
-    const isPublished = pubCheck.rows.length > 0 && pubCheck.rows[0].status === 'published';
+    const isPublished = pubCheck.rows.length > 0 && pubCheck.rows.some(r => r.status === 'published');
 
     // Get Sem 5 marks rollup
     const marksResult = await pool.query(
@@ -246,7 +248,9 @@ router.get('/notifications', async (req, res) => {
     const pubResult = await pool.query(
       `SELECT rps.semester, rps.academic_year, rps.published_at
        FROM result_publish_status rps
-       WHERE rps.department = $1 AND rps.division = $2 AND rps.status = 'published'
+       WHERE rps.department = $1 
+         AND (rps.division = $2 OR rps.division = REPLACE($2, ' Comp ', ' ') OR REPLACE(rps.division, ' Comp ', ' ') = $2)
+         AND rps.status = 'published'
        ORDER BY rps.published_at DESC LIMIT 3`,
       [student.department, student.division]
     );

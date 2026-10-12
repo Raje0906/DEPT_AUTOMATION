@@ -24,11 +24,6 @@ const Icons = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
     </svg>
   ),
-  lab: (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0H3" />
-    </svg>
-  ),
   project: (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
@@ -137,7 +132,6 @@ const roleNav = {
       group: 'Department Administration',
       items: [
         { to: '/faculty/clubs',           label: 'Manage Clubs',          icon: Icons.clubs },
-        { to: '/faculty/lab-maintenance', label: 'Lab Maintenance',      icon: Icons.lab },
         { to: '/faculty/project-eval',    label: 'BE Project Evaluation', icon: Icons.project },
         { to: '/faculty/magazines',       label: 'Magazine',              icon: Icons.magazines },
         { to: '/faculty/seminar',         label: 'TE Seminar Governance', icon: Icons.seminar },
@@ -184,12 +178,12 @@ const PAGE_TITLES = {
   '/faculty/marksheet/end-term-internal': 'End-Term Internal Evaluation Ledger',
   '/faculty/reports': 'Class Academic Reports',
   '/faculty/clubs': 'Manage Student Clubs',
-  '/faculty/lab-maintenance': 'Laboratory Maintenance Log',
   '/faculty/project-eval': 'BE Project Evaluation',
   '/faculty/project-coordination': 'BE Project Governance',
   '/faculty/magazines': 'Department Magazine Publication',
   '/faculty/seminar': 'TE Seminar Coordinator Portal',
   '/faculty/seminar/my-groups': 'Assigned Seminar Groups',
+  '/faculty/class-namelist': 'University Namelist Segregator',
   '/hod': 'HOD Executive Dashboard',
   '/hod/teachers': 'Faculty Teaching Allocation',
   '/hod/coordinators': 'Academic Coordinator Assignment',
@@ -280,6 +274,38 @@ export default function Layout({ children }) {
           : item
       )
     }));
+  }
+
+  // Class Teacher navigation item
+  const isClassTeacher = !!(
+    user?.is_class_teacher ||
+    (user?.class_teacher_classes && user.class_teacher_classes.length > 0) ||
+    (user?.classTeacherOf && user.classTeacherOf.length > 0)
+  );
+
+  if (user?.role === 'faculty' && isClassTeacher) {
+    navGroups = [
+      ...navGroups,
+      {
+        group: 'Class Teacher Desk',
+        items: [
+          { to: '/faculty/class-namelist', label: 'University Namelist Segregator', icon: Icons.results }
+        ]
+      }
+    ];
+  } else if (user?.role === 'hod') {
+    navGroups = navGroups.map(group => {
+      if (group.group === 'Department Governance') {
+        return {
+          ...group,
+          items: [
+            ...group.items,
+            { to: '/faculty/class-namelist', label: 'Namelist Segregator', icon: Icons.results }
+          ]
+        };
+      }
+      return group;
+    });
   }
 
   const handleLogout = () => {

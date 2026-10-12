@@ -217,23 +217,6 @@ export default function FacultyDashboard() {
           </Link>
 
           <Link
-            to="/faculty/lab-maintenance"
-            className="panel p-5 hover:border-maroon/40 hover:shadow-sm transition-all group block"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <span className="w-8 h-8 rounded bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-sm">
-                🛠️
-              </span>
-              <h3 className="font-semibold text-ink text-base group-hover:text-maroon transition-colors">
-                Lab Maintenance
-              </h3>
-            </div>
-            <p className="text-xs text-draft leading-relaxed">
-              Log equipment issues, monitor lab workstation readiness, and manage maintenance tickets.
-            </p>
-          </Link>
-
-          <Link
             to="/faculty/project-eval"
             className="panel p-5 hover:border-maroon/40 hover:shadow-sm transition-all group block"
           >

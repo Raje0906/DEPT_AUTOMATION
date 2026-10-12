@@ -3,12 +3,14 @@ import { Link } from 'react-router-dom';
 import api from '../../api/axios';
 import { StatusBadge } from '../../components/ResultTable';
 import { useMagazine } from '../../contexts/MagazineContext';
+import WhatsAppNotifyModal from '../../components/WhatsAppNotifyModal';
 
 export default function HODDashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedYear, setSelectedYear] = useState('2026-27');
   const [selectedSem, setSelectedSem] = useState('');
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
   const { magazines } = useMagazine();
 
   const pendingMagazines = magazines?.filter((m) => m.status === 'Under Review') || [];
@@ -114,6 +116,14 @@ export default function HODDashboard() {
           >
             Review Marks
           </Link>
+
+          <button
+            onClick={() => setShowWhatsAppModal(true)}
+            className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded shadow-2xs transition-colors inline-flex items-center gap-1.5 cursor-pointer"
+            title="Open WhatsApp Notification Center (Restricted to 4 Whitelisted Students)"
+          >
+            <span>💬</span> Test WhatsApp
+          </button>
         </div>
       </div>
 
@@ -433,6 +443,12 @@ export default function HODDashboard() {
           </div>
         </div>
       )}
+
+      {/* WhatsApp Test Notification Center Modal */}
+      <WhatsAppNotifyModal
+        isOpen={showWhatsAppModal}
+        onClose={() => setShowWhatsAppModal(false)}
+      />
     </div>
   );
 }

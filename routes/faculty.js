@@ -4,11 +4,24 @@ const pool = require('../db/pool');
 const multer = require('multer');
 const csv = require('csv-parser');
 const { Readable } = require('stream');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const { spawn } = require('child_process');
 const { verifyToken, requireRole } = require('../middleware/auth');
-const { computeMarks } = require('../services/gradeCalculator');
+const { calculateGrade, computeSubjectRollup, computeMarks } = require('../services/gradeCalculator');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+const namelistUploadDir = path.join(os.tmpdir(), 'namelist_uploads');
+if (!fs.existsSync(namelistUploadDir)) {
+  fs.mkdirSync(namelistUploadDir, { recursive: true });
+}
+const namelistDiskUpload = multer({
+  dest: namelistUploadDir,
+  limits: { fileSize: 30 * 1024 * 1024 }
+});
 
 // Allow any authenticated user (student, faculty, hod) to get full faculty list
 router.get('/all', verifyToken, async (req, res) => {
@@ -429,7 +442,7 @@ router.get('/subjects', async (req, res) => {
               s.max_cie, s.max_practical, s.max_end_sem, s.has_practical, s.subject_type,
               fsm.academic_year, fsm.division,
               COUNT(sem.id) AS marks_entered,
-              (SELECT COUNT(*) FROM students st WHERE st.division = fsm.division AND st.current_semester = fsm.semester) AS enrolled_count,
+              (SELECT COUNT(*) FROM students st WHERE (st.division = fsm.division OR st.division = REPLACE(fsm.division, ' Comp ', ' ') OR REPLACE(st.division, ' Comp ', ' ') = fsm.division) AND st.current_semester = fsm.semester) AS enrolled_count,
               CASE
                 WHEN COUNT(sem.id) = 0 THEN 'not_started'
                 WHEN COUNT(sem.id) FILTER (WHERE sem.status = 'published') > 0 THEN 'published'
@@ -462,13 +475,23 @@ router.get('/marks/:subjectId', async (req, res) => {
     const { subjectId } = req.params;
     const semester = parseInt(req.query.semester, 10) || 5;
     const academicYear = req.query.academic_year || '2026-27';
-    const division = req.query.division || 'TE 1';
+    let division = req.query.division;
+    if (!division) {
+      const defaultDivRes = await pool.query(
+        `SELECT division FROM faculty_subject_map
+         WHERE faculty_id = $1 AND subject_id = $2 AND semester = $3 AND academic_year = $4
+         ORDER BY division ASC LIMIT 1`,
+        [faculty.id, subjectId, semester, academicYear]
+      );
+      division = defaultDivRes.rows[0]?.division || 'TE Comp 1';
+    }
     let examTypeId = req.query.exam_type_id ? parseInt(req.query.exam_type_id, 10) : null;
 
     // Strict Server-side RBAC: Faculty MUST be assigned to this subject, division, semester, academic_year
     const assignmentCheck = await pool.query(
-      `SELECT id FROM faculty_subject_map
-       WHERE faculty_id = $1 AND subject_id = $2 AND division = $3 AND semester = $4 AND academic_year = $5`,
+      `SELECT id, division FROM faculty_subject_map
+       WHERE faculty_id = $1 AND subject_id = $2 AND semester = $4 AND academic_year = $5
+         AND (division = $3 OR division = REPLACE($3, ' Comp ', ' ') OR REPLACE(division, ' Comp ', ' ') = $3)`,
       [faculty.id, subjectId, division, semester, academicYear]
     );
     if (assignmentCheck.rows.length === 0) {
@@ -506,7 +529,7 @@ router.get('/marks/:subjectId', async (req, res) => {
          AND tw.subject_id = $1 
          AND tw.semester = $3 
          AND tw.academic_year = $4
-       WHERE s.division = $5 AND s.current_semester = $3
+       WHERE (s.division = $5 OR s.division = REPLACE($5, ' Comp ', ' ') OR REPLACE(s.division, ' Comp ', ' ') = $5) AND s.current_semester = $3
        ORDER BY CAST(NULLIF(regexp_replace(s.roll_no, '[^0-9]', '', 'g'), '') AS INTEGER), s.roll_no`,
       [subjectId, examTypeId, semester, academicYear, division]
     );
@@ -551,7 +574,8 @@ router.post('/marks', async (req, res) => {
     // Strict Server-side RBAC
     const assignmentCheck = await client.query(
       `SELECT id FROM faculty_subject_map 
-       WHERE faculty_id = $1 AND subject_id = $2 AND division = $3 AND semester = $4 AND academic_year = $5`,
+       WHERE faculty_id = $1 AND subject_id = $2 AND semester = $4 AND academic_year = $5
+         AND (division = $3 OR division = REPLACE($3, ' Comp ', ' ') OR REPLACE(division, ' Comp ', ' ') = $3)`,
       [faculty.id, subjectId, division, semester, academicYear]
     );
     if (assignmentCheck.rows.length === 0) {
@@ -653,7 +677,8 @@ router.post('/term-work', async (req, res) => {
     // RBAC Check
     const assignmentCheck = await client.query(
       `SELECT id FROM faculty_subject_map 
-       WHERE faculty_id = $1 AND subject_id = $2 AND division = $3 AND semester = $4 AND academic_year = $5`,
+       WHERE faculty_id = $1 AND subject_id = $2 AND semester = $4 AND academic_year = $5
+         AND (division = $3 OR division = REPLACE($3, ' Comp ', ' ') OR REPLACE(division, ' Comp ', ' ') = $3)`,
       [faculty.id, subjectId, division, semester, academicYear]
     );
     if (assignmentCheck.rows.length === 0) {
@@ -740,7 +765,8 @@ router.post('/marks/submit', async (req, res) => {
     // RBAC check
     const assignmentCheck = await pool.query(
       `SELECT id FROM faculty_subject_map 
-       WHERE faculty_id = $1 AND subject_id = $2 AND division = $3 AND semester = $4 AND academic_year = $5`,
+       WHERE faculty_id = $1 AND subject_id = $2 AND semester = $4 AND academic_year = $5
+         AND (division = $3 OR division = REPLACE($3, ' Comp ', ' ') OR REPLACE(division, ' Comp ', ' ') = $3)`,
       [faculty.id, subjectId, division, semester, academicYear]
     );
     if (assignmentCheck.rows.length === 0) {
@@ -842,41 +868,259 @@ router.post('/marks/csv-upload', upload.single('file'), async (req, res) => {
 });
 
 
-// ─── GET /api/faculty/reports/:subjectId ──────────────────────────────────────
-router.get('/reports/:subjectId', async (req, res) => {
+// ─── GET /api/faculty/reports/class-performance ──────────────────────────────
+router.get('/reports/class-performance', verifyToken, async (req, res) => {
   try {
-    const faculty = await getFaculty(req.user.id);
-    if (!faculty) return res.status(404).json({ error: 'Faculty record not found' });
+    const academicYear = req.query.academic_year || req.query.academicYear || '2026-27';
+    let division = req.query.division || 'TE Comp 1';
+    let subjectQuery = req.query.subject_id || req.query.subjectId || req.query.subject_code || req.query.subjectCode;
 
-    const { subjectId } = req.params;
-    const { semester, academicYear } = req.query;
-
-    const assignmentCheck = await pool.query(
-      `SELECT id FROM faculty_subject_map WHERE faculty_id = $1 AND subject_id = $2`,
-      [faculty.id, subjectId]
+    // Fetch all available subjects
+    const allSubjectsRes = await pool.query(
+      `SELECT id, name, code, semester, credits, subject_type, has_practical 
+       FROM subjects 
+       ORDER BY semester, code`
     );
-    if (assignmentCheck.rows.length === 0) {
-      return res.status(403).json({ error: 'You are not assigned to this subject' });
+    const availableSubjects = allSubjectsRes.rows;
+
+    // Determine target subject
+    let subject = null;
+    if (subjectQuery) {
+      if (!isNaN(Number(subjectQuery))) {
+        subject = availableSubjects.find(s => s.id === Number(subjectQuery));
+      }
+      if (!subject) {
+        subject = availableSubjects.find(s => s.code.toLowerCase() === String(subjectQuery).toLowerCase());
+      }
+    }
+    if (!subject) {
+      subject = availableSubjects.find(s => s.code === 'CE504') || availableSubjects[0];
     }
 
-    const result = await pool.query(
-      `SELECT m.grade, m.grade_points, m.total, m.is_backlog,
-              s.max_cie, s.max_practical, s.max_end_sem, s.has_practical, s.credits
-       FROM marks m
-       JOIN subjects s ON s.id = m.subject_id
-       WHERE m.subject_id = $1 AND m.semester = $2 AND m.academic_year = $3`,
-      [subjectId, semester, academicYear || '2024-25']
+    // Fetch all distinct classes
+    const divRes = await pool.query(
+      `SELECT DISTINCT division FROM students WHERE division IS NOT NULL AND division != '' ORDER BY division`
+    );
+    const availableClasses = divRes.rows.map(r => r.division);
+
+    // Fetch students enrolled in this division
+    const studentsRes = await pool.query(
+      `SELECT s.id AS student_id, s.roll_no, s.enrollment_no, u.name
+       FROM students s
+       JOIN users u ON u.id = s.user_id
+       WHERE (s.division = $1 OR s.division = REPLACE($1, ' Comp ', ' ') OR REPLACE(s.division, ' Comp ', ' ') = $1)
+       ORDER BY CAST(NULLIF(regexp_replace(s.roll_no, '[^0-9]', '', 'g'), '') AS INTEGER), s.roll_no`,
+      [division]
     );
 
-    const rows = result.rows;
-    const total = rows.length;
-    const passed = rows.filter(r => r.grade !== 'F').length;
+    const students = studentsRes.rows;
+    const studentIds = students.map(s => s.student_id);
+
+    let marksRows = [];
+    if (studentIds.length > 0 && subject) {
+      const marksRes = await pool.query(
+        `SELECT sem.student_id, sem.marks_obtained, sem.is_absent, sem.status,
+                et.code AS exam_code, et.name AS exam_name, et.category AS exam_category,
+                et.has_result_impact, et.default_max_marks
+         FROM student_exam_marks sem
+         JOIN exam_types et ON et.id = sem.exam_type_id
+         WHERE sem.subject_id = $1 
+           AND sem.academic_year = $2
+           AND sem.student_id = ANY($3::int[])`,
+        [subject.id, academicYear, studentIds]
+      );
+      marksRows = marksRes.rows;
+    }
+
+    // Group marks by student
+    const marksByStudent = {};
+    for (const m of marksRows) {
+      if (!marksByStudent[m.student_id]) marksByStudent[m.student_id] = [];
+      marksByStudent[m.student_id].push(m);
+    }
+
+    const studentRoster = [];
+    for (const st of students) {
+      const studentMarks = marksByStudent[st.student_id] || [];
+      const rollup = computeSubjectRollup(subject, studentMarks);
+
+      const insemRow = studentMarks.find(m => m.exam_code === 'insem');
+      const endsemRow = studentMarks.find(m => m.exam_code === 'endsem' || m.exam_code === 'final_practical');
+      const twRow = studentMarks.find(m => m.exam_code === 'term_work');
+
+      const isAbsent = Boolean(insemRow?.is_absent || endsemRow?.is_absent);
+
+      studentRoster.push({
+        student_id: st.student_id,
+        roll_no: st.roll_no,
+        enrollment_no: st.enrollment_no,
+        name: st.name,
+        insem_marks: insemRow ? Number(insemRow.marks_obtained) : null,
+        endsem_marks: endsemRow ? Number(endsemRow.marks_obtained) : null,
+        tw_marks: twRow ? Number(twRow.marks_obtained) : null,
+        total_marks: rollup.total !== null ? rollup.total : 0,
+        max_marks: rollup.maxMarks,
+        percentage: rollup.percentage !== null ? rollup.percentage : 0,
+        grade: rollup.grade || 'F',
+        grade_points: rollup.gradePoints || 0,
+        is_cleared: rollup.grade !== 'F' && !isAbsent && (rollup.total || 0) > 0,
+        is_absent: isAbsent,
+      });
+    }
+
+    const sortedStudents = [...studentRoster].sort((a, b) => b.total_marks - a.total_marks);
+    const toppers = sortedStudents
+      .filter(s => s.total_marks > 0 && !s.is_absent)
+      .slice(0, 5)
+      .map((s, idx) => ({
+        rank: idx + 1,
+        name: s.name,
+        roll: s.roll_no,
+        prn: s.enrollment_no,
+        marks: `${s.total_marks}/${s.max_marks}`,
+        total: s.total_marks,
+        percentage: `${s.percentage}%`,
+        grade: s.grade,
+      }));
+
+    const totalStudents = students.length;
+    const appeared = studentRoster.filter(s => s.total_marks > 0 || s.insem_marks !== null).length;
+    const passed = studentRoster.filter(s => s.is_cleared).length;
+    const failed = appeared > 0 ? (appeared - passed) : 0;
+    const passPercentage = appeared > 0 ? `${(Math.round((passed / appeared) * 1000) / 10).toFixed(1)}%` : '0.0%';
+
+    const validScores = studentRoster.filter(s => s.total_marks > 0).map(s => s.total_marks);
+    const highestScore = validScores.length > 0 ? Math.max(...validScores) : 0;
+    const avgScore = validScores.length > 0 
+      ? Math.round((validScores.reduce((a, b) => a + b, 0) / validScores.length) * 10) / 10 
+      : 0;
+
+    let median = 0;
+    if (validScores.length > 0) {
+      const sortedScores = [...validScores].sort((a, b) => a - b);
+      const mid = Math.floor(sortedScores.length / 2);
+      median = sortedScores.length % 2 !== 0 ? sortedScores[mid] : (sortedScores[mid - 1] + sortedScores[mid]) / 2;
+      median = Math.round(median * 10) / 10;
+    }
+
+    const gradeCounts = {
+      'O (Outstanding)': 0,
+      'A+ (Excellent)': 0,
+      'A (Very Good)': 0,
+      'B+ (Good)': 0,
+      'B (Above Avg)': 0,
+      'C (Average)': 0,
+      'P (Pass)': 0,
+      'F (Backlog)': 0,
+    };
+
+    for (const s of studentRoster) {
+      if (s.is_absent || s.grade === 'F' || s.total_marks === 0) {
+        gradeCounts['F (Backlog)']++;
+      } else if (s.grade === 'O') {
+        gradeCounts['O (Outstanding)']++;
+      } else if (s.grade === 'A+') {
+        gradeCounts['A+ (Excellent)']++;
+      } else if (s.grade === 'A') {
+        gradeCounts['A (Very Good)']++;
+      } else if (s.grade === 'B+') {
+        gradeCounts['B+ (Good)']++;
+      } else if (s.grade === 'B') {
+        gradeCounts['B (Above Avg)']++;
+      } else if (s.grade === 'C') {
+        gradeCounts['C (Average)']++;
+      } else if (s.grade === 'P') {
+        gradeCounts['P (Pass)']++;
+      } else {
+        gradeCounts['F (Backlog)']++;
+      }
+    }
+
+    const denom = appeared || totalStudents || 1;
+    const gradeDist = Object.entries(gradeCounts).map(([grade, count]) => ({
+      grade,
+      count,
+      pct: `${(Math.round((count / denom) * 1000) / 10).toFixed(1)}%`,
+    }));
+
+    res.json({
+      subject,
+      division,
+      academicYear,
+      availableSubjects,
+      availableClasses,
+      metrics: {
+        totalStudents,
+        appeared,
+        passed,
+        failed,
+        passPercentage,
+        highestScore,
+        avgScore,
+        median,
+        backlogs: failed,
+      },
+      gradeDist,
+      toppers,
+      roster: studentRoster,
+    });
+  } catch (err) {
+    console.error('[Faculty] Class performance reports error:', err);
+    res.status(500).json({ error: 'Failed to generate class performance report: ' + err.message });
+  }
+});
+
+// ─── GET /api/faculty/reports/:subjectId ──────────────────────────────────────
+router.get('/reports/:subjectId', verifyToken, async (req, res) => {
+  try {
+    const { subjectId } = req.params;
+    const { semester = 5, academicYear = '2026-27', division = 'TE Comp 1' } = req.query;
+
+    const subRes = await pool.query('SELECT * FROM subjects WHERE id = $1', [subjectId]);
+    if (subRes.rows.length === 0) return res.status(404).json({ error: 'Subject not found' });
+    const subject = subRes.rows[0];
+
+    const studentsRes = await pool.query(
+      `SELECT s.id AS student_id, s.roll_no, u.name
+       FROM students s JOIN users u ON u.id = s.user_id
+       WHERE (s.division = $1 OR s.division = REPLACE($1, ' Comp ', ' ') OR REPLACE(s.division, ' Comp ', ' ') = $1)
+       ORDER BY s.roll_no`,
+      [division]
+    );
+
+    const studentIds = studentsRes.rows.map(r => r.student_id);
+    let marksRows = [];
+    if (studentIds.length > 0) {
+      const mRes = await pool.query(
+        `SELECT sem.student_id, sem.marks_obtained, sem.is_absent, et.code AS exam_code
+         FROM student_exam_marks sem JOIN exam_types et ON sem.exam_type_id = et.id
+         WHERE sem.subject_id = $1 AND sem.academic_year = $2 AND sem.student_id = ANY($3::int[])`,
+        [subjectId, academicYear, studentIds]
+      );
+      marksRows = mRes.rows;
+    }
+
+    const marksByStudent = {};
+    for (const m of marksRows) {
+      if (!marksByStudent[m.student_id]) marksByStudent[m.student_id] = [];
+      marksByStudent[m.student_id].push(m);
+    }
+
+    const rollups = studentsRes.rows.map(st => {
+      const studentMarks = marksByStudent[st.student_id] || [];
+      return computeSubjectRollup(subject, studentMarks);
+    });
+
+    const total = rollups.length;
+    const passed = rollups.filter(r => r.grade && r.grade !== 'F').length;
     const failed = total - passed;
-    const avgTotal = total > 0 ? rows.reduce((s, r) => s + parseFloat(r.total || 0), 0) / total : 0;
+    const validScores = rollups.filter(r => r.total !== null).map(r => r.total);
+    const avgTotal = validScores.length > 0 ? validScores.reduce((a, b) => a + b, 0) / validScores.length : 0;
 
     const gradeDistribution = {};
-    for (const r of rows) {
-      gradeDistribution[r.grade] = (gradeDistribution[r.grade] || 0) + 1;
+    for (const r of rollups) {
+      const g = r.grade || 'F';
+      gradeDistribution[g] = (gradeDistribution[g] || 0) + 1;
     }
 
     res.json({
@@ -1558,17 +1802,173 @@ router.put('/remedial/plans/:planId/students', async (req, res) => {
   }
 });
 
-// DELETE /api/faculty/remedial/plans/:planId
-router.delete('/remedial/plans/:planId', async (req, res) => {
+// ─── CLASS TEACHER: UNIVERSITY NAMELIST SEGREGATION ────────────────────────────
+const DEFAULT_UNIVERSITY_MASTER_PDF = 'C:\\Users\\Rajea\\Downloads\\NAMELIST\\NAMELIST\\TE COMP.pdf';
+
+// GET /api/faculty/namelist/classes - Get classes assigned to this class teacher (or all for HOD)
+router.get('/namelist/classes', verifyToken, async (req, res) => {
   try {
-    const { planId } = req.params;
-    const deleteRes = await pool.query(`DELETE FROM remedial_action_plans WHERE id = $1 RETURNING id`, [planId]);
-    if (deleteRes.rows.length === 0) return res.status(404).json({ error: 'Plan not found' });
-    res.json({ message: 'Remedial Action Plan deleted successfully' });
+    if (req.user.role === 'hod') {
+      const distinctDivs = await pool.query(
+        `SELECT DISTINCT division as class_name FROM students WHERE division LIKE 'TE Comp%' ORDER BY division`
+      );
+      const classes = distinctDivs.rows.length > 0
+        ? distinctDivs.rows.map(r => r.class_name)
+        : ['TE Comp 1', 'TE Comp 2', 'TE Comp 3'];
+      return res.json({
+        classes,
+        assignedClass: classes[0],
+        isHod: true,
+        masterAvailable: fs.existsSync(DEFAULT_UNIVERSITY_MASTER_PDF),
+        defaultMasterPath: DEFAULT_UNIVERSITY_MASTER_PDF
+      });
+    }
+
+    if (req.user.role !== 'faculty') {
+      return res.status(403).json({ error: 'Access restricted to Class Teachers only.' });
+    }
+
+    const ctRes = await pool.query(
+      `SELECT DISTINCT class_name FROM class_teachers WHERE faculty_id = $1`,
+      [req.user.faculty_id]
+    );
+
+    if (ctRes.rows.length === 0) {
+      return res.status(403).json({ error: 'You are not assigned as a Class Teacher.' });
+    }
+
+    const assignedClass = ctRes.rows[0].class_name;
+    res.json({
+      classes: [assignedClass],
+      assignedClass,
+      isHod: false,
+      masterAvailable: fs.existsSync(DEFAULT_UNIVERSITY_MASTER_PDF),
+      defaultMasterPath: DEFAULT_UNIVERSITY_MASTER_PDF
+    });
   } catch (err) {
-    console.error('[Faculty] Delete remedial plan error:', err.message);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('[Faculty] Get namelist classes error:', err.message);
+    res.status(500).json({ error: 'Failed to retrieve class assignments.' });
   }
 });
+
+// POST /api/faculty/namelist/segregate - Segregate university namelist by teacher PDF or DB class
+router.post(
+  '/namelist/segregate',
+  verifyToken,
+  namelistDiskUpload.fields([
+    { name: 'class_pdf', maxCount: 1 },
+    { name: 'master_pdf', maxCount: 1 }
+  ]),
+  async (req, res) => {
+    const uploadedFiles = [];
+    if (req.files?.class_pdf?.[0]) uploadedFiles.push(req.files.class_pdf[0].path);
+    if (req.files?.master_pdf?.[0]) uploadedFiles.push(req.files.master_pdf[0].path);
+
+    const cleanup = () => {
+      uploadedFiles.forEach(fPath => {
+        try {
+          if (fs.existsSync(fPath)) fs.unlinkSync(fPath);
+        } catch (_) {}
+      });
+    };
+
+    try {
+      // Permission check: must be HOD or Class Teacher
+      if (req.user.role !== 'hod' && req.user.role !== 'faculty') {
+        cleanup();
+        return res.status(403).json({ error: 'Only Class Teachers and HOD can access this feature.' });
+      }
+
+      let targetClass;
+      if (req.user.role === 'faculty') {
+        const ctCheck = await pool.query(
+          `SELECT class_name FROM class_teachers WHERE faculty_id = $1`,
+          [req.user.faculty_id]
+        );
+        if (ctCheck.rows.length === 0) {
+          cleanup();
+          return res.status(403).json({ error: 'Access restricted to assigned Class Teachers.' });
+        }
+        // Enforce strictly: the class teacher gets ONLY her assigned class
+        targetClass = ctCheck.rows[0].class_name;
+      } else {
+        // HOD can segregate for requested class or defaults to TE Comp 1
+        targetClass = req.body.class_name || 'TE Comp 1';
+      }
+
+      const classPdfPath = req.files?.class_pdf?.[0]?.path;
+      const masterPdfPath = req.files?.master_pdf?.[0]?.path || DEFAULT_UNIVERSITY_MASTER_PDF;
+
+      if (!fs.existsSync(masterPdfPath)) {
+        cleanup();
+        return res.status(400).json({
+          error: `University Master Namelist PDF not found at: ${masterPdfPath}. Please upload it.`
+        });
+      }
+
+      // Fetch enrolled students of this specific target class from PostgreSQL
+      const studentRes = await pool.query(
+        `SELECT u.name, s.roll_no, s.enrollment_no, s.division
+         FROM students s
+         JOIN users u ON s.user_id = u.id
+         WHERE s.division = $1
+         ORDER BY s.roll_no ASC`,
+        [targetClass]
+      );
+
+      let payload = {
+        master_path: masterPdfPath,
+        target_class: targetClass,
+        class_students: studentRes.rows,
+        class_pdf_path: classPdfPath || null
+      };
+
+      const scriptPath = path.join(__dirname, '..', 'scripts', 'segregate_namelist.py');
+      const py = spawn('python', [scriptPath, '--json-input']);
+
+      let stdoutData = '';
+      let stderrData = '';
+
+      py.stdout.on('data', chunk => {
+        stdoutData += chunk.toString();
+      });
+
+      py.stderr.on('data', chunk => {
+        stderrData += chunk.toString();
+      });
+
+      py.on('close', code => {
+        cleanup();
+        if (code !== 0) {
+          console.error('[Faculty] segregate_namelist.py stderr:', stderrData);
+          return res.status(500).json({
+            error: 'Failed to process PDF namelist.',
+            details: stderrData || stdoutData
+          });
+        }
+
+        try {
+          const result = JSON.parse(stdoutData);
+          if (!result.success) {
+            return res.status(400).json({ error: result.error || 'Segregation error' });
+          }
+          result.source_master = path.basename(masterPdfPath);
+          result.class_name = targetClass;
+          return res.json(result);
+        } catch (parseErr) {
+          console.error('[Faculty] JSON parse error:', parseErr.message, stdoutData);
+          return res.status(500).json({ error: 'Invalid response from namelist processor.' });
+        }
+      });
+
+      py.stdin.write(JSON.stringify(payload));
+      py.stdin.end();
+    } catch (err) {
+      cleanup();
+      console.error('[Faculty] Namelist segregate error:', err.message);
+      res.status(500).json({ error: 'Server error during namelist segregation: ' + err.message });
+    }
+  }
+);
 
 module.exports = router;

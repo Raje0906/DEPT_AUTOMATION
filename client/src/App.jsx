@@ -24,7 +24,6 @@ import FacultyDashboard  from './pages/faculty/FacultyDashboard'
 import ResultGeneration  from './pages/faculty/ResultGeneration'
 import MarksEntry        from './pages/faculty/MarksEntry'
 import ClassReports      from './pages/faculty/ClassReports'
-import LabMaintenance   from './pages/faculty/LabMaintenance'
 import ProjectEval       from './pages/faculty/ProjectEval'
 import BEProjectGovernance from './pages/faculty/BEProjectGovernance'
 import Magazines         from './pages/faculty/Magazines'
@@ -36,6 +35,7 @@ import ManageClubs       from './pages/faculty/ManageClubs'
 import RemedialClasses   from './pages/faculty/RemedialClasses'
 import InsemMarksheetAnalysis from './pages/faculty/InsemMarksheetAnalysis'
 import EndTermInternalMarksheet from './pages/faculty/EndTermInternalMarksheet'
+import ClassTeacherNamelist from './pages/faculty/ClassTeacherNamelist'
 
 // HOD
 import HODDashboard   from './pages/hod/HODDashboard'
@@ -119,7 +119,6 @@ export default function App() {
           <Route path="/faculty/marksheet/insem-cce" element={<FacultyLayout><InsemMarksheetAnalysis /></FacultyLayout>} />
           <Route path="/faculty/marksheet/end-term-internal" element={<FacultyLayout><EndTermInternalMarksheet /></FacultyLayout>} />
           <Route path="/faculty/reports" element={<FacultyLayout><ClassReports /></FacultyLayout>} />
-          <Route path="/faculty/lab-maintenance" element={<FacultyLayout><LabMaintenance /></FacultyLayout>} />
           <Route path="/faculty/project-eval" element={<FacultyLayout><ProjectEval /></FacultyLayout>} />
           <Route path="/faculty/project-coordination" element={<AnyLayout><BEProjectGovernance /></AnyLayout>} />
           <Route path="/hod/project-governance" element={<HODLayout><BEProjectGovernance /></HODLayout>} />
@@ -130,6 +129,7 @@ export default function App() {
           <Route path="/faculty/magazines/view/:id" element={<OnlineMagazineViewer />} />
           <Route path="/faculty/clubs" element={<FacultyLayout><ManageClubs /></FacultyLayout>} />
           <Route path="/hod/clubs" element={<Navigate to="/hod" replace />} />
+          <Route path="/faculty/class-namelist" element={<AnyLayout><ClassTeacherNamelist /></AnyLayout>} />
 
           {/* Seminar Tool — Coordinator */}
           <Route path="/faculty/seminar"                    element={<CoordinatorLayout><SeminarSessions /></CoordinatorLayout>} />

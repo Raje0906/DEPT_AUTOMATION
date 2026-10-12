@@ -19,7 +19,7 @@ router.get('/dashboard', async (req, res) => {
              s.subject_type, s.has_practical, fsm.division, fsm.academic_year,
              u.name AS faculty_name, f.employee_id,
              COUNT(sem.id) AS marks_entered,
-             (SELECT COUNT(*) FROM students st WHERE st.division = fsm.division AND st.current_semester = fsm.semester) AS enrolled,
+             (SELECT COUNT(*) FROM students st WHERE (st.division = fsm.division OR st.division = REPLACE(fsm.division, ' Comp ', ' ') OR REPLACE(st.division, ' Comp ', ' ') = fsm.division) AND st.current_semester = fsm.semester) AS enrolled,
              CASE
                WHEN COUNT(sem.id) = 0 THEN 'not_started'
                WHEN COUNT(sem.id) FILTER (WHERE sem.status = 'published') > 0 THEN 'published'
@@ -59,7 +59,12 @@ router.get('/dashboard', async (req, res) => {
     // Department KPIs
     const [facultyCountRes, studentCountRes, ctCountRes, yearsRes] = await Promise.all([
       pool.query(`SELECT COUNT(*) FROM faculty f WHERE f.department = $1 OR f.department ILIKE '%Computer%'`, [deptFilter]),
-      pool.query(`SELECT COUNT(*) FROM students s WHERE s.department = $1 OR s.department ILIKE '%Computer%'`, [deptFilter]),
+      pool.query(
+        `SELECT COUNT(*) FROM students s 
+         JOIN users u ON u.id = s.user_id 
+         WHERE u.department = $1 OR u.department ILIKE '%Computer%'`,
+        [deptFilter]
+      ),
       pool.query(`SELECT COUNT(*) FROM class_teachers WHERE academic_year = $1`, [selectedYear]),
       pool.query(`SELECT DISTINCT academic_year FROM faculty_subject_map ORDER BY academic_year DESC`),
     ]);
@@ -790,6 +795,32 @@ router.delete('/teachers/unassign-faculty/:facultyId', async (req, res) => {
     });
   } catch (err) {
     console.error('[HOD] Unassign faculty error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── DELETE /api/hod/teachers/unassign-class/:className ───────────────────────
+router.delete('/teachers/unassign-class/:className', async (req, res) => {
+  try {
+    const { className } = req.params;
+    const result = await pool.query(`DELETE FROM faculty_subject_map WHERE division = $1`, [className]);
+
+    auditRecord({
+      tableName: 'faculty_subject_map',
+      recordId: null,
+      changedBy: req.user.id,
+      oldValue: null,
+      newValue: null,
+      action: 'DELETE',
+      reason: `HOD cleared all subject allocations for class ${className} (${result.rowCount} mappings removed)`,
+    });
+
+    res.json({
+      message: `Successfully deleted all ${result.rowCount} assigned subjects for ${className}.`,
+      count: result.rowCount,
+    });
+  } catch (err) {
+    console.error('[HOD] Unassign class error:', err.message);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

@@ -140,6 +140,18 @@ router.post('/login', async (req, res) => {
       roleData.assigned_clubs_count = parseInt(roleData.assigned_clubs_count, 10) || 0;
       roleData.assigned_clubs = roleData.assigned_clubs || [];
       roleData.is_assigned_club_faculty = roleData.assigned_clubs_count > 0;
+
+      if (roleData.faculty_id) {
+        const ct = await pool.query(
+          `SELECT DISTINCT class_name, academic_year FROM class_teachers WHERE faculty_id = $1`,
+          [roleData.faculty_id]
+        );
+        roleData.class_teacher_classes = ct.rows.map(r => r.class_name);
+        roleData.is_class_teacher = (user.role === 'hod') || (ct.rows.length > 0);
+      } else if (user.role === 'hod') {
+        roleData.is_class_teacher = true;
+        roleData.class_teacher_classes = ['TE Comp 1', 'TE Comp 2', 'TE Comp 3'];
+      }
     }
 
     const payload = {
@@ -294,6 +306,18 @@ router.get('/me', verifyToken, async (req, res) => {
       extra.assigned_clubs_count = parseInt(extra.assigned_clubs_count, 10) || 0;
       extra.assigned_clubs = extra.assigned_clubs || [];
       extra.is_assigned_club_faculty = extra.assigned_clubs_count > 0;
+
+      if (extra.faculty_id) {
+        const ct = await pool.query(
+          `SELECT DISTINCT class_name, academic_year FROM class_teachers WHERE faculty_id = $1`,
+          [extra.faculty_id]
+        );
+        extra.class_teacher_classes = ct.rows.map(r => r.class_name);
+        extra.is_class_teacher = (user.role === 'hod') || (ct.rows.length > 0);
+      } else if (user.role === 'hod') {
+        extra.is_class_teacher = true;
+        extra.class_teacher_classes = ['TE Comp 1', 'TE Comp 2', 'TE Comp 3'];
+      }
     } else if (user.role === 'student') {
       const s = await pool.query(
         `SELECT id AS student_id, roll_no, enrollment_no, batch, current_semester, division FROM students WHERE user_id = $1`,

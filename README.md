@@ -84,7 +84,7 @@ DEPT AUTOMATION/
         ├── pages/
         │   ├── auth/      Login, ForgotPassword
         │   ├── student/   Dashboard, Results, CGPA
-        │   ├── faculty/   Dashboard, MarksEntry, Reports, Maintenance
+        │   ├── faculty/   Dashboard, MarksEntry, Reports
         │   └── hod/       Dashboard, Approval, Publish, Analytics, AuditLog
         ├── components/    Layout, ResultTable, ProtectedRoute
         ├── contexts/      AuthContext (JWT + role)
