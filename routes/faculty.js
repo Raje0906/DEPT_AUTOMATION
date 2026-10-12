@@ -893,4 +893,682 @@ router.get('/reports/:subjectId', async (req, res) => {
   }
 });
 
+// ─── GET /api/faculty/analysis/exam ──────────────────────────────────────────
+// Detailed statistical analysis & learner categorization for any exam
+router.get('/analysis/exam', async (req, res) => {
+  try {
+    const { subjectId, semester = 5, academicYear = '2026-27', division = 'TE 1', examCode = 'insem' } = req.query;
+    const semNum = parseInt(semester, 10);
+
+    const subjectRes = await pool.query(`SELECT * FROM subjects WHERE id = $1`, [subjectId]);
+    if (subjectRes.rows.length === 0) return res.status(404).json({ error: 'Subject not found' });
+    const subject = subjectRes.rows[0];
+
+    const examTypeRes = await pool.query(`SELECT * FROM exam_types WHERE code = $1`, [examCode]);
+    const examType = examTypeRes.rows[0] || { code: examCode, name: 'Examination', default_max_marks: 30 };
+    const maxMarks = Number(examType.default_max_marks) || 30;
+    const benchmark = req.query.benchmark ? Number(req.query.benchmark) : Math.round(maxMarks * 0.40 * 10) / 10; // 40% passing benchmark (12/30 for insem)
+
+    // Fetch students with their exam marks
+    const studentsRes = await pool.query(
+      `SELECT s.id AS student_id, s.roll_no, s.enrollment_no, u.name,
+              sem.marks_obtained, sem.is_absent, sem.status AS mark_status, sem.last_modified_at
+       FROM students s
+       JOIN users u ON u.id = s.user_id
+       LEFT JOIN student_exam_marks sem ON sem.student_id = s.id 
+         AND sem.subject_id = $1 
+         AND sem.exam_type_id = $2
+         AND sem.semester = $3 
+         AND sem.academic_year = $4
+       WHERE s.division = $5 AND s.current_semester = $3
+       ORDER BY CAST(NULLIF(regexp_replace(s.roll_no, '[^0-9]', '', 'g'), '') AS INTEGER), s.roll_no`,
+      [subjectId, examType.id, semNum, academicYear, division]
+    );
+
+    const students = studentsRes.rows.map(s => {
+      const mark = s.marks_obtained !== null && s.marks_obtained !== undefined ? Number(s.marks_obtained) : null;
+      const isAbsent = Boolean(s.is_absent);
+      let category = 'Unrecorded';
+      let requiresRemedial = false;
+
+      if (isAbsent) {
+        category = 'Absent / Remedial Required';
+        requiresRemedial = true;
+      } else if (mark !== null) {
+        if (mark < benchmark) {
+          category = 'Slow Learner (< 40%)';
+          requiresRemedial = true;
+        } else if (mark >= maxMarks * 0.70) {
+          category = 'Advanced Learner (>= 70%)';
+        } else {
+          category = 'Average Learner (40% - 69%)';
+        }
+      }
+
+      return {
+        ...s,
+        numericMark: mark,
+        isAbsent,
+        category,
+        requiresRemedial,
+        percentage: mark !== null ? Math.round((mark / maxMarks) * 100 * 10) / 10 : 0
+      };
+    });
+
+    const totalStudents = students.length;
+    const appearedList = students.filter(s => s.numericMark !== null && !s.isAbsent);
+    const absentList   = students.filter(s => s.isAbsent);
+    const appeared     = appearedList.length;
+    const passedList   = appearedList.filter(s => s.numericMark >= benchmark);
+    const slowLearners = students.filter(s => s.requiresRemedial);
+    const avgScore     = appeared > 0 ? appearedList.reduce((acc, s) => acc + s.numericMark, 0) / appeared : 0;
+    const highestScore = appeared > 0 ? Math.max(...appearedList.map(s => s.numericMark)) : 0;
+    const lowestScore  = appeared > 0 ? Math.min(...appearedList.map(s => s.numericMark)) : 0;
+    const passPercentage = appeared > 0 ? Math.round((passedList.length / appeared) * 100 * 10) / 10 : 0;
+
+    // Categorization
+    const advancedLearners = students.filter(s => s.category.startsWith('Advanced'));
+    const averageLearners  = students.filter(s => s.category.startsWith('Average'));
+
+    // Check if a Remedial Action Plan exists
+    const planRes = await pool.query(
+      `SELECT id, title, status, benchmark_marks, created_at, updated_at
+       FROM remedial_action_plans 
+       WHERE subject_id = $1 AND semester = $2 AND academic_year = $3 AND division = $4 AND exam_code = $5
+       ORDER BY id DESC LIMIT 1`,
+      [subjectId, semNum, academicYear, division, examCode]
+    );
+
+    res.json({
+      subject,
+      examType,
+      maxMarks,
+      benchmark,
+      metrics: {
+        totalStudents,
+        appeared,
+        absent: absentList.length,
+        passed: passedList.length,
+        failed: slowLearners.length,
+        passPercentage,
+        averageMarks: Math.round(avgScore * 10) / 10,
+        highestMarks: highestScore,
+        lowestMarks: lowestScore
+      },
+      categories: {
+        slowLearners,
+        averageLearners,
+        advancedLearners,
+      },
+      students,
+      activeRemedialPlan: planRes.rows[0] || null
+    });
+  } catch (err) {
+    console.error('[Faculty] Exam analysis error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── GET /api/faculty/marksheet/insem-cce ──────────────────────────────────────
+// Complete In-Sem / CCE (Mid Term) Marksheet with Analysis & Remedial Action
+router.get('/marksheet/insem-cce', async (req, res) => {
+  try {
+    const { subjectId, semester = 5, academicYear = '2026-27', division = 'TE 1' } = req.query;
+    const semNum = parseInt(semester, 10);
+
+    const subjectRes = await pool.query(`SELECT * FROM subjects WHERE id = $1`, [subjectId]);
+    if (subjectRes.rows.length === 0) return res.status(404).json({ error: 'Subject not found' });
+    const subject = subjectRes.rows[0];
+
+    const insemExamRes = await pool.query(`SELECT * FROM exam_types WHERE code = 'insem'`);
+    const insemExam = insemExamRes.rows[0] || { id: 3, code: 'insem', name: 'Univ In-Sem / CCE (Mid Term)', default_max_marks: 30 };
+    const maxMarks = Number(insemExam.default_max_marks) || 30;
+    const passingMark = 12; // 40%
+
+    // Teacher details
+    const facultyMapRes = await pool.query(
+      `SELECT f.id, f.employee_id, f.designation, u.name AS faculty_name, u.email
+       FROM faculty_subject_map fsm
+       JOIN faculty f ON f.id = fsm.faculty_id
+       JOIN users u ON u.id = f.user_id
+       WHERE fsm.subject_id = $1 AND fsm.semester = $2 AND fsm.academic_year = $3 AND fsm.division = $4
+       LIMIT 1`,
+      [subjectId, semNum, academicYear, division]
+    );
+    const faculty = facultyMapRes.rows[0] || null;
+
+    // Student marks
+    const studentsRes = await pool.query(
+      `SELECT s.id AS student_id, s.roll_no, s.enrollment_no, u.name AS student_name,
+              sem.marks_obtained, sem.is_absent, sem.status AS mark_status
+       FROM students s
+       JOIN users u ON u.id = s.user_id
+       LEFT JOIN student_exam_marks sem ON sem.student_id = s.id 
+         AND sem.subject_id = $1 
+         AND sem.exam_type_id = $2
+         AND sem.semester = $3 
+         AND sem.academic_year = $4
+       WHERE s.division = $5 AND s.current_semester = $3
+       ORDER BY CAST(NULLIF(regexp_replace(s.roll_no, '[^0-9]', '', 'g'), '') AS INTEGER), s.roll_no`,
+      [subjectId, insemExam.id, semNum, academicYear, division]
+    );
+
+    const students = studentsRes.rows.map(s => {
+      const mark = s.marks_obtained !== null && s.marks_obtained !== undefined ? Number(s.marks_obtained) : null;
+      const isAbsent = Boolean(s.is_absent);
+      let result = 'UNRECORDED';
+      let performanceBand = 'Pending';
+
+      if (isAbsent) {
+        result = 'ABSENT';
+        performanceBand = 'Remedial Required';
+      } else if (mark !== null) {
+        if (mark >= passingMark) {
+          result = 'PASS';
+          if (mark >= 24) performanceBand = 'Distinction (80%+)';
+          else if (mark >= 20) performanceBand = 'First Class (66%+)';
+          else if (mark >= 16) performanceBand = 'Higher Second (53%+)';
+          else performanceBand = 'Pass Class';
+        } else {
+          result = 'FAIL / REMEDIAL';
+          performanceBand = 'Remedial Required (< 12)';
+        }
+      }
+
+      return {
+        ...s,
+        numericMark: mark,
+        isAbsent,
+        result,
+        performanceBand
+      };
+    });
+
+    const appearedStudents = students.filter(s => s.numericMark !== null && !s.isAbsent);
+    const passedCount = appearedStudents.filter(s => s.result === 'PASS').length;
+    const failedCount = students.filter(s => s.result === 'FAIL / REMEDIAL' || s.isAbsent).length;
+    const absentCount = students.filter(s => s.isAbsent).length;
+    const totalCount = students.length;
+    const highestMark = appearedStudents.length > 0 ? Math.max(...appearedStudents.map(s => s.numericMark)) : 0;
+    const averageMark = appearedStudents.length > 0 
+      ? Math.round((appearedStudents.reduce((a, b) => a + b.numericMark, 0) / appearedStudents.length) * 10) / 10 
+      : 0;
+    const passPercentage = appearedStudents.length > 0 ? Math.round((passedCount / appearedStudents.length) * 100 * 10) / 10 : 0;
+
+    // Fetch associated Remedial Action Plan
+    const remedialPlanRes = await pool.query(
+      `SELECT rap.*, 
+              (SELECT COUNT(*) FROM remedial_student_records rsr WHERE rsr.plan_id = rap.id) AS assigned_students,
+              (SELECT COUNT(*) FROM remedial_student_records rsr WHERE rsr.plan_id = rap.id AND rsr.attendance_status = 'ATTENDED') AS attended_students,
+              (SELECT COUNT(*) FROM remedial_student_records rsr WHERE rsr.plan_id = rap.id AND (rsr.retest_marks >= rap.benchmark_marks OR rsr.outcome_status = 'REMEDIAL_CLEARED')) AS cleared_students
+       FROM remedial_action_plans rap
+       WHERE rap.subject_id = $1 AND rap.semester = $2 AND rap.academic_year = $3 AND rap.division = $4 AND rap.exam_code = 'insem'
+       ORDER BY rap.id DESC LIMIT 1`,
+      [subjectId, semNum, academicYear, division]
+    );
+
+    res.json({
+      subject,
+      examType: insemExam,
+      faculty,
+      maxMarks,
+      passingMark,
+      summary: {
+        totalStudents: totalCount,
+        appeared: appearedStudents.length,
+        absent: absentCount,
+        passed: passedCount,
+        failed: failedCount,
+        passPercentage,
+        highestMark,
+        averageMark
+      },
+      students,
+      remedialPlan: remedialPlanRes.rows[0] || null
+    });
+  } catch (err) {
+    console.error('[Faculty] Insem Marksheet error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── GET /api/faculty/marksheet/end-term-internal ─────────────────────────────
+// Complete End-Term Internal Marksheet (Term Work 25M + Practical 25M + Mock 70M)
+router.get('/marksheet/end-term-internal', async (req, res) => {
+  try {
+    const { subjectId, semester = 5, academicYear = '2026-27', division = 'TE 1' } = req.query;
+    const semNum = parseInt(semester, 10);
+
+    const subjectRes = await pool.query(`SELECT * FROM subjects WHERE id = $1`, [subjectId]);
+    if (subjectRes.rows.length === 0) return res.status(404).json({ error: 'Subject not found' });
+    const subject = subjectRes.rows[0];
+
+    // Exam type IDs
+    const examTypesRes = await pool.query(`SELECT id, code, name, default_max_marks FROM exam_types`);
+    const examMap = {};
+    examTypesRes.rows.forEach(e => { examMap[e.code] = e; });
+
+    // Faculty
+    const facultyMapRes = await pool.query(
+      `SELECT f.id, f.employee_id, f.designation, u.name AS faculty_name, u.email
+       FROM faculty_subject_map fsm
+       JOIN faculty f ON f.id = fsm.faculty_id
+       JOIN users u ON u.id = f.user_id
+       WHERE fsm.subject_id = $1 AND fsm.semester = $2 AND fsm.academic_year = $3 AND fsm.division = $4
+       LIMIT 1`,
+      [subjectId, semNum, academicYear, division]
+    );
+    const faculty = facultyMapRes.rows[0] || null;
+
+    // Fetch students
+    const studentsRes = await pool.query(
+      `SELECT s.id AS student_id, s.roll_no, s.enrollment_no, u.name AS student_name
+       FROM students s
+       JOIN users u ON u.id = s.user_id
+       WHERE s.division = $1 AND s.current_semester = $2
+       ORDER BY CAST(NULLIF(regexp_replace(s.roll_no, '[^0-9]', '', 'g'), '') AS INTEGER), s.roll_no`,
+      [division, semNum]
+    );
+
+    // Fetch Term Work
+    const twRes = await pool.query(
+      `SELECT student_id, attendance_marks, assignment_1_marks, assignment_2_marks, timely_submission_marks, total_tw_marks
+       FROM student_term_work_details
+       WHERE subject_id = $1 AND semester = $2 AND academic_year = $3`,
+      [subjectId, semNum, academicYear]
+    );
+    const twMap = {};
+    twRes.rows.forEach(r => { twMap[r.student_id] = r; });
+
+    // Fetch Practical / Oral marks
+    const prExamId = examMap['final_practical']?.id || examMap['mock_practical']?.id;
+    let prMap = {};
+    if (prExamId) {
+      const prRes = await pool.query(
+        `SELECT student_id, marks_obtained, is_absent
+         FROM student_exam_marks
+         WHERE subject_id = $1 AND exam_type_id = $2 AND semester = $3 AND academic_year = $4`,
+        [subjectId, prExamId, semNum, academicYear]
+      );
+      prRes.rows.forEach(r => { prMap[r.student_id] = r; });
+    }
+
+    // Fetch Mock Theory / Internal CIE
+    const mockExamId = examMap['mock_theory']?.id || examMap['endsem']?.id;
+    let mockMap = {};
+    if (mockExamId) {
+      const mockRes = await pool.query(
+        `SELECT student_id, marks_obtained, is_absent
+         FROM student_exam_marks
+         WHERE subject_id = $1 AND exam_type_id = $2 AND semester = $3 AND academic_year = $4`,
+        [subjectId, mockExamId, semNum, academicYear]
+      );
+      mockRes.rows.forEach(r => { mockMap[r.student_id] = r; });
+    }
+
+    const students = studentsRes.rows.map(s => {
+      const tw = twMap[s.student_id] || { attendance_marks: 0, assignment_1_marks: 0, assignment_2_marks: 0, timely_submission_marks: 0, total_tw_marks: 0 };
+      const pr = prMap[s.student_id] || { marks_obtained: 0, is_absent: false };
+      const mock = mockMap[s.student_id] || { marks_obtained: 0, is_absent: false };
+
+      const twTotal = Number(tw.total_tw_marks) || 0;
+      const prMark  = pr.is_absent ? 0 : (Number(pr.marks_obtained) || 0);
+      const mockMark = mock.is_absent ? 0 : (Number(mock.marks_obtained) || 0);
+
+      const totalInternal = subject.has_practical 
+        ? Math.round((twTotal + prMark) * 10) / 10 
+        : twTotal;
+      const maxInternal = subject.has_practical ? 50 : 25;
+
+      const twPassed = twTotal >= 10; // 40% of 25
+      const prPassed = !subject.has_practical || prMark >= 10;
+      const internalStatus = (twPassed && prPassed) ? 'QUALIFIED' : 'DETENTION_RISK';
+
+      return {
+        ...s,
+        termWork: tw,
+        twTotal,
+        practicalMarks: prMark,
+        isPracticalAbsent: Boolean(pr.is_absent),
+        mockTheoryMarks: mockMark,
+        isMockAbsent: Boolean(mock.is_absent),
+        totalInternal,
+        maxInternal,
+        internalStatus
+      };
+    });
+
+    const totalStudents = students.length;
+    const qualifiedCount = students.filter(s => s.internalStatus === 'QUALIFIED').length;
+    const atRiskCount = totalStudents - qualifiedCount;
+    const avgInternal = totalStudents > 0 
+      ? Math.round((students.reduce((a, b) => a + b.totalInternal, 0) / totalStudents) * 10) / 10 
+      : 0;
+
+    res.json({
+      subject,
+      faculty,
+      summary: {
+        totalStudents,
+        qualified: qualifiedCount,
+        atRisk: atRiskCount,
+        qualificationPercentage: totalStudents > 0 ? Math.round((qualifiedCount / totalStudents) * 100 * 10) / 10 : 0,
+        averageInternal: avgInternal
+      },
+      students
+    });
+  } catch (err) {
+    console.error('[Faculty] End Term Internal Marksheet error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── REMEDIAL ACTION PLAN CRUD ENDPOINTS ──────────────────────────────────────
+
+// GET /api/faculty/remedial/plans
+router.get('/remedial/plans', async (req, res) => {
+  try {
+    const { subjectId, semester = 5, academicYear = '2026-27', division = 'TE 1' } = req.query;
+    const semNum = parseInt(semester, 10);
+
+    const query = `
+      SELECT rap.*, s.name AS subject_name, s.code AS subject_code, u.name AS faculty_name,
+             (SELECT COUNT(*) FROM remedial_student_records rsr WHERE rsr.plan_id = rap.id) AS total_students,
+             (SELECT COUNT(*) FROM remedial_student_records rsr WHERE rsr.plan_id = rap.id AND rsr.attendance_status = 'ATTENDED') AS attended_count,
+             (SELECT COUNT(*) FROM remedial_student_records rsr WHERE rsr.plan_id = rap.id AND (rsr.retest_marks >= rap.benchmark_marks OR rsr.outcome_status = 'REMEDIAL_CLEARED')) AS cleared_count
+      FROM remedial_action_plans rap
+      JOIN subjects s ON s.id = rap.subject_id
+      LEFT JOIN faculty f ON f.id = rap.faculty_id
+      LEFT JOIN users u ON u.id = f.user_id
+      WHERE ($1::int IS NULL OR rap.subject_id = $1)
+        AND ($2::int IS NULL OR rap.semester = $2)
+        AND ($3::varchar IS NULL OR rap.academic_year = $3)
+        AND ($4::varchar IS NULL OR rap.division = $4)
+      ORDER BY rap.created_at DESC
+    `;
+
+    const result = await pool.query(query, [
+      subjectId ? parseInt(subjectId, 10) : null,
+      semNum || null,
+      academicYear || null,
+      division || null
+    ]);
+
+    res.json({ plans: result.rows });
+  } catch (err) {
+    console.error('[Faculty] Get remedial plans error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/faculty/remedial/plans
+// Create a new remedial plan and auto-populate slow learners
+router.post('/remedial/plans', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const {
+      subjectId,
+      semester = 5,
+      academicYear = '2026-27',
+      division = 'TE 1',
+      examCode = 'insem',
+      title,
+      benchmarkMarks = 12,
+      weakTopics = '',
+      actionPlan = '',
+      scheduleDetails = [],
+      studentIds = null
+    } = req.body;
+
+    if (!subjectId || !title) {
+      return res.status(400).json({ error: 'Subject ID and Action Plan Title are required' });
+    }
+
+    let facultyId = null;
+    if (req.user.role === 'faculty') {
+      const fac = await getFaculty(req.user.id);
+      facultyId = fac?.id || null;
+    }
+
+    await client.query('BEGIN');
+
+    const insertPlanRes = await client.query(
+      `INSERT INTO remedial_action_plans 
+        (subject_id, faculty_id, semester, academic_year, division, exam_code, title, benchmark_marks, weak_topics, action_plan, schedule_details, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'ACTIVE')
+       RETURNING *`,
+      [
+        subjectId,
+        facultyId,
+        parseInt(semester, 10),
+        academicYear,
+        division,
+        examCode,
+        title,
+        Number(benchmarkMarks) || 12,
+        weakTopics,
+        actionPlan,
+        JSON.stringify(scheduleDetails || [])
+      ]
+    );
+
+    const plan = insertPlanRes.rows[0];
+
+    // Determine students needing remedial intervention
+    let candidates = [];
+    if (Array.isArray(studentIds) && studentIds.length > 0) {
+      const stdRes = await client.query(
+        `SELECT s.id AS student_id, sem.marks_obtained
+         FROM students s
+         LEFT JOIN student_exam_marks sem ON sem.student_id = s.id 
+           AND sem.subject_id = $1 AND sem.semester = $2 AND sem.academic_year = $3
+         WHERE s.id = ANY($4::int[])`,
+        [subjectId, parseInt(semester, 10), academicYear, studentIds]
+      );
+      candidates = stdRes.rows;
+    } else {
+      // Auto-identify students below benchmark or absent in this exam
+      const examTypeRes = await client.query(`SELECT id FROM exam_types WHERE code = $1`, [examCode]);
+      const examTypeId = examTypeRes.rows[0]?.id;
+
+      const autoRes = await client.query(
+        `SELECT s.id AS student_id, sem.marks_obtained, sem.is_absent
+         FROM students s
+         LEFT JOIN student_exam_marks sem ON sem.student_id = s.id 
+           AND sem.subject_id = $1 
+           AND sem.exam_type_id = $2
+           AND sem.semester = $3 
+           AND sem.academic_year = $4
+         WHERE s.division = $5 AND s.current_semester = $3
+           AND (sem.marks_obtained IS NULL OR sem.marks_obtained < $6 OR sem.is_absent = TRUE)`,
+        [subjectId, examTypeId, parseInt(semester, 10), academicYear, division, Number(benchmarkMarks) || 12]
+      );
+      candidates = autoRes.rows;
+    }
+
+    for (const cand of candidates) {
+      await client.query(
+        `INSERT INTO remedial_student_records 
+          (plan_id, student_id, initial_marks, attendance_status, outcome_status)
+         VALUES ($1, $2, $3, 'SCHEDULED', 'PENDING')
+         ON CONFLICT (plan_id, student_id) DO UPDATE SET initial_marks = EXCLUDED.initial_marks`,
+        [plan.id, cand.student_id, cand.marks_obtained !== null ? Number(cand.marks_obtained) : 0]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    res.status(201).json({
+      message: `Remedial Action Plan created with ${candidates.length} enrolled students.`,
+      plan,
+      enrolledCount: candidates.length
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[Faculty] Create remedial plan error:', err.message);
+    res.status(500).json({ error: 'Failed to create remedial plan: ' + err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// GET /api/faculty/remedial/plans/:planId
+router.get('/remedial/plans/:planId', async (req, res) => {
+  try {
+    const { planId } = req.params;
+
+    const planRes = await pool.query(
+      `SELECT rap.*, s.name AS subject_name, s.code AS subject_code, s.semester AS subject_sem,
+              u.name AS faculty_name, f.employee_id
+       FROM remedial_action_plans rap
+       JOIN subjects s ON s.id = rap.subject_id
+       LEFT JOIN faculty f ON f.id = rap.faculty_id
+       LEFT JOIN users u ON u.id = f.user_id
+       WHERE rap.id = $1`,
+      [planId]
+    );
+
+    if (planRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Remedial Action Plan not found' });
+    }
+
+    const plan = planRes.rows[0];
+
+    const recordsRes = await pool.query(
+      `SELECT rsr.*, s.roll_no, s.enrollment_no, u.name AS student_name, u.email AS student_email
+       FROM remedial_student_records rsr
+       JOIN students s ON s.id = rsr.student_id
+       JOIN users u ON u.id = s.user_id
+       WHERE rsr.plan_id = $1
+       ORDER BY CAST(NULLIF(regexp_replace(s.roll_no, '[^0-9]', '', 'g'), '') AS INTEGER), s.roll_no`,
+      [planId]
+    );
+
+    const records = recordsRes.rows;
+    const totalAssigned = records.length;
+    const attendedCount = records.filter(r => r.attendance_status === 'ATTENDED').length;
+    const clearedCount  = records.filter(r => 
+      (r.retest_marks !== null && Number(r.retest_marks) >= Number(plan.benchmark_marks)) ||
+      r.outcome_status === 'REMEDIAL_CLEARED' || r.outcome_status === 'IMPROVED'
+    ).length;
+
+    res.json({
+      plan,
+      records,
+      statistics: {
+        totalAssigned,
+        attendedCount,
+        clearedCount,
+        clearanceRate: totalAssigned > 0 ? Math.round((clearedCount / totalAssigned) * 100 * 10) / 10 : 0
+      }
+    });
+  } catch (err) {
+    console.error('[Faculty] Get remedial plan details error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /api/faculty/remedial/plans/:planId
+router.put('/remedial/plans/:planId', async (req, res) => {
+  try {
+    const { planId } = req.params;
+    const { title, weakTopics, actionPlan, scheduleDetails, status, benchmarkMarks } = req.body;
+
+    const updateRes = await pool.query(
+      `UPDATE remedial_action_plans
+       SET title = COALESCE($1, title),
+           weak_topics = COALESCE($2, weak_topics),
+           action_plan = COALESCE($3, action_plan),
+           schedule_details = COALESCE($4::jsonb, schedule_details),
+           status = COALESCE($5, status),
+           benchmark_marks = COALESCE($6, benchmark_marks),
+           updated_at = NOW()
+       WHERE id = $7
+       RETURNING *`,
+      [
+        title,
+        weakTopics,
+        actionPlan,
+        scheduleDetails ? JSON.stringify(scheduleDetails) : null,
+        status,
+        benchmarkMarks ? Number(benchmarkMarks) : null,
+        planId
+      ]
+    );
+
+    if (updateRes.rows.length === 0) return res.status(404).json({ error: 'Plan not found' });
+    res.json({ message: 'Remedial Action Plan updated successfully', plan: updateRes.rows[0] });
+  } catch (err) {
+    console.error('[Faculty] Update remedial plan error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /api/faculty/remedial/plans/:planId/students
+// Bulk update student remedial progress (attendance, re-test marks, outcome)
+router.put('/remedial/plans/:planId/students', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { planId } = req.params;
+    const { studentUpdates } = req.body; // [{ studentId, attendanceStatus, retestMarks, improvementRemarks, outcomeStatus }]
+
+    if (!Array.isArray(studentUpdates)) {
+      return res.status(400).json({ error: 'studentUpdates must be an array' });
+    }
+
+    const planRes = await client.query(`SELECT benchmark_marks FROM remedial_action_plans WHERE id = $1`, [planId]);
+    if (planRes.rows.length === 0) return res.status(404).json({ error: 'Plan not found' });
+    const benchmark = Number(planRes.rows[0].benchmark_marks);
+
+    await client.query('BEGIN');
+
+    for (const update of studentUpdates) {
+      const { studentId, attendanceStatus = 'ATTENDED', retestMarks, improvementRemarks, outcomeStatus } = update;
+      const numRetest = retestMarks !== '' && retestMarks !== null && retestMarks !== undefined ? Number(retestMarks) : null;
+      
+      let computedOutcome = outcomeStatus;
+      if (!computedOutcome) {
+        if (numRetest !== null) {
+          computedOutcome = numRetest >= benchmark ? 'REMEDIAL_CLEARED' : 'NEEDS_FURTHER_ATTENTION';
+        } else {
+          computedOutcome = attendanceStatus === 'ABSENT' ? 'NEEDS_FURTHER_ATTENTION' : 'PENDING';
+        }
+      }
+
+      await client.query(
+        `UPDATE remedial_student_records
+         SET attendance_status = $1,
+             retest_marks = $2,
+             improvement_remarks = $3,
+             outcome_status = $4,
+             updated_at = NOW()
+         WHERE plan_id = $5 AND student_id = $6`,
+        [attendanceStatus, numRetest, improvementRemarks || '', computedOutcome, planId, studentId]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json({ message: `Successfully updated ${studentUpdates.length} student remedial records.` });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[Faculty] Bulk update remedial students error:', err.message);
+    res.status(500).json({ error: 'Failed to update records: ' + err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// DELETE /api/faculty/remedial/plans/:planId
+router.delete('/remedial/plans/:planId', async (req, res) => {
+  try {
+    const { planId } = req.params;
+    const deleteRes = await pool.query(`DELETE FROM remedial_action_plans WHERE id = $1 RETURNING id`, [planId]);
+    if (deleteRes.rows.length === 0) return res.status(404).json({ error: 'Plan not found' });
+    res.json({ message: 'Remedial Action Plan deleted successfully' });
+  } catch (err) {
+    console.error('[Faculty] Delete remedial plan error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 module.exports = router;

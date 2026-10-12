@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { NavLink, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useMagazine } from '../contexts/MagazineContext';
 
@@ -127,6 +127,9 @@ const roleNav = {
       items: [
         { to: '/faculty',             label: 'Dashboard',             icon: Icons.dashboard },
         { to: '/faculty/subjects',    label: 'Result Generation',     icon: Icons.resultGen },
+        { to: '/faculty/remedial',    label: 'Remedial Classes & Action Plan', icon: Icons.results },
+        { to: '/faculty/marksheet/insem-cce', label: 'In-Sem (CCE) Marksheet', icon: Icons.resultGen },
+        { to: '/faculty/marksheet/end-term-internal', label: 'End-Term Internal Marksheet', icon: Icons.results },
         { to: '/faculty/reports',     label: 'Class Reports',         icon: Icons.reports },
       ],
     },
@@ -152,6 +155,9 @@ const roleNav = {
         { to: '/hod/projects',        label: 'BE Project Governance',   icon: Icons.project },
         { to: '/hod/seminar-approvals', label: 'TE Seminar Governance', icon: Icons.seminar },
         { to: '/hod/approval',        label: 'Mark Approvals',          icon: Icons.approval },
+        { to: '/hod/remedial',        label: 'Remedial Action Plans',   icon: Icons.results },
+        { to: '/hod/marksheet/insem-cce', label: 'In-Sem (CCE) Marksheets', icon: Icons.resultGen },
+        { to: '/hod/marksheet/end-term-internal', label: 'End-Term Internal Marksheets', icon: Icons.results },
         { to: '/hod/magazine-approvals', label: 'Magazine Approvals',   icon: Icons.magazines },
         { to: '/hod/publish',         label: 'Publish Results',         icon: Icons.publish },
         { to: '/hod/rollover',        label: 'Term Rollover',           icon: Icons.rollover },
@@ -163,12 +169,59 @@ const roleNav = {
 
 const roleLabels = { student: 'Student', faculty: 'Faculty', hod: 'Head of Department' };
 
+const PAGE_TITLES = {
+  '/student': 'Student Dashboard',
+  '/student/results': 'Examination Results & Marks',
+  '/student/cgpa': 'CGPA Overview & Academic Standing',
+  '/student/project': 'BE Final Year Project',
+  '/student/seminar': 'TE Seminar Registration',
+  '/student/clubs': 'Student Technical Clubs',
+  '/student/magazine': 'Department Magazine',
+  '/faculty': 'Faculty Portal & Overview',
+  '/faculty/subjects': 'Result Generation & Evaluation',
+  '/faculty/remedial': 'Remedial Classes & Action Plan',
+  '/faculty/marksheet/insem-cce': 'In-Sem (CCE) Marksheet & Analysis',
+  '/faculty/marksheet/end-term-internal': 'End-Term Internal Evaluation Ledger',
+  '/faculty/reports': 'Class Academic Reports',
+  '/faculty/clubs': 'Manage Student Clubs',
+  '/faculty/lab-maintenance': 'Laboratory Maintenance Log',
+  '/faculty/project-eval': 'BE Project Evaluation',
+  '/faculty/project-coordination': 'BE Project Governance',
+  '/faculty/magazines': 'Department Magazine Publication',
+  '/faculty/seminar': 'TE Seminar Coordinator Portal',
+  '/faculty/seminar/my-groups': 'Assigned Seminar Groups',
+  '/hod': 'HOD Executive Dashboard',
+  '/hod/teachers': 'Faculty Teaching Allocation',
+  '/hod/coordinators': 'Academic Coordinator Assignment',
+  '/hod/projects': 'BE Project Groups & Review',
+  '/hod/seminar-approvals': 'TE Seminar Approval Desk',
+  '/hod/approval': 'Mark Submission Approvals',
+  '/hod/remedial': 'Remedial Action Plans Review',
+  '/hod/marksheet/insem-cce': 'In-Semester Marksheets & Analysis',
+  '/hod/marksheet/end-term-internal': 'End-Term Internal Evaluation Ledgers',
+  '/hod/magazine-approvals': 'Department Magazine Approval',
+  '/hod/publish': 'Publish Academic Results',
+  '/hod/rollover': 'Academic Term Rollover',
+  '/hod/analytics': 'Department Academic Analytics',
+  '/hod/audit': 'System Audit Log & Trail',
+  '/alumni/feedback': 'Alumni Graduate Feedback',
+  '/alumni/distinguished': 'Distinguished Alumni Directory',
+};
+
 export default function Layout({ children }) {
   const { user, logout } = useAuth();
   const { magazines } = useMagazine();
   const navigate = useNavigate();
+  const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [alumniOpen, setAlumniOpen] = useState(false);
+
+  const homePath = user?.role === 'hod' ? '/hod' : user?.role === 'faculty' ? '/faculty' : '/student';
+
+  useEffect(() => {
+    const pageTitle = PAGE_TITLES[location.pathname] || (location.pathname.startsWith('/faculty/marks/') ? 'Marks Entry & Assessment' : 'Academic Portal');
+    document.title = `${pageTitle} — MES Wadia COE`;
+  }, [location.pathname]);
 
   const pendingMagazinesCount = magazines?.filter(m => m.status === 'Under Review').length || 0;
 
@@ -241,17 +294,23 @@ export default function Layout({ children }) {
         className={`
           fixed inset-y-0 left-0 z-30 w-64 bg-[#141C38] flex flex-col border-r border-[#222E54]
           transform transition-transform duration-200 print:hidden h-screen
-          ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
-          lg:sticky lg:top-0 lg:translate-x-0 lg:flex
+          ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}
       >
         {/* Institutional header */}
         <div className="px-4 py-4 border-b border-white/10 flex items-center justify-between gap-2 bg-[#0F162E] flex-shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded bg-white/10 border border-white/15 flex items-center justify-center flex-shrink-0">
-              <svg viewBox="0 0 24 24" className="w-5 h-5 text-blue-200" fill="none" stroke="currentColor" strokeWidth={1.75}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
-              </svg>
+          <Link
+            to={homePath}
+            onClick={() => setMobileOpen(false)}
+            className="flex items-center gap-3 min-w-0 group hover:opacity-95 transition-opacity"
+            title="Navigate to Portal Home"
+          >
+            <div className="w-10 h-10 rounded-sm bg-white p-1 shadow-xs border border-white/20 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform overflow-hidden">
+              <img
+                src="/images/college-logo.jpg"
+                alt="MES Wadia COE Logo"
+                className="w-full h-full object-contain"
+              />
             </div>
             <div className="min-w-0">
               <p className="text-white text-sm font-bold tracking-tight font-serif uppercase leading-snug">
@@ -261,11 +320,22 @@ export default function Layout({ children }) {
                 Computer Engineering
               </p>
             </div>
-          </div>
+          </Link>
+          {/* Mobile drawer close button */}
+          <button
+            type="button"
+            onClick={() => setMobileOpen(false)}
+            className="lg:hidden p-1.5 text-blue-300 hover:text-white rounded hover:bg-white/10 transition-colors"
+            aria-label="Close navigation"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
         {/* Navigation Sections */}
-        <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto min-h-0">
+        <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto min-h-0 sidebar-scroll">
           {navGroups.map((group, gIdx) => (
             <div key={gIdx} className="space-y-1">
               {group.group && (
@@ -342,7 +412,7 @@ export default function Layout({ children }) {
                   <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center">
                     {Icons.results}
                   </span>
-                  <span className="truncate">Alumni</span>
+                  <span className="truncate">Alumni Feedback</span>
                 </NavLink>
 
                 <NavLink
@@ -404,7 +474,7 @@ export default function Layout({ children }) {
       )}
 
       {/* Main content */}
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div className="lg:pl-64 flex-1 min-w-0 flex flex-col min-h-screen w-full">
         {/* Top bar (mobile) */}
         <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-rule">
           <div className="flex items-center gap-3">
@@ -417,7 +487,16 @@ export default function Layout({ children }) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            <span className="font-serif text-navy font-semibold text-sm">MES Wadia COE</span>
+            <Link to={homePath} className="flex items-center gap-2 hover:opacity-90">
+              <img
+                src="/images/college-logo.jpg"
+                alt="MES Wadia COE Logo"
+                className="w-7 h-7 object-contain rounded-xs bg-white p-0.5 border border-rule"
+              />
+              <span className="font-serif text-navy font-semibold text-sm">
+                MES Wadia COE
+              </span>
+            </Link>
           </div>
           <button
             onClick={handleLogout}
@@ -429,9 +508,53 @@ export default function Layout({ children }) {
           </button>
         </header>
 
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-x-hidden overflow-y-auto min-w-0 w-full">
           {children}
         </main>
+
+        {/* Institutional Footer */}
+        <footer className="mt-auto border-t border-rule bg-white py-5 px-4 sm:px-6 lg:px-8 text-xs text-slate-600 print:hidden">
+          <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <Link to={homePath} className="flex items-center gap-2.5 group" title="Return to Portal Home">
+                <img
+                  src="/images/college-logo.jpg"
+                  alt="MES Wadia COE Logo"
+                  className="h-9 w-auto object-contain flex-shrink-0 group-hover:scale-105 transition-transform"
+                />
+                <div className="text-left">
+                  <p className="font-bold text-navy group-hover:underline leading-tight text-xs sm:text-sm">MES Wadia College of Engineering</p>
+                  <p className="text-[11px] text-slate-500 font-medium">Dept. of Computer Engineering · SPPU Pune</p>
+                </div>
+              </Link>
+            </div>
+
+            {/* Quick Working Links */}
+            <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[11px] text-slate-600 font-medium">
+              <NavLink to="/alumni/feedback" className="hover:text-navy hover:underline transition-colors">
+                Alumni Feedback
+              </NavLink>
+              <NavLink to="/alumni/distinguished" className="hover:text-navy hover:underline transition-colors">
+                Distinguished Alumni
+              </NavLink>
+              <a href="https://www.unipune.ac.in" target="_blank" rel="noopener noreferrer" className="hover:text-navy hover:underline transition-colors">
+                SPPU Portal ↗
+              </a>
+              <span className="text-slate-300 hidden sm:inline">|</span>
+              <a href="tel:+912026163831" className="hover:text-navy font-semibold text-slate-700 transition-colors inline-flex items-center gap-1">
+                <span>Tel:</span> +91 (020) 2616-3831
+              </a>
+              <a href="mailto:info@coewadia.mespune.org" className="hover:text-navy font-semibold text-slate-700 transition-colors inline-flex items-center gap-1">
+                <span>Email:</span> info@coewadia.mespune.org
+              </a>
+            </div>
+
+            {/* Dynamic Copyright Year */}
+            <div className="text-[11px] text-slate-500 text-center md:text-right">
+              © {new Date().getFullYear()} Modern Education Society. All rights reserved.
+            </div>
+          </div>
+        </footer>
       </div>
     </div>
   );

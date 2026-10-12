@@ -10,45 +10,71 @@ router.use(verifyToken, requireRole('hod'));
 router.get('/dashboard', async (req, res) => {
   try {
     const selectedYear = req.query.academic_year || '2026-27';
-    const selectedSem = req.query.semester ? parseInt(req.query.semester, 10) : 5;
+    const selectedSem = req.query.semester ? parseInt(req.query.semester, 10) : null;
+    const deptFilter = req.user.dept || 'Computer Engineering';
 
     // Dept-wide subject submission status table
-    const result = await pool.query(
-      `SELECT fsm.id, s.id AS subject_id, s.name AS subject_name, s.code, s.semester, s.credits,
-              s.subject_type, s.has_practical, fsm.division, fsm.academic_year,
-              u.name AS faculty_name, f.employee_id,
-              COUNT(sem.id) AS marks_entered,
-              (SELECT COUNT(*) FROM students st WHERE st.division = fsm.division AND st.current_semester = fsm.semester) AS enrolled,
-              CASE
-                WHEN COUNT(sem.id) = 0 THEN 'not_started'
-                WHEN COUNT(sem.id) FILTER (WHERE sem.status = 'published') > 0 THEN 'published'
-                WHEN COUNT(sem.id) FILTER (WHERE sem.status = 'approved') = COUNT(sem.id) AND COUNT(sem.id) > 0 THEN 'approved'
-                WHEN COUNT(sem.id) FILTER (WHERE sem.status = 'submitted') > 0 THEN 'submitted'
-                ELSE 'draft'
-              END AS status
-       FROM faculty_subject_map fsm
-       JOIN subjects s ON s.id = fsm.subject_id
-       JOIN faculty f ON f.id = fsm.faculty_id
-       JOIN users u ON u.id = f.user_id
-       LEFT JOIN student_exam_marks sem ON sem.subject_id = s.id AND sem.semester = fsm.semester AND sem.academic_year = fsm.academic_year
-       WHERE f.department = $1 AND fsm.academic_year = $2
-       GROUP BY fsm.id, s.id, u.name, f.employee_id
-       ORDER BY s.semester, s.code, fsm.division`,
-      [req.user.dept, selectedYear]
-    );
+    let queryStr = `
+      SELECT fsm.id, s.id AS subject_id, s.name AS subject_name, s.code, s.semester, s.credits,
+             s.subject_type, s.has_practical, fsm.division, fsm.academic_year,
+             u.name AS faculty_name, f.employee_id,
+             COUNT(sem.id) AS marks_entered,
+             (SELECT COUNT(*) FROM students st WHERE st.division = fsm.division AND st.current_semester = fsm.semester) AS enrolled,
+             CASE
+               WHEN COUNT(sem.id) = 0 THEN 'not_started'
+               WHEN COUNT(sem.id) FILTER (WHERE sem.status = 'published') > 0 THEN 'published'
+               WHEN COUNT(sem.id) FILTER (WHERE sem.status = 'approved') = COUNT(sem.id) AND COUNT(sem.id) > 0 THEN 'approved'
+               WHEN COUNT(sem.id) FILTER (WHERE sem.status = 'submitted') > 0 THEN 'submitted'
+               ELSE 'draft'
+             END AS status
+      FROM faculty_subject_map fsm
+      JOIN subjects s ON s.id = fsm.subject_id
+      JOIN faculty f ON f.id = fsm.faculty_id
+      JOIN users u ON u.id = f.user_id
+      LEFT JOIN student_exam_marks sem ON sem.subject_id = s.id AND sem.semester = fsm.semester AND sem.academic_year = fsm.academic_year
+      WHERE (f.department = $1 OR f.department ILIKE '%Computer%') AND fsm.academic_year = $2
+    `;
+    const params = [deptFilter, selectedYear];
 
+    if (selectedSem) {
+      queryStr += ` AND s.semester = $3`;
+      params.push(selectedSem);
+    }
+
+    queryStr += `
+      GROUP BY fsm.id, s.id, u.name, f.employee_id
+      ORDER BY s.semester, s.code, fsm.division
+    `;
+
+    const result = await pool.query(queryStr, params);
 
     // Publication status per division for this semester & year
     const pubStatusRes = await pool.query(
       `SELECT division, status, published_at 
        FROM result_publish_status 
-       WHERE semester = $1 AND academic_year = $2 AND department = $3`,
-      [selectedSem, selectedYear, req.user.dept]
+       WHERE academic_year = $1 AND (department = $2 OR department ILIKE '%Computer%')`,
+      [selectedYear, deptFilter]
     );
+
+    // Department KPIs
+    const [facultyCountRes, studentCountRes, ctCountRes, yearsRes] = await Promise.all([
+      pool.query(`SELECT COUNT(*) FROM faculty f WHERE f.department = $1 OR f.department ILIKE '%Computer%'`, [deptFilter]),
+      pool.query(`SELECT COUNT(*) FROM students s WHERE s.department = $1 OR s.department ILIKE '%Computer%'`, [deptFilter]),
+      pool.query(`SELECT COUNT(*) FROM class_teachers WHERE academic_year = $1`, [selectedYear]),
+      pool.query(`SELECT DISTINCT academic_year FROM faculty_subject_map ORDER BY academic_year DESC`),
+    ]);
 
     res.json({
       subjects: result.rows,
       publishStatus: pubStatusRes.rows,
+      stats: {
+        totalFaculty: parseInt(facultyCountRes.rows[0]?.count || 0, 10),
+        totalStudents: parseInt(studentCountRes.rows[0]?.count || 0, 10),
+        totalClassTeachers: parseInt(ctCountRes.rows[0]?.count || 0, 10),
+        activeAssignments: result.rows.length,
+      },
+      academicYear: selectedYear,
+      availableYears: yearsRes.rows.map(r => r.academic_year).filter(Boolean),
     });
   } catch (err) {
     console.error('[HOD] Dashboard error:', err.message);
@@ -707,6 +733,63 @@ router.delete('/teachers/unassign/:mappingId', async (req, res) => {
     res.json({ message: 'Assignment removed successfully' });
   } catch (err) {
     console.error('[HOD] Unassign teacher error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── DELETE /api/hod/teachers/unassign-all ────────────────────────────────────
+router.delete('/teachers/unassign-all', async (req, res) => {
+  try {
+    const { academic_year } = req.query;
+    let result;
+    if (academic_year && academic_year !== 'all') {
+      result = await pool.query(`DELETE FROM faculty_subject_map WHERE academic_year = $1`, [academic_year]);
+    } else {
+      result = await pool.query(`DELETE FROM faculty_subject_map`);
+    }
+
+    auditRecord({
+      tableName: 'faculty_subject_map',
+      recordId: null,
+      changedBy: req.user.id,
+      oldValue: null,
+      newValue: null,
+      action: 'DELETE',
+      reason: `HOD cleared all faculty subject allocations (${result.rowCount} mappings removed)${academic_year ? ` for AY ${academic_year}` : ''}`,
+    });
+
+    res.json({
+      message: `Successfully deleted all ${result.rowCount} assigned subjects across all faculty members.`,
+      count: result.rowCount,
+    });
+  } catch (err) {
+    console.error('[HOD] Unassign all error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── DELETE /api/hod/teachers/unassign-faculty/:facultyId ─────────────────────
+router.delete('/teachers/unassign-faculty/:facultyId', async (req, res) => {
+  try {
+    const { facultyId } = req.params;
+    const result = await pool.query(`DELETE FROM faculty_subject_map WHERE faculty_id = $1`, [facultyId]);
+
+    auditRecord({
+      tableName: 'faculty_subject_map',
+      recordId: parseInt(facultyId, 10),
+      changedBy: req.user.id,
+      oldValue: null,
+      newValue: null,
+      action: 'DELETE',
+      reason: `HOD cleared all subject allocations for faculty #${facultyId} (${result.rowCount} mappings removed)`,
+    });
+
+    res.json({
+      message: `Successfully deleted all ${result.rowCount} assigned subjects for this faculty member.`,
+      count: result.rowCount,
+    });
+  } catch (err) {
+    console.error('[HOD] Unassign faculty error:', err.message);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

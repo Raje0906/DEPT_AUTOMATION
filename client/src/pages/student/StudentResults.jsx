@@ -147,6 +147,7 @@ export default function StudentResults() {
             <div className="border-b border-gray-200 no-print">
               <nav className="flex flex-wrap gap-2 sm:space-x-4">
                 <button
+                  type="button"
                   onClick={() => setActiveTab('sppu')}
                   className={`py-3 px-3 text-sm font-medium border-b-2 transition-colors ${
                     activeTab === 'sppu'
@@ -154,9 +155,10 @@ export default function StudentResults() {
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
-                  🏛️ SPPU Marksheet View
+                  SPPU Marksheet View
                 </button>
                 <button
+                  type="button"
                   onClick={() => setActiveTab('final')}
                   className={`py-3 px-3 text-sm font-medium border-b-2 transition-colors ${
                     activeTab === 'final'
@@ -164,9 +166,10 @@ export default function StudentResults() {
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
-                  🏆 Final Consolidated Breakdown
+                  Final Consolidated Breakdown
                 </button>
                 <button
+                  type="button"
                   onClick={() => setActiveTab('internal')}
                   className={`py-3 px-3 text-sm font-medium border-b-2 transition-colors ${
                     activeTab === 'internal'
@@ -174,9 +177,10 @@ export default function StudentResults() {
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
-                  📝 Internal (UT1, UT2, Mock)
+                  Mid Term / Internal (UT1, UT2, Mock)
                 </button>
                 <button
+                  type="button"
                   onClick={() => setActiveTab('term_work')}
                   className={`py-3 px-3 text-sm font-medium border-b-2 transition-colors ${
                     activeTab === 'term_work'
@@ -184,9 +188,10 @@ export default function StudentResults() {
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
-                  📊 Term Work Details
+                  Term Work Details
                 </button>
                 <button
+                  type="button"
                   onClick={() => setActiveTab('university')}
                   className={`py-3 px-3 text-sm font-medium border-b-2 transition-colors ${
                     activeTab === 'university'
@@ -194,7 +199,7 @@ export default function StudentResults() {
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
-                  🏛️ University (Insem/Endsem)
+                  Univ In-Sem (CCE) &amp; End-Sem
                 </button>
               </nav>
             </div>

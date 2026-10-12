@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../api/axios';
-import crestLogo from '../../assets/images/mes-wadia-crest.jpg';
+import crestLogo from '../../assets/images/college-logo.jpg';
 import campusPhoto from '../../assets/images/mes-wadia-campus.jpg';
 
 const BATCH_OPTIONS = [

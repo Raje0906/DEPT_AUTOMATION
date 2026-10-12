@@ -804,6 +804,7 @@ async function runMigrations() {
         UNIQUE(event_id, user_id)
       );
 
+<<<<<<< HEAD
       -- Dedicated Club Office Bearers table
       CREATE TABLE IF NOT EXISTS club_office_bearers (
         id            SERIAL PRIMARY KEY,
@@ -838,6 +839,61 @@ async function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_club_office_bearers_user ON club_office_bearers(user_id);
       CREATE INDEX IF NOT EXISTS idx_club_office_bearers_club ON club_office_bearers(club_id, academic_year);
       CREATE INDEX IF NOT EXISTS idx_club_events_club_status ON club_events(club_id, status);
+=======
+      -- Seed sample departmental clubs if none exist
+      INSERT INTO clubs (name, code, category, department, description, faculty_coordinator_id, student_lead_name, student_lead_email, student_lead_phone, student_lead_division, academic_year, status, founded_year)
+      VALUES 
+        ('Computer Society of India (CSI)', 'CSI', 'Professional Chapter', 'Computer Engineering', 'Promotes professional computing competence, national competitions, technical publications, and industry seminars.', 7, NULL, NULL, NULL, NULL, '2026-27', 'Active', '2018'),
+        ('ACM Student Chapter', 'ACM', 'Professional Chapter', 'Computer Engineering', 'Advancing computing as a science and profession through algorithm decathlons, ICPC bootcamps, and research talks.', 3, NULL, NULL, NULL, NULL, '2026-27', 'Active', '2019'),
+        ('Google Developer Groups (GDG / GDSC)', 'GDG_ON_CAMPUS', 'Technical & Coding', 'Computer Engineering', 'Developer ecosystem focusing on Cloud, Flutter, Android, Firebase, and Open Source contributions.', 4, NULL, NULL, NULL, NULL, '2026-27', 'Active', '2021'),
+        ('Competitive Programming & Algo Club', 'CP_ALGO', 'Technical & Coding', 'Computer Engineering', 'Peer-driven platform for LeetCode, Codeforces contests, data structures, and tech interview masterclasses.', 2, NULL, NULL, NULL, NULL, '2026-27', 'Active', '2022'),
+        ('Cyber Security & Forensics Guild', 'CYBER_SEC', 'Technical & Security', 'Computer Engineering', 'Hands-on network security, Capture The Flag (CTF) events, ethical hacking drills, and digital forensics.', 6, NULL, NULL, NULL, NULL, '2026-27', 'Active', '2023'),
+        ('AI & Machine Learning Innovators Club', 'AI_ML_CLUB', 'Innovation & AI', 'Computer Engineering', 'Research papers implementation, Kaggle hackathons, LLM development, and computer vision workshops.', 5, NULL, NULL, NULL, NULL, '2026-27', 'Active', '2023'),
+        ('Smart India Hackathon (SIH) Cell', 'SIH', 'National Hackathon & Innovation', 'Computer Engineering', 'Directs departmental team registrations, internal hackathons, problem statement shortlisting, mentoring, and university/national nodal submissions for Smart India Hackathon.', 8, NULL, NULL, NULL, NULL, '2026-27', 'Active', '2019')
+      ON CONFLICT (code) DO NOTHING;
+
+      -- ─── REMEDIAL ACTION PLANS & REMEDIAL CLASSES ────────────────────────────
+      CREATE TABLE IF NOT EXISTS remedial_action_plans (
+        id                      SERIAL PRIMARY KEY,
+        subject_id              INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+        faculty_id              INTEGER REFERENCES faculty(id) ON DELETE SET NULL,
+        semester                INTEGER NOT NULL,
+        academic_year           VARCHAR(20) NOT NULL,
+        division                VARCHAR(30) NOT NULL,
+        exam_code               VARCHAR(50) NOT NULL DEFAULT 'insem',
+        title                   VARCHAR(250) NOT NULL,
+        benchmark_marks         NUMERIC(5,2) DEFAULT 12.0,
+        weak_topics             TEXT,
+        action_plan             TEXT,
+        schedule_details        JSONB DEFAULT '[]'::jsonb,
+        status                  VARCHAR(20) DEFAULT 'ACTIVE' CHECK (status IN ('DRAFT', 'ACTIVE', 'COMPLETED')),
+        created_at              TIMESTAMPTZ DEFAULT NOW(),
+        updated_at              TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS remedial_student_records (
+        id                      SERIAL PRIMARY KEY,
+        plan_id                 INTEGER NOT NULL REFERENCES remedial_action_plans(id) ON DELETE CASCADE,
+        student_id              INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+        initial_marks           NUMERIC(5,2),
+        attendance_status       VARCHAR(20) DEFAULT 'SCHEDULED' CHECK (attendance_status IN ('SCHEDULED', 'ATTENDED', 'ABSENT')),
+        retest_marks            NUMERIC(5,2),
+        improvement_remarks     TEXT,
+        outcome_status          VARCHAR(30) DEFAULT 'PENDING' CHECK (outcome_status IN ('PENDING', 'IMPROVED', 'REMEDIAL_CLEARED', 'NEEDS_FURTHER_ATTENTION')),
+        updated_at              TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(plan_id, student_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_remedial_plan_lookup 
+        ON remedial_action_plans(subject_id, semester, academic_year, division);
+      CREATE INDEX IF NOT EXISTS idx_remedial_student_rec 
+        ON remedial_student_records(plan_id, student_id);
+
+      -- Update insem exam type name to clearly reflect CCE / Mid Term Test
+      UPDATE exam_types 
+      SET name = 'Univ In-Sem / CCE (Mid Term)'
+      WHERE code = 'insem';
+>>>>>>> font/system1
     `);
 
     await client.query('COMMIT');

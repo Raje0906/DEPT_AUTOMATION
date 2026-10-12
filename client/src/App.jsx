@@ -33,6 +33,9 @@ import MagazineEditor    from './pages/faculty/magazine/MagazineEditor'
 import MagazinePreview   from './pages/faculty/magazine/MagazinePreview'
 import OnlineMagazineViewer from './pages/faculty/magazine/OnlineMagazineViewer'
 import ManageClubs       from './pages/faculty/ManageClubs'
+import RemedialClasses   from './pages/faculty/RemedialClasses'
+import InsemMarksheetAnalysis from './pages/faculty/InsemMarksheetAnalysis'
+import EndTermInternalMarksheet from './pages/faculty/EndTermInternalMarksheet'
 
 // HOD
 import HODDashboard   from './pages/hod/HODDashboard'
@@ -60,6 +63,9 @@ import DistinguishedAlumni from './pages/alumni/DistinguishedAlumni'
 
 // HOD Seminar Approval
 import HODSeminarMgmt from './pages/hod/HODSeminarMgmt'
+
+// Error Pages
+import NotFound from './pages/NotFound'
 
 function StudentLayout({ children }) {
   return <ProtectedRoute role="student"><Layout>{children}</Layout></ProtectedRoute>
@@ -109,6 +115,9 @@ export default function App() {
           <Route path="/faculty" element={<FacultyLayout><FacultyDashboard /></FacultyLayout>} />
           <Route path="/faculty/subjects" element={<FacultyLayout><ResultGeneration /></FacultyLayout>} />
           <Route path="/faculty/marks/:subjectId" element={<FacultyLayout><MarksEntry /></FacultyLayout>} />
+          <Route path="/faculty/remedial" element={<FacultyLayout><RemedialClasses /></FacultyLayout>} />
+          <Route path="/faculty/marksheet/insem-cce" element={<FacultyLayout><InsemMarksheetAnalysis /></FacultyLayout>} />
+          <Route path="/faculty/marksheet/end-term-internal" element={<FacultyLayout><EndTermInternalMarksheet /></FacultyLayout>} />
           <Route path="/faculty/reports" element={<FacultyLayout><ClassReports /></FacultyLayout>} />
           <Route path="/faculty/lab-maintenance" element={<FacultyLayout><LabMaintenance /></FacultyLayout>} />
           <Route path="/faculty/project-eval" element={<FacultyLayout><ProjectEval /></FacultyLayout>} />
@@ -141,6 +150,9 @@ export default function App() {
           <Route path="/hod/teachers" element={<HODLayout><TeacherManagement /></HODLayout>} />
           <Route path="/hod/coordinators" element={<HODLayout><CoordinatorAssignment /></HODLayout>} />
           <Route path="/hod/approval" element={<HODLayout><MarksApproval /></HODLayout>} />
+          <Route path="/hod/remedial" element={<HODLayout><RemedialClasses /></HODLayout>} />
+          <Route path="/hod/marksheet/insem-cce" element={<HODLayout><InsemMarksheetAnalysis /></HODLayout>} />
+          <Route path="/hod/marksheet/end-term-internal" element={<HODLayout><EndTermInternalMarksheet /></HODLayout>} />
           <Route path="/hod/magazine-approvals" element={<HODLayout><HODMagazineApprovals /></HODLayout>} />
           <Route path="/hod/magazines/preview/:id" element={<HODLayout><MagazinePreview /></HODLayout>} />
           <Route path="/hod/publish" element={<HODLayout><PublishResults /></HODLayout>} />
@@ -152,8 +164,8 @@ export default function App() {
           <Route path="/alumni/feedback"      element={<AnyLayout><AlumniFeedback /></AnyLayout>} />
           <Route path="/alumni/distinguished" element={<AnyLayout><DistinguishedAlumni /></AnyLayout>} />
 
-          {/* Fallback */}
-          <Route path="*" element={<Navigate to="/login" replace />} />
+          {/* Fallback 404 */}
+          <Route path="*" element={<NotFound />} />
         </Routes>
         </MagazineProvider>
       </AuthProvider>

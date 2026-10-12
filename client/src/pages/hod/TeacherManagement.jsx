@@ -24,6 +24,9 @@ export default function TeacherManagement() {
   const [modalOpen, setModalOpen]     = useState(false);
   const [ctModalOpen, setCtModalOpen] = useState(false);
   const [submitting, setSubmitting]   = useState(false);
+  const [deleteAllModalOpen, setDeleteAllModalOpen] = useState(false);
+  const [deletingAll, setDeletingAll]               = useState(false);
+  const [deleteAllYearFilter, setDeleteAllYearFilter] = useState('all');
 
   const [form, setForm] = useState({
     facultyId: '',
@@ -289,6 +292,36 @@ export default function TeacherManagement() {
     }
   };
 
+  const handleUnassignAll = async () => {
+    setDeletingAll(true);
+    try {
+      const url = deleteAllYearFilter === 'all'
+        ? '/hod/teachers/unassign-all'
+        : `/hod/teachers/unassign-all?academic_year=${deleteAllYearFilter}`;
+      const res = await api.delete(url);
+      toast.success(res.data?.message || 'All assigned subjects deleted successfully');
+      setDeleteAllModalOpen(false);
+      await fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to delete assigned subjects');
+    } finally {
+      setDeletingAll(false);
+    }
+  };
+
+  const handleUnassignFaculty = async (facultyId, facultyName) => {
+    if (!window.confirm(`Are you sure you want to delete ALL assigned subjects for ${facultyName}?`)) {
+      return;
+    }
+    try {
+      const res = await api.delete(`/hod/teachers/unassign-faculty/${facultyId}`);
+      toast.success(res.data?.message || `Removed all assigned subjects for ${facultyName}`);
+      await fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to delete assigned subjects for this faculty');
+    }
+  };
+
   // Derive unique departments
   const departments = ['all', ...Array.from(new Set(teachers.map((t) => t.department).filter(Boolean))).sort()];
 
@@ -310,8 +343,8 @@ export default function TeacherManagement() {
   if (loading) {
     return (
       <div className="p-8 lg:p-10 w-full max-w-7xl mx-auto flex flex-col items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-700 mb-3"></div>
-        <p className="text-sm font-medium text-slate-600">Connecting to Supabase faculty database...</p>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-navy mb-3"></div>
+        <p className="text-xs font-medium text-slate-600">Retrieving department faculty register…</p>
       </div>
     );
   }
@@ -319,17 +352,17 @@ export default function TeacherManagement() {
   if (error) {
     return (
       <div className="p-8 lg:p-10 w-full max-w-7xl mx-auto">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
-          <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-3 text-xl font-bold">
+        <div className="bg-red-50 border border-red-200 rounded p-6 text-center">
+          <div className="w-10 h-10 rounded bg-red-100 text-red-700 flex items-center justify-center mx-auto mb-3 text-base font-bold font-mono">
             !
           </div>
-          <h3 className="text-base font-bold text-red-900 mb-1">Failed to Load Faculty Records</h3>
-          <p className="text-sm text-red-700 mb-4">{error}</p>
+          <h3 className="font-serif text-base font-bold text-red-900 mb-1">Failed to Load Faculty Records</h3>
+          <p className="text-xs text-red-700 mb-4">{error}</p>
           <button
             onClick={fetchData}
-            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg shadow-sm transition-colors inline-flex items-center gap-2"
+            className="px-3.5 py-1.5 bg-[#1E2D5A] hover:bg-[#141C38] text-white text-xs font-semibold rounded shadow-2xs transition-colors inline-flex items-center gap-1.5"
           >
-            ↻ Retry Connection
+            Retry Loading
           </button>
         </div>
       </div>
@@ -338,38 +371,41 @@ export default function TeacherManagement() {
 
   return (
     <div className="p-6 lg:p-10 w-full max-w-7xl mx-auto space-y-6 animate-fadeIn">
-      {/* Header */}
-      <div className="pb-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Institutional Header */}
+      <div className="pb-5 border-b border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="font-serif text-2xl lg:text-3xl font-bold text-slate-900">
+            <h1 className="font-serif text-2xl lg:text-3xl font-bold text-gray-900">
               Faculty &amp; Teaching Staff Management
             </h1>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-200">
+            <span className="px-2.5 py-0.5 rounded text-xs font-semibold bg-white text-navy border border-gray-300 shadow-2xs">
               {teachers.length} Faculty Members
             </span>
           </div>
-          <p className="text-sm text-slate-600 mt-1">
-            Real-time directory synchronized with Supabase <code className="text-xs bg-slate-100 px-1 py-0.5 rounded text-blue-700">faculty</code> table. Manage profiles, course mappings, and class teacher designations.
+          <p className="text-sm text-gray-600 mt-1">
+            Department of Computer Engineering faculty register, course allocation matrix, and class teacher governance (AY 2026–27).
           </p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
           <button
+            type="button"
             onClick={handleOpenAddFaculty}
-            className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5"
+            className="px-3.5 py-2 bg-[#1E2D5A] hover:bg-[#141C38] text-white text-xs font-semibold rounded shadow-2xs transition-colors flex items-center gap-1.5"
           >
-            <span className="text-base leading-none">+</span> Add Faculty Member
+            <span className="text-sm leading-none">+</span> Add Faculty Member
           </button>
 
           <button
+            type="button"
             onClick={() => openAssignModal()}
-            className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5"
+            className="px-3.5 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-slate-700 text-xs font-semibold rounded shadow-2xs transition-colors"
           >
-            <span>📖</span> Assign Course
+            Assign Course
           </button>
 
           <button
+            type="button"
             onClick={() => {
               setCtForm({
                 facultyId: teachers[0] ? String(teachers[0].id) : '',
@@ -378,39 +414,46 @@ export default function TeacherManagement() {
               });
               setCtModalOpen(true);
             }}
-            className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5"
+            className="px-3.5 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-slate-700 text-xs font-semibold rounded shadow-2xs transition-colors"
           >
-            <span>⭐</span> Appoint Class Teacher
+            Appoint Class Teacher
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setDeleteAllModalOpen(true)}
+            disabled={totalAssignments === 0}
+            className="px-3.5 py-2 bg-white border border-red-300 hover:bg-red-50 disabled:opacity-50 disabled:hover:bg-white text-red-700 text-xs font-semibold rounded shadow-2xs transition-colors"
+            title="Delete all assigned courses for all faculty members"
+          >
+            Delete All Assigned Subjects
           </button>
         </div>
       </div>
 
       {/* KPI Stats Strip */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
-          <p className="text-xs uppercase tracking-wider text-slate-500 font-bold">Total Faculty Members</p>
-          <p className="font-serif text-3xl font-bold text-slate-900 mt-1">{teachers.length}</p>
-          <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
-            Synchronized with Supabase DB
-          </p>
+        <div className="bg-white p-4 sm:p-5 rounded border border-rule shadow-2xs">
+          <p className="text-[11px] uppercase tracking-wider text-gray-500 font-bold">Total Faculty Members</p>
+          <p className="font-serif text-3xl font-bold text-navy mt-1 tabular-num">{teachers.length}</p>
+          <p className="text-xs text-slate-500 mt-1">Approved department roster</p>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
-          <p className="text-xs uppercase tracking-wider text-slate-500 font-bold">Active Course Mappings</p>
-          <p className="font-serif text-3xl font-bold text-blue-700 mt-1">{totalAssignments}</p>
+        <div className="bg-white p-4 sm:p-5 rounded border border-rule shadow-2xs">
+          <p className="text-[11px] uppercase tracking-wider text-gray-500 font-bold">Active Course Mappings</p>
+          <p className="font-serif text-3xl font-bold text-navy mt-1 tabular-num">{totalAssignments}</p>
           <p className="text-xs text-slate-500 mt-1">Teaching subject &amp; division links</p>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
-          <p className="text-xs uppercase tracking-wider text-slate-500 font-bold">Class Teachers Appointed</p>
-          <p className="font-serif text-3xl font-bold text-amber-600 mt-1">{totalClassTeachers} / 12</p>
+        <div className="bg-white p-4 sm:p-5 rounded border border-rule shadow-2xs">
+          <p className="text-[11px] uppercase tracking-wider text-gray-500 font-bold">Class Teachers Appointed</p>
+          <p className="font-serif text-3xl font-bold text-navy mt-1 tabular-num">{totalClassTeachers} / 12</p>
           <p className="text-xs text-slate-500 mt-1">Designated class guardians</p>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
-          <p className="text-xs uppercase tracking-wider text-slate-500 font-bold">Seminar Coordinators</p>
-          <p className="font-serif text-3xl font-bold text-indigo-700 mt-1">
+        <div className="bg-white p-4 sm:p-5 rounded border border-rule shadow-2xs">
+          <p className="text-[11px] uppercase tracking-wider text-gray-500 font-bold">Seminar Coordinators</p>
+          <p className="font-serif text-3xl font-bold text-navy mt-1 tabular-num">
             {teachers.filter((t) => t.is_seminar_coordinator).length}
           </p>
           <p className="text-xs text-slate-500 mt-1">TE Seminar coordinator authority</p>
@@ -418,34 +461,36 @@ export default function TeacherManagement() {
       </div>
 
       {/* Tabs & Controls */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-3">
+      <div className="bg-white p-4 rounded border border-rule shadow-2xs space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-gray-200 pb-2">
           {/* Tab Selector */}
-          <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg">
+          <div className="flex items-center gap-6">
             <button
+              type="button"
               onClick={() => setActiveTab('directory')}
-              className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${
+              className={`pb-2 text-xs font-semibold transition-all border-b-2 ${
                 activeTab === 'directory'
-                  ? 'bg-white text-blue-700 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'border-navy text-navy font-bold'
+                  : 'border-transparent text-gray-500 hover:text-gray-800'
               }`}
             >
               Faculty Directory ({filteredTeachers.length})
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('allocation')}
-              className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${
+              className={`pb-2 text-xs font-semibold transition-all border-b-2 ${
                 activeTab === 'allocation'
-                  ? 'bg-white text-blue-700 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'border-navy text-navy font-bold'
+                  : 'border-transparent text-gray-500 hover:text-gray-800'
               }`}
             >
-              Workload &amp; Assignments
+              Workload &amp; Course Assignments
             </button>
           </div>
 
-          <div className="text-xs text-slate-500 font-medium">
-            Showing <strong className="text-slate-800">{filteredTeachers.length}</strong> of {teachers.length} faculty
+          <div className="text-xs text-gray-500 font-medium">
+            Showing <strong className="text-gray-800 font-semibold">{filteredTeachers.length}</strong> of {teachers.length} faculty members
           </div>
         </div>
 
@@ -457,13 +502,18 @@ export default function TeacherManagement() {
               placeholder="Search faculty by name, employee ID, email, or designation…"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-3 py-2 pl-9 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+              className="w-full px-3 py-1.5 pl-8 border border-gray-300 rounded text-xs bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-navy transition-colors"
             />
-            <span className="absolute left-3 top-2.5 text-slate-400 text-sm">🔍</span>
+            <span className="absolute left-2.5 top-2 text-gray-400">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </span>
             {searchTerm && (
               <button
+                type="button"
                 onClick={() => setSearchTerm('')}
-                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                className="absolute right-2.5 top-2 text-gray-400 hover:text-gray-600 text-xs font-bold"
               >
                 ✕
               </button>
@@ -474,7 +524,7 @@ export default function TeacherManagement() {
             <select
               value={selectedDept}
               onChange={(e) => setSelectedDept(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-medium"
+              className="w-full px-3 py-1.5 border border-gray-300 rounded text-xs bg-white text-gray-800 focus:outline-none focus:border-navy transition-colors font-medium"
             >
               {departments.map((dept) => (
                 <option key={dept} value={dept}>
@@ -488,15 +538,15 @@ export default function TeacherManagement() {
 
       {/* Empty State */}
       {filteredTeachers.length === 0 && (
-        <div className="bg-white rounded-xl border border-slate-200 p-12 text-center shadow-xs">
-          <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3 text-xl font-bold">
-            👤
+        <div className="bg-white rounded border border-rule p-12 text-center shadow-2xs">
+          <div className="w-10 h-10 rounded bg-slate-100 text-slate-500 flex items-center justify-center mx-auto mb-3 text-sm font-bold font-mono">
+            N/A
           </div>
-          <h3 className="text-base font-bold text-slate-800 mb-1">No Faculty Members Found</h3>
-          <p className="text-sm text-slate-500 max-w-md mx-auto mb-4">
+          <h3 className="font-serif text-base font-bold text-gray-900 mb-1">No Faculty Members Found</h3>
+          <p className="text-xs text-gray-500 max-w-md mx-auto mb-4">
             {searchTerm || selectedDept !== 'all'
               ? 'No faculty matched your active search and department filters.'
-              : 'There are currently no faculty members registered in the Supabase database.'}
+              : 'There are currently no faculty members registered in the department faculty register.'}
           </p>
           {(searchTerm || selectedDept !== 'all') ? (
             <button
@@ -504,16 +554,16 @@ export default function TeacherManagement() {
                 setSearchTerm('');
                 setSelectedDept('all');
               }}
-              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition-colors"
+              className="px-3.5 py-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-slate-700 text-xs font-medium rounded transition-colors"
             >
               Clear Filters
             </button>
           ) : (
             <button
               onClick={handleOpenAddFaculty}
-              className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold rounded-lg shadow-sm transition-colors"
+              className="px-3.5 py-1.5 bg-[#1E2D5A] hover:bg-[#141C38] text-white text-xs font-semibold rounded shadow-2xs transition-colors"
             >
-              + Add First Faculty Member
+              + Register Faculty Member
             </button>
           )}
         </div>
@@ -521,7 +571,7 @@ export default function TeacherManagement() {
 
       {/* Directory Grid View */}
       {activeTab === 'directory' && filteredTeachers.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredTeachers.map((teacher) => {
             const assignments = teacher.assignments || [];
             const classTeacherOf = teacher.classTeacherOf || [];
@@ -529,13 +579,13 @@ export default function TeacherManagement() {
             return (
               <div
                 key={teacher.id}
-                className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
+                className="bg-white rounded border border-rule p-4 shadow-2xs hover:border-gray-400 transition-colors flex flex-col justify-between"
               >
                 <div>
                   {/* Top card bar */}
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-11 h-11 rounded-full bg-blue-700/10 text-blue-800 font-serif font-bold text-sm flex items-center justify-center flex-shrink-0 border border-blue-700/20">
+                      <div className="w-10 h-10 rounded bg-[#FAF8F5] border border-[#D4D0C8] text-slate-800 font-serif font-bold text-sm flex items-center justify-center flex-shrink-0">
                         {teacher.name
                           .replace('Dr. ', '')
                           .replace('(Mrs.) ', '')
@@ -548,78 +598,78 @@ export default function TeacherManagement() {
                           .toUpperCase()}
                       </div>
                       <div className="min-w-0">
-                        <h3 className="font-bold text-slate-900 text-base leading-tight truncate">
+                        <h3 className="font-serif font-bold text-gray-900 text-sm leading-tight truncate">
                           {teacher.name}
                         </h3>
-                        <p className="text-xs text-blue-700 font-semibold mt-0.5">
+                        <p className="text-xs text-gray-600 mt-0.5 truncate">
                           {teacher.designation}
                         </p>
                       </div>
                     </div>
 
-                    <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 flex-shrink-0">
+                    <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-slate-50 text-slate-700 border border-gray-300 flex-shrink-0">
                       {teacher.employee_id}
                     </span>
                   </div>
 
-                  {/* Metadata Pills */}
-                  <div className="space-y-1.5 text-xs text-slate-600 mb-4 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                  {/* Metadata Box */}
+                  <div className="space-y-1 text-xs text-slate-600 mb-3 bg-[#FAF8F5] p-2.5 rounded border border-[#E8E4DC]">
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-400">Email:</span>
-                      <span className="font-medium text-slate-800 truncate ml-2">{teacher.email}</span>
+                      <span className="text-slate-500">Email:</span>
+                      <span className="font-mono text-[11px] text-gray-800 truncate ml-2">{teacher.email}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-400">Department:</span>
-                      <span className="font-medium text-slate-800">{teacher.department}</span>
+                      <span className="text-slate-500">Department:</span>
+                      <span className="font-medium text-gray-800">{teacher.department}</span>
                     </div>
                   </div>
 
-                  {/* Badges */}
-                  <div className="flex flex-wrap items-center gap-1.5 mb-4">
+                  {/* Institutional Badges */}
+                  <div className="flex flex-wrap items-center gap-1.5 mb-3">
                     {teacher.is_seminar_coordinator && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                        🎓 Seminar Coordinator
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-indigo-50 text-indigo-900 border border-indigo-200">
+                        Seminar Coordinator
                       </span>
                     )}
 
                     {classTeacherOf.map((ct) => (
                       <span
                         key={ct.class_teacher_id}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-300"
+                        className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-900 border border-amber-300"
                       >
-                        ⭐ Class Teacher: {ct.class_name}
+                        Class Teacher: {ct.class_name}
                       </span>
                     ))}
 
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                      📚 {assignments.length} {assignments.length === 1 ? 'Course' : 'Courses'}
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                      {assignments.length} {assignments.length === 1 ? 'Course' : 'Courses'}
                     </span>
                   </div>
                 </div>
 
                 {/* Footer Action Buttons */}
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                <div className="pt-3 border-t border-gray-200 flex items-center justify-between gap-2">
                   <button
                     onClick={() => openAssignModal(String(teacher.id))}
-                    className="text-xs font-bold text-blue-700 hover:text-blue-900 px-2.5 py-1 rounded hover:bg-blue-50 transition-colors"
+                    className="text-xs font-semibold text-navy hover:underline transition-colors"
                   >
                     + Assign Course
                   </button>
 
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1.5">
                     <button
                       onClick={() => handleOpenEditFaculty(teacher)}
-                      className="px-2.5 py-1 text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded transition-colors"
+                      className="px-2 py-1 text-xs font-medium text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-gray-300 rounded transition-colors"
                       title="Edit faculty details"
                     >
-                      ✎ Edit
+                      Edit
                     </button>
                     <button
                       onClick={() => setDeleteConfirmFaculty(teacher)}
-                      className="px-2.5 py-1 text-xs font-bold text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 rounded transition-colors"
+                      className="px-2 py-1 text-xs font-medium text-red-600 hover:text-red-800 bg-white hover:bg-red-50 border border-red-200 rounded transition-colors"
                       title="Delete faculty member"
                     >
-                      🗑 Delete
+                      Delete
                     </button>
                   </div>
                 </div>
@@ -631,130 +681,163 @@ export default function TeacherManagement() {
 
       {/* Allocation / Workload Tab */}
       {activeTab === 'allocation' && filteredTeachers.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {filteredTeachers.map((teacher) => {
-            const assignments = teacher.assignments || [];
-            const classTeacherOf = teacher.classTeacherOf || [];
+        <div className="space-y-3">
+          {/* Allocation Control Strip */}
+          <div className="bg-white p-3.5 rounded border border-rule shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="font-serif text-sm font-bold text-gray-900">
+                Department Course Allocation &amp; Workload Matrix
+              </h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Total active course assignments: <strong className="text-gray-900 font-semibold">{totalAssignments}</strong> across {teachers.filter(t => (t.assignments?.length || 0) > 0).length} faculty members.
+              </p>
+            </div>
 
-            return (
-              <div
-                key={teacher.id}
-                className="bg-white rounded-xl border border-slate-200 p-6 flex flex-col justify-between hover:shadow-md transition-shadow"
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-200 mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-full bg-slate-900 text-white font-serif font-bold text-base flex items-center justify-center flex-shrink-0">
-                        {teacher.name
-                          .replace('Dr. ', '')
-                          .replace('(Mrs.) ', '')
-                          .replace('(Miss.) ', '')
-                          .replace('(Mr.) ', '')
-                          .replace('Mr. ', '')
-                          .replace('Mrs. ', '')
-                          .replace('Ms. ', '')
-                          .substring(0, 2)
-                          .toUpperCase()}
-                      </div>
-                      <div>
-                        <h3 className="font-serif text-base font-bold text-slate-900 leading-tight">
-                          {teacher.name}
-                        </h3>
-                        <p className="text-xs font-medium text-slate-500 mt-0.5">
-                          {teacher.designation} · <span className="font-mono font-bold text-slate-800">{teacher.employee_id}</span>
-                        </p>
-                        <p className="text-xs text-slate-400">{teacher.email}</p>
-                      </div>
-                    </div>
+            <button
+              type="button"
+              onClick={() => setDeleteAllModalOpen(true)}
+              disabled={totalAssignments === 0}
+              className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:hover:bg-red-600 text-white text-xs font-semibold rounded shadow-2xs transition-colors flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+              title="Delete all assigned courses for all faculty members"
+            >
+              Delete All Assigned Subjects (All Faculty)
+            </button>
+          </div>
 
-                    <button
-                      onClick={() => openAssignModal(String(teacher.id))}
-                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-700 hover:text-white text-blue-700 text-xs font-bold rounded-lg border border-blue-200 transition-colors flex-shrink-0"
-                    >
-                      + Assign
-                    </button>
-                  </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {filteredTeachers.map((teacher) => {
+              const assignments = teacher.assignments || [];
+              const classTeacherOf = teacher.classTeacherOf || [];
 
-                  {/* Class Teacher Badge(s) */}
-                  {classTeacherOf.length > 0 && (
-                    <div className="mb-4">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {classTeacherOf.map((ct) => (
-                          <span
-                            key={ct.class_teacher_id}
-                            className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-amber-50 border border-amber-300 text-amber-950 text-xs font-bold shadow-2xs"
-                          >
-                            <span className="flex items-center gap-1">
-                              <span>⭐</span>
-                              <span>Class Teacher:</span>
-                              <span className="underline decoration-amber-400 font-extrabold">{ct.class_name}</span>
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveClassTeacher(ct.class_teacher_id, ct.class_name)}
-                              className="text-amber-700 hover:text-red-700 font-black text-sm ml-1 cursor-pointer transition-colors"
-                              title="Remove Class Teacher designation"
-                            >
-                              ×
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Assigned Subjects & Classes */}
+              return (
+                <div
+                  key={teacher.id}
+                  className="bg-white rounded border border-rule p-5 shadow-2xs flex flex-col justify-between"
+                >
                   <div>
-                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                      Teaching Subjects &amp; Classes ({assignments.length})
-                    </h4>
-
-                    {assignments.length === 0 ? (
-                      <div className="p-3 bg-slate-50 rounded-lg border border-dashed border-slate-200 text-center">
-                        <p className="text-xs text-slate-400">No subjects assigned yet.</p>
+                    <div className="flex items-start justify-between gap-3 pb-3 border-b border-gray-200 mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded bg-[#FAF8F5] border border-[#D4D0C8] text-slate-800 font-serif font-bold text-sm flex items-center justify-center flex-shrink-0">
+                          {teacher.name
+                            .replace('Dr. ', '')
+                            .replace('(Mrs.) ', '')
+                            .replace('(Miss.) ', '')
+                            .replace('(Mr.) ', '')
+                            .replace('Mr. ', '')
+                            .replace('Mrs. ', '')
+                            .replace('Ms. ', '')
+                            .substring(0, 2)
+                            .toUpperCase()}
+                        </div>
+                        <div>
+                          <h3 className="font-serif text-sm font-bold text-gray-900 leading-tight">
+                            {teacher.name}
+                          </h3>
+                          <p className="text-xs text-gray-600 mt-0.5">
+                            {teacher.designation} · <span className="font-mono font-bold text-slate-700">{teacher.employee_id}</span>
+                          </p>
+                          <p className="font-mono text-[11px] text-gray-500 mt-0.5">{teacher.email}</p>
+                        </div>
                       </div>
-                    ) : (
-                      <div className="space-y-2">
-                        {assignments.map((asgn) => (
-                          <div
-                            key={asgn.mapping_id}
-                            className="flex items-center justify-between gap-2 p-2.5 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 text-xs transition-colors"
-                          >
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-semibold text-slate-900">{asgn.subject_name}</span>
-                                <span className="font-mono text-[10px] font-bold text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">
-                                  {asgn.subject_code}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-500">
-                                <span className="font-bold text-blue-800 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
-                                  {asgn.division}
-                                </span>
-                                <span>·</span>
-                                <span>Sem {asgn.semester}</span>
-                                <span>·</span>
-                                <span>{asgn.academic_year}</span>
-                              </div>
-                            </div>
 
-                            <button
-                              type="button"
-                              onClick={() => handleUnassign(asgn.mapping_id, asgn.subject_name, asgn.division)}
-                              className="text-red-500 hover:text-red-700 p-1.5 hover:bg-red-50 rounded transition-colors text-sm font-bold flex-shrink-0"
-                              title="Remove assignment"
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <button
+                          onClick={() => openAssignModal(String(teacher.id))}
+                          className="px-2.5 py-1 bg-white hover:bg-slate-50 text-navy text-xs font-semibold rounded border border-gray-300 transition-colors"
+                        >
+                          + Assign
+                        </button>
+                        {assignments.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => handleUnassignFaculty(teacher.id, teacher.name)}
+                            className="px-2 py-1 bg-white hover:bg-red-50 text-red-600 text-xs font-medium rounded border border-red-200 transition-colors"
+                            title={`Delete all ${assignments.length} assigned courses for ${teacher.name}`}
+                          >
+                            Clear All
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Class Teacher Designation(s) */}
+                    {classTeacherOf.length > 0 && (
+                      <div className="mb-3">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {classTeacherOf.map((ct) => (
+                            <span
+                              key={ct.class_teacher_id}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-amber-50 border border-amber-300 text-amber-950 text-xs font-semibold"
                             >
-                              ×
-                            </button>
-                          </div>
-                        ))}
+                              <span>Class Teacher:</span>
+                              <span className="font-bold underline decoration-amber-400">{ct.class_name}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveClassTeacher(ct.class_teacher_id, ct.class_name)}
+                                className="text-amber-700 hover:text-red-700 font-bold ml-1 cursor-pointer transition-colors leading-none"
+                                title="Remove Class Teacher designation"
+                              >
+                                ✕
+                              </button>
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     )}
+
+                    {/* Assigned Subjects & Classes */}
+                    <div>
+                      <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2">
+                        Teaching Subjects &amp; Classes ({assignments.length})
+                      </h4>
+
+                      {assignments.length === 0 ? (
+                        <div className="p-3 bg-slate-50 rounded border border-dashed border-gray-300 text-center">
+                          <p className="text-xs text-gray-500">No subjects assigned yet.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {assignments.map((asgn) => (
+                            <div
+                              key={asgn.mapping_id}
+                              className="flex items-center justify-between gap-2 p-2 bg-[#FAF8F5] hover:bg-[#F3EFEA] rounded border border-[#E8E4DC] text-xs transition-colors"
+                            >
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-semibold text-gray-900">{asgn.subject_name}</span>
+                                  <span className="font-mono text-[10px] font-bold text-gray-600 bg-white px-1.5 py-0.5 rounded border border-gray-300">
+                                    {asgn.subject_code}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-600">
+                                  <span className="font-bold text-navy bg-white border border-gray-300 px-1.5 py-0.5 rounded">
+                                    {asgn.division}
+                                  </span>
+                                  <span>·</span>
+                                  <span>Sem {asgn.semester}</span>
+                                  <span>·</span>
+                                  <span>{asgn.academic_year}</span>
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => handleUnassign(asgn.mapping_id, asgn.subject_name, asgn.division)}
+                                className="text-red-600 hover:text-red-800 p-1 hover:bg-red-50 rounded transition-colors text-xs font-semibold flex-shrink-0"
+                                title="Remove assignment"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -771,29 +854,83 @@ export default function TeacherManagement() {
 
       {/* Modal 2: Delete Faculty Confirmation Dialog */}
       {deleteConfirmFaculty && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-md w-full p-6 text-center">
-            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4 text-xl font-bold">
-              🗑
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded border border-gray-300 shadow-xl max-w-md w-full p-6 text-center">
+            <div className="w-10 h-10 rounded bg-red-100 text-red-700 flex items-center justify-center mx-auto mb-3 text-base font-bold font-mono">
+              !
             </div>
-            <h3 className="text-lg font-bold text-slate-900 mb-2">Delete Faculty Member</h3>
-            <p className="text-sm text-slate-600 mb-6">
-              Are you sure you want to delete <strong className="text-slate-900">{deleteConfirmFaculty.name}</strong> ({deleteConfirmFaculty.employee_id})? This will remove their user account and all associated assignments from Supabase.
+            <h3 className="font-serif text-base font-bold text-gray-900 mb-1">Delete Faculty Record</h3>
+            <p className="text-xs text-gray-600 mb-6">
+              Are you sure you want to delete <strong className="text-gray-900">{deleteConfirmFaculty.name}</strong> ({deleteConfirmFaculty.employee_id})? This will permanently remove their profile and all associated teaching allocations from department records.
             </p>
 
-            <div className="flex items-center justify-center gap-3">
+            <div className="flex items-center justify-center gap-2.5">
               <button
                 onClick={() => setDeleteConfirmFaculty(null)}
-                className="px-4 py-2 text-sm font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                className="px-3.5 py-1.5 text-xs font-medium text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-gray-300 rounded transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDeleteFaculty}
                 disabled={deleting}
-                className="px-5 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 disabled:bg-red-400 rounded-lg shadow-sm transition-all"
+                className="px-4 py-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded shadow-2xs transition-colors"
               >
-                {deleting ? 'Deleting...' : 'Yes, Delete Faculty'}
+                {deleting ? 'Deleting…' : 'Confirm Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 2b: Delete All Assigned Subjects Dialog */}
+      {deleteAllModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded border border-gray-300 shadow-xl max-w-md w-full p-6 text-center">
+            <div className="w-10 h-10 rounded bg-red-100 text-red-700 flex items-center justify-center mx-auto mb-3 text-base font-bold font-mono">
+              !
+            </div>
+            <h3 className="font-serif text-base font-bold text-gray-900 mb-1">
+              Delete All Assigned Subjects
+            </h3>
+            <p className="text-xs text-gray-600 mb-4">
+              Are you sure you want to delete all <strong className="text-gray-900">{totalAssignments}</strong> active course allocations across all department faculty?
+            </p>
+
+            <div className="text-left bg-[#FAF8F5] p-3 rounded border border-[#E8E4DC] mb-5 space-y-2">
+              <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider">
+                Target Academic Year
+              </label>
+              <select
+                value={deleteAllYearFilter}
+                onChange={(e) => setDeleteAllYearFilter(e.target.value)}
+                className="w-full px-2.5 py-1.5 border border-gray-300 rounded text-xs bg-white text-gray-900 font-medium focus:outline-none focus:border-navy"
+              >
+                <option value="all">All Academic Years (Full Reset)</option>
+                <option value="2026-27">Academic Year 2026–27 Only</option>
+                <option value="2025-26">Academic Year 2025–26 Only</option>
+                <option value="2024-25">Academic Year 2024–25 Only</option>
+              </select>
+              <p className="text-[11px] text-gray-500">
+                Note: Faculty member user accounts and Class Teacher appointments will be preserved. Only course subject-division links will be cleared.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => setDeleteAllModalOpen(false)}
+                className="px-3.5 py-1.5 text-xs font-medium text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-gray-300 rounded transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleUnassignAll}
+                disabled={deletingAll}
+                className="px-4 py-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded shadow-2xs transition-colors"
+              >
+                {deletingAll ? 'Deleting Allocations…' : 'Confirm Delete All'}
               </button>
             </div>
           </div>
@@ -802,33 +939,34 @@ export default function TeacherManagement() {
 
       {/* Modal 3: Multi-Subject Course Assignment Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 border border-slate-200 max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-200 mb-4 flex-shrink-0">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-fadeIn">
+          <div className="bg-white rounded border border-gray-300 shadow-xl max-w-2xl w-full p-6 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-200 mb-4 flex-shrink-0">
               <div>
-                <h2 className="font-serif text-xl font-bold text-slate-900">Assign Teaching Courses</h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Allocate single or multiple subjects &amp; divisions to a faculty member for the academic year.
+                <h2 className="font-serif text-lg font-bold text-gray-900">Assign Teaching Courses</h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Allocate subjects and divisions to a faculty member for the academic year.
                 </p>
               </div>
               <button
                 onClick={() => setModalOpen(false)}
-                className="text-slate-400 hover:text-slate-700 text-xl font-bold p-1"
+                className="text-gray-400 hover:text-gray-700 text-base font-bold p-1"
+                aria-label="Close"
               >
                 ✕
               </button>
             </div>
 
             <form onSubmit={handleAssign} className="space-y-4 overflow-y-auto pr-1 flex-1">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Select Faculty Member
+                  <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
+                    Faculty Member
                   </label>
                   <select
                     value={form.facultyId}
                     onChange={(e) => setForm({ ...form, facultyId: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white font-semibold"
+                    className="w-full px-3 py-1.5 border border-gray-300 rounded text-xs bg-white text-gray-900 font-medium focus:outline-none focus:border-navy"
                     required
                   >
                     {teachers.map((t) => (
@@ -840,13 +978,13 @@ export default function TeacherManagement() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
                     Academic Year
                   </label>
                   <select
                     value={form.academicYear}
                     onChange={(e) => setForm({ ...form, academicYear: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white font-semibold"
+                    className="w-full px-3 py-1.5 border border-gray-300 rounded text-xs bg-white text-gray-900 font-medium focus:outline-none focus:border-navy"
                   >
                     <option value="2026-27">2026-27 (Current)</option>
                     <option value="2025-26">2025-26</option>
@@ -855,22 +993,22 @@ export default function TeacherManagement() {
                 </div>
               </div>
 
-              {/* Course Items Table */}
-              <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
+              {/* Course Items List */}
+              <div className="border border-gray-200 rounded p-3 bg-slate-50">
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  <h3 className="text-[11px] font-bold text-gray-700 uppercase tracking-wider">
                     Courses to Assign ({form.items.length})
                   </h3>
                   <button
                     type="button"
                     onClick={handleAddItem}
-                    className="text-xs font-bold text-blue-700 hover:text-blue-900 bg-white border border-blue-200 px-2.5 py-1 rounded shadow-2xs hover:bg-blue-50 transition-colors"
+                    className="text-xs font-semibold text-navy hover:underline transition-colors"
                   >
-                    + Add Another Course
+                    + Add Course Row
                   </button>
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   {form.items.map((item, idx) => {
                     const selectedSub = subjects.find((s) => String(s.id) === String(item.subjectId));
                     const allowedClasses = selectedSub
@@ -880,17 +1018,17 @@ export default function TeacherManagement() {
                     return (
                       <div
                         key={idx}
-                        className="bg-white p-3 rounded-lg border border-slate-200 shadow-2xs space-y-2"
+                        className="bg-white p-3 rounded border border-gray-300 shadow-2xs space-y-2"
                       >
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-slate-500">
-                            Course #{idx + 1}
+                          <span className="text-[11px] font-bold font-mono text-gray-500">
+                            COURSE #{idx + 1}
                           </span>
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1.5">
                             <button
                               type="button"
                               onClick={() => handleDuplicateItem(idx)}
-                              className="text-[11px] font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded transition-colors"
+                              className="text-[11px] font-medium text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-gray-300 px-2 py-0.5 rounded transition-colors"
                               title="Duplicate for another division"
                             >
                               Duplicate
@@ -899,7 +1037,7 @@ export default function TeacherManagement() {
                               <button
                                 type="button"
                                 onClick={() => handleRemoveItem(idx)}
-                                className="text-[11px] font-bold text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 px-2 py-0.5 rounded transition-colors"
+                                className="text-[11px] font-medium text-red-600 hover:text-red-800 bg-white hover:bg-red-50 border border-red-200 px-2 py-0.5 rounded transition-colors"
                               >
                                 Remove
                               </button>
@@ -909,13 +1047,13 @@ export default function TeacherManagement() {
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
-                            <label className="block text-[11px] font-bold text-slate-500 mb-1">
+                            <label className="block text-[11px] font-bold text-gray-600 mb-1">
                               Subject
                             </label>
                             <select
                               value={item.subjectId}
                               onChange={(e) => handleItemSubjectChange(idx, e.target.value)}
-                              className="w-full px-2.5 py-1.5 border border-slate-300 rounded text-xs bg-white font-medium"
+                              className="w-full px-2.5 py-1.5 border border-gray-300 rounded text-xs bg-white text-gray-900 font-medium focus:outline-none focus:border-navy"
                               required
                             >
                               <option value="">-- Choose Subject --</option>
@@ -928,13 +1066,13 @@ export default function TeacherManagement() {
                           </div>
 
                           <div>
-                            <label className="block text-[11px] font-bold text-slate-500 mb-1">
+                            <label className="block text-[11px] font-bold text-gray-600 mb-1">
                               Target Class / Division
                             </label>
                             <select
                               value={item.division}
                               onChange={(e) => handleItemDivisionChange(idx, e.target.value)}
-                              className="w-full px-2.5 py-1.5 border border-slate-300 rounded text-xs bg-white font-bold text-slate-800"
+                              className="w-full px-2.5 py-1.5 border border-gray-300 rounded text-xs bg-white font-bold text-gray-800 focus:outline-none focus:border-navy"
                               required
                             >
                               {allowedClasses.map((cls) => (
@@ -952,28 +1090,28 @@ export default function TeacherManagement() {
               </div>
 
               {/* Class Teacher Checkbox */}
-              <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-lg">
+              <div className="p-3 bg-[#FAF8F5] border border-[#E8E4DC] rounded">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={form.isClassTeacher}
                     onChange={(e) => setForm({ ...form, isClassTeacher: e.target.checked })}
-                    className="rounded border-amber-300 text-amber-600 focus:ring-amber-500 w-4 h-4"
+                    className="rounded border-gray-300 text-navy focus:ring-navy w-4 h-4"
                   />
-                  <span className="text-xs font-bold text-amber-900">
-                    Also designate as Class Teacher for a class
+                  <span className="text-xs font-semibold text-gray-900">
+                    Also designate as Class Teacher for a division
                   </span>
                 </label>
 
                 {form.isClassTeacher && (
-                  <div className="mt-2.5 pt-2 border-t border-amber-200/60 flex items-center gap-3">
-                    <label className="text-xs font-bold text-amber-900 flex-shrink-0">
+                  <div className="mt-2 pt-2 border-t border-[#E8E4DC] flex items-center gap-3">
+                    <label className="text-xs font-bold text-gray-700 flex-shrink-0">
                       Class:
                     </label>
                     <select
                       value={form.classTeacherFor}
                       onChange={(e) => setForm({ ...form, classTeacherFor: e.target.value })}
-                      className="w-full px-2.5 py-1.5 border border-amber-300 rounded text-xs bg-white font-bold text-amber-950"
+                      className="w-full px-2.5 py-1.5 border border-gray-300 rounded text-xs bg-white font-semibold text-gray-900 focus:outline-none focus:border-navy"
                     >
                       <optgroup label="Second Year (SE)">
                         <option value="SE Comp 1">SE Comp 1</option>
@@ -999,18 +1137,18 @@ export default function TeacherManagement() {
               </div>
 
               {/* Form Actions */}
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-200">
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                  className="px-3.5 py-1.5 text-xs font-medium text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-gray-300 rounded transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-5 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 rounded-lg shadow-sm transition-all"
+                  className="px-4 py-1.5 text-xs font-semibold text-white bg-[#1E2D5A] hover:bg-[#141C38] disabled:opacity-50 rounded shadow-2xs transition-colors"
                 >
                   {submitting
                     ? 'Assigning…'
@@ -1024,16 +1162,17 @@ export default function TeacherManagement() {
 
       {/* Modal 4: Dedicated Class Teacher Appointment Dialog */}
       {ctModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 border border-slate-200">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-200 mb-5">
-              <div className="flex items-center gap-2">
-                <span className="text-lg">⭐</span>
-                <h2 className="font-serif text-lg font-bold text-slate-900">Designate Class Teacher</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-fadeIn">
+          <div className="bg-white rounded border border-gray-300 shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-200 mb-4">
+              <div>
+                <h2 className="font-serif text-base font-bold text-gray-900">Designate Class Teacher</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Assign class guardian responsibilities to a faculty member.</p>
               </div>
               <button
                 onClick={() => setCtModalOpen(false)}
-                className="text-slate-400 hover:text-slate-700 text-xl font-bold p-1"
+                className="text-gray-400 hover:text-gray-700 text-base font-bold p-1"
+                aria-label="Close"
               >
                 ✕
               </button>
@@ -1041,13 +1180,13 @@ export default function TeacherManagement() {
 
             <form onSubmit={handleSetClassTeacher} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Select Faculty
+                <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
+                  Faculty Member
                 </label>
                 <select
                   value={ctForm.facultyId}
                   onChange={(e) => setCtForm({ ...ctForm, facultyId: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white font-semibold"
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded text-xs bg-white text-gray-900 font-medium focus:outline-none focus:border-navy"
                   required
                 >
                   {teachers.map((t) => (
@@ -1059,13 +1198,13 @@ export default function TeacherManagement() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Select Class
+                <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
+                  Target Class
                 </label>
                 <select
                   value={ctForm.className}
                   onChange={(e) => setCtForm({ ...ctForm, className: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white font-semibold"
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded text-xs bg-white text-gray-900 font-semibold focus:outline-none focus:border-navy"
                   required
                 >
                   <optgroup label="Second Year (SE)">
@@ -1090,13 +1229,13 @@ export default function TeacherManagement() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
                   Academic Year
                 </label>
                 <select
                   value={ctForm.academicYear}
                   onChange={(e) => setCtForm({ ...ctForm, academicYear: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white font-semibold"
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded text-xs bg-white text-gray-900 font-medium focus:outline-none focus:border-navy"
                 >
                   <option value="2026-27">2026-27 (Current)</option>
                   <option value="2025-26">2025-26</option>
@@ -1104,18 +1243,18 @@ export default function TeacherManagement() {
                 </select>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 mt-6">
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-200 mt-5">
                 <button
                   type="button"
                   onClick={() => setCtModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                  className="px-3.5 py-1.5 text-xs font-medium text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-gray-300 rounded transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-5 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 rounded-lg shadow-sm transition-all"
+                  className="px-4 py-1.5 text-xs font-semibold text-white bg-[#1E2D5A] hover:bg-[#141C38] disabled:opacity-50 rounded shadow-2xs transition-colors"
                 >
                   {submitting ? 'Appointing…' : 'Appoint Class Teacher'}
                 </button>
