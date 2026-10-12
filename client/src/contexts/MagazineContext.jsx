@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import api from '../api/axios';
 import { parseClassAndDivision } from '../utils/toppersUtils';
 import { DEMO_MAGAZINE_METADATA, DEMO_MAGAZINE_SECTION_DATA } from '../utils/demoMagazineData';
 
@@ -278,6 +279,28 @@ export function MagazineProvider({ children }) {
   const [activeSection, setActiveSection]     = useState('cover');
   const [magazineStatus, setMagazineStatus]   = useState('draft');
 
+  // Load magazines from database on mount, keeping localStorage as fast fallback
+  useEffect(() => {
+    let isMounted = true;
+    async function loadFromDb() {
+      try {
+        const res = await api.get('/magazines');
+        if (isMounted && res.data?.magazines && Array.isArray(res.data.magazines) && res.data.magazines.length > 0) {
+          setMagazines(res.data.magazines);
+          try {
+            localStorage.setItem(STORAGE_KEY_MAGAZINES, JSON.stringify(res.data.magazines));
+          } catch (e) {
+            // ignore
+          }
+        }
+      } catch (err) {
+        // Fall back gracefully to local storage
+      }
+    }
+    loadFromDb();
+    return () => { isMounted = false; };
+  }, []);
+
   // Persist magazines list changes
   const saveMagazinesList = useCallback((updatedList) => {
     setMagazines(updatedList);
@@ -354,6 +377,20 @@ export function MagazineProvider({ children }) {
     setSectionStatus({});
     setActiveSection('cover');
     setMagazineStatus('draft');
+
+    // Sync created magazine with database
+    api.post('/magazines', {
+      id,
+      title: info.title,
+      issueNumber: info.issueNumber,
+      academicYear: info.academicYear,
+      department: info.department,
+      template: info.template || 'modern-academic',
+      status: 'Draft',
+      sections: {},
+      sectionData: initialData,
+    }).catch(err => console.warn('[Magazine] DB create sync:', err.message));
+
     return id;
   }, [magazines, saveMagazinesList, persistSectionData]);
 
@@ -393,6 +430,10 @@ export function MagazineProvider({ children }) {
         }
         return updated;
       });
+
+      // Sync section to database
+      api.put(`/magazines/${currentMagazine.id}/sections/${sectionId}`, cleanData)
+        .catch(err => console.warn(`[Magazine] DB updateSection sync error for ${sectionId}:`, err.message));
     }
   }, [currentMagazine?.id, persistSectionData]);
 
@@ -494,6 +535,11 @@ export function MagazineProvider({ children }) {
         saveMagazinesList(updated);
         return updated;
       });
+
+      api.put(`/magazines/${currentMagazine.id}`, {
+        sectionData,
+        status: 'Draft'
+      }).catch(err => console.warn('[Magazine] DB saveDraft sync error:', err.message));
     }
   }, [currentMagazine?.id, sectionData, persistSectionData, saveMagazinesList]);
 
@@ -512,6 +558,10 @@ export function MagazineProvider({ children }) {
         return updated;
       });
       setCurrentMagazine(prev => prev ? { ...prev, status: 'Under Review' } : null);
+
+      api.patch(`/magazines/${currentMagazine.id}/status`, {
+        status: 'Under Review'
+      }).catch(err => console.warn('[Magazine] DB submitForApproval sync error:', err.message));
     }
   }, [currentMagazine?.id, sectionData, persistSectionData, saveMagazinesList]);
 
@@ -532,6 +582,10 @@ export function MagazineProvider({ children }) {
       setMagazineStatus('approved');
       setCurrentMagazine(prev => prev ? { ...prev, status: 'Approved', reviewComment: null } : null);
     }
+
+    api.patch(`/magazines/${targetId}/status`, {
+      status: 'Approved'
+    }).catch(err => console.warn('[Magazine] DB approve sync error:', err.message));
   }, [currentMagazine?.id, saveMagazinesList]);
 
   // Publish magazine (HOD / Faculty)
@@ -552,6 +606,10 @@ export function MagazineProvider({ children }) {
       setMagazineStatus('published');
       setCurrentMagazine(prev => prev ? { ...prev, status: 'Published', publishedDate: nowStr } : null);
     }
+
+    api.patch(`/magazines/${targetId}/status`, {
+      status: 'Published'
+    }).catch(err => console.warn('[Magazine] DB publish sync error:', err.message));
   }, [currentMagazine?.id, saveMagazinesList]);
 
   // Request changes / Reject (HOD)
@@ -571,6 +629,10 @@ export function MagazineProvider({ children }) {
       setMagazineStatus('draft');
       setCurrentMagazine(prev => prev ? { ...prev, status: 'Draft', reviewComment: comment } : null);
     }
+    api.patch(`/magazines/${targetId}/status`, {
+      status: 'Draft',
+      reviewComment: comment
+    }).catch(err => console.warn('[Magazine] DB requestChanges sync error:', err.message));
   }, [currentMagazine?.id, saveMagazinesList]);
 
   // Update magazine design template (presentation only, content untouched)
@@ -585,6 +647,10 @@ export function MagazineProvider({ children }) {
     if (currentMagazine?.id === targetId) {
       setCurrentMagazine(prev => prev ? { ...prev, template: templateId } : null);
     }
+
+    api.put(`/magazines/${targetId}`, {
+      template: templateId
+    }).catch(err => console.warn('[Magazine] DB template sync error:', err.message));
   }, [currentMagazine?.id, saveMagazinesList]);
 
   // Load an existing magazine for editing/preview
@@ -621,7 +687,39 @@ export function MagazineProvider({ children }) {
       );
       setMagazineStatus((mag.status || 'draft').toLowerCase().replace(' ', '_'));
     }
-  }, [magazines, getPersistedSectionData]);
+
+    // Also fetch from API in background to ensure database-level consistency
+    if (id) {
+      api.get(`/magazines/${id}`)
+        .then(res => {
+          const dbMag = res.data?.magazine;
+          if (dbMag) {
+            setCurrentMagazine(prev => ({ ...(prev || {}), ...dbMag }));
+            if (dbMag.sectionData && Object.keys(dbMag.sectionData).length > 0) {
+              const normalizedData = {
+                ...dbMag.sectionData,
+                toppers: normalizeToppersData(dbMag.sectionData.toppers)
+              };
+              setSectionData(normalizedData);
+              persistSectionData(dbMag.id, normalizedData);
+            }
+            if (dbMag.sections) {
+              setSectionStatus(
+                Object.fromEntries(
+                  Object.entries(dbMag.sections || {}).map(([k, v]) => [k, v.completed ? 'completed' : 'pending'])
+                )
+              );
+            }
+            if (dbMag.status) {
+              setMagazineStatus(dbMag.status.toLowerCase().replace(' ', '_'));
+            }
+          }
+        })
+        .catch(err => {
+          // Fall back gracefully to local state
+        });
+    }
+  }, [magazines, getPersistedSectionData, persistSectionData]);
 
   const completedCount = MAGAZINE_SECTIONS.filter(s => sectionStatus[s.id] === 'completed').length;
 

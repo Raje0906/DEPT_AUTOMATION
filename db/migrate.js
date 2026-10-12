@@ -690,6 +690,7 @@ async function runMigrations() {
         default_max_marks = EXCLUDED.default_max_marks,
         display_order = EXCLUDED.display_order;
 
+
       -- BE Project Individual Student Scoring Migration
       ALTER TABLE project_evaluation_scores ADD COLUMN IF NOT EXISTS member_id INTEGER REFERENCES project_group_members(id) ON DELETE CASCADE;
       ALTER TABLE project_evaluation_scores ADD COLUMN IF NOT EXISTS student_id INTEGER REFERENCES students(id) ON DELETE CASCADE;
@@ -894,6 +895,36 @@ async function runMigrations() {
       WHERE code = 'insem';
     `);
 
+    // ─── MAGAZINES ────────────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS magazines (
+        id            VARCHAR(100) PRIMARY KEY,
+        title         VARCHAR(255) NOT NULL,
+        issue_number  INTEGER NOT NULL,
+        academic_year VARCHAR(50) NOT NULL,
+        semester      VARCHAR(50) DEFAULT 'Annual',
+        department    VARCHAR(200) DEFAULT 'Department of Computer Engineering',
+        period        VARCHAR(150),
+        description   TEXT,
+        status        VARCHAR(50) NOT NULL DEFAULT 'Draft',
+        template      VARCHAR(100) DEFAULT 'modern-academic',
+        published_date DATE,
+        cover_color   VARCHAR(50) DEFAULT '#1E2D5A',
+        cover_image   TEXT,
+        total_pages   INTEGER DEFAULT 0,
+        tagline       TEXT,
+        sections      JSONB DEFAULT '{}'::jsonb,
+        section_data  JSONB DEFAULT '{}'::jsonb,
+        review_comment TEXT,
+        created_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at    TIMESTAMPTZ DEFAULT NOW(),
+        updated_at    TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_magazines_status ON magazines(status);
+      CREATE INDEX IF NOT EXISTS idx_magazines_academic_year ON magazines(academic_year);
+    `);
+
     await client.query('COMMIT');
     console.log('[Migration] All tables created successfully');
   } catch (err) {
@@ -909,9 +940,12 @@ module.exports = { runMigrations };
 
 if (require.main === module) {
   runMigrations()
-    .then(() => process.exit(0))
+    .then(() => {
+      console.log('[Migration] Done.');
+      process.exit(0);
+    })
     .catch((err) => {
-      console.error(err);
+      console.error('[Migration] Failed:', err);
       process.exit(1);
     });
 }

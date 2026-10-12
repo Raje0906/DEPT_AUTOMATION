@@ -73,27 +73,27 @@ function CoverPage({ data, theme = getTemplate('modern-academic') }) {
         )}
 
         <div className="w-20 h-px bg-white opacity-40" />
-        <p className="text-[11px] font-bold uppercase tracking-widest opacity-75">
+        <p className="text-[13px] font-bold uppercase tracking-widest opacity-85">
           MES Wadia COE · {data?.department || 'Computer Engineering'}
         </p>
         
-        <h1 className={`${theme.fontHeading} text-5xl font-bold text-center leading-tight tracking-tight`}>
+        <h1 className={`${theme.fontHeading} text-5xl font-extrabold text-center leading-tight tracking-tight`}>
           {data?.title || 'Reflection'}
         </h1>
         
-        <p className="text-base opacity-85 font-medium tracking-wide">
+        <p className="text-lg opacity-90 font-semibold tracking-wide">
           Issue {data?.issueNumber || 'XX'}
         </p>
         <div className="w-20 h-px bg-white opacity-40" />
         
-        <p className="text-sm opacity-75 text-center px-6 italic max-w-md">
+        <p className="text-[14.5px] opacity-80 text-center px-6 italic max-w-lg leading-relaxed">
           {data?.tagline || ''}
         </p>
       </div>
 
       <div className="px-10 py-6 border-t border-white border-opacity-20 flex items-center justify-between relative z-10">
-        <p className="text-xs opacity-75">{data?.period || ''}</p>
-        <p className="text-xs opacity-75 font-mono">{data?.academicYear || ''}</p>
+        <p className="text-sm opacity-85 font-medium">{data?.period || ''}</p>
+        <p className="text-sm opacity-85 font-mono font-medium">{data?.academicYear || ''}</p>
       </div>
     </div>
   );
@@ -107,77 +107,79 @@ function ArticlePage({ data, theme = getTemplate('modern-academic') }) {
 
   return (
     <div
-      className={`w-full h-full p-9 flex flex-col ${theme.fontBody}`}
+      className={`w-full h-full p-9 pb-12 flex flex-col justify-between ${theme.fontBody}`}
       style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}
     >
-      {/* Header section styled by active template */}
-      <div className={`mb-5 pb-3 ${theme.headerDivider}`}>
-        <div className="flex items-center justify-between mb-1.5">
-          <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm ${theme.badgeStyle}`}>
-            {data?.section || 'Section'}
-          </span>
-          {isInstitutional && (
-            <span className="text-[9px] font-serif text-[#1B365D] uppercase tracking-widest font-bold">
-              Official Publication
+      <div>
+        {/* Header section styled by active template */}
+        <div className={`mb-5 pb-3 ${theme.headerDivider}`}>
+          <div className="flex items-center justify-between mb-1.5">
+            <span className={`text-xs font-bold uppercase tracking-wider px-2.5 py-1 min-h-[24px] inline-flex items-center rounded-sm ${theme.badgeStyle}`}>
+              {data?.section || 'Section'}
             </span>
-          )}
+            {isInstitutional && (
+              <span className="text-[10px] font-serif text-[#1B365D] uppercase tracking-widest font-bold">
+                Official Publication
+              </span>
+            )}
+          </div>
+          <h2 className={`${theme.fontHeading} text-3xl font-bold text-ink leading-tight mt-1.5`}>
+            {data?.title || 'Article Title'}
+          </h2>
+          {data?.subtitle && <p className="text-sm text-draft mt-1 font-medium">{data.subtitle}</p>}
         </div>
-        <h2 className={`${theme.fontHeading} text-2xl font-bold text-ink leading-tight mt-1`}>
-          {data?.title || 'Article Title'}
-        </h2>
-        {data?.subtitle && <p className="text-xs text-draft mt-1 font-medium">{data.subtitle}</p>}
-      </div>
 
-      {/* Author Card or Hero Image */}
-      {data?.image && (
-        data?.author ? (
-          <div className={`mb-4 flex items-center gap-4 p-3.5 ${theme.cardStyle} flex-shrink-0`}>
-            <img
-              src={data.image}
-              alt={data.author}
-              className={`w-24 h-28 object-cover flex-shrink-0 ${isCampus ? 'rounded-md shadow-sm' : isMinimal ? 'rounded-none' : 'rounded-sm border border-rule'}`}
-            />
-            <div className="flex-1">
-              <h3 className={`${theme.fontHeading} text-base font-bold text-ink`}>{data.author}</h3>
-              <p className="text-xs text-draft font-medium mt-0.5">{data.designation}</p>
-              {isEditorial && (
-                <p className="text-[11px] text-[#4A1525] font-serif italic mt-1.5 opacity-90">
-                  "Leading innovation, academic distinction, and research mentorship."
-                </p>
-              )}
+        {/* Author Card or Hero Image */}
+        {data?.image && (
+          data?.author ? (
+            <div className={`mb-4 flex items-center gap-4 p-3.5 ${theme.cardStyle} flex-shrink-0`}>
+              <img
+                src={data.image}
+                alt={data.author}
+                className={`w-28 h-32 object-cover flex-shrink-0 ${isCampus ? 'rounded-md shadow-sm' : isMinimal ? 'rounded-none' : 'rounded-sm border border-rule'}`}
+              />
+              <div className="flex-1">
+                <h3 className={`${theme.fontHeading} text-lg font-bold text-ink`}>{data.author}</h3>
+                <p className="text-sm text-draft font-medium mt-1 leading-snug">{data.designation}</p>
+                {isEditorial && (
+                  <p className="text-xs text-[#4A1525] font-serif italic mt-1.5 opacity-90">
+                    "Leading innovation, academic distinction, and research mentorship."
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className={`mb-4 h-48 ${theme.cardStyle} overflow-hidden flex items-center justify-center flex-shrink-0`}>
-            <img src={data.image} alt="" className="w-full h-full object-cover" />
-          </div>
-        )
-      )}
+          ) : (
+            <div className={`mb-4 h-48 ${theme.cardStyle} overflow-hidden flex items-center justify-center flex-shrink-0`}>
+              <img src={data.image} alt="" className="w-full h-full object-cover" />
+            </div>
+          )
+        )}
 
-      {/* Pull quote for editorial & campus styles if article has paragraphs */}
-      {isEditorial && (data?.paragraphs?.length > 1) && (
-        <div className={`my-2 ${theme.quoteStyle}`}>
-          <p>"{data.paragraphs[0]}"</p>
+        {/* Pull quote for editorial & campus styles if article has paragraphs */}
+        {isEditorial && (data?.paragraphs?.length > 1) && (
+          <div className={`my-2 ${theme.quoteStyle}`}>
+            <p>"{data.paragraphs[0]}"</p>
+          </div>
+        )}
+
+        {/* Article Body Paragraphs */}
+        <div className="space-y-3.5">
+          {(data?.paragraphs || ['Department activities and accomplishments for the academic semester.'])
+            .slice(isEditorial && data?.paragraphs?.length > 1 ? 1 : 0)
+            .map((p, i) => (
+              <p key={i} className={`text-[14.5px] text-ink leading-relaxed ${isMinimal ? 'text-left tracking-wide' : 'text-justify'}`}>
+                {p}
+              </p>
+          ))}
         </div>
-      )}
-
-      {/* Article Body Paragraphs */}
-      <div className="flex-1 space-y-3">
-        {(data?.paragraphs || ['Department activities and accomplishments for the academic semester.'])
-          .slice(isEditorial && data?.paragraphs?.length > 1 ? 1 : 0)
-          .map((p, i) => (
-            <p key={i} className={`text-[11px] text-ink leading-relaxed ${isMinimal ? 'text-left tracking-wide' : 'text-justify'}`}>
-              {p}
-            </p>
-        ))}
       </div>
 
       {/* Footer author stamp if no image */}
       {data?.author && !data?.image && (
         <div className={`mt-4 pt-3 border-t border-rule flex items-center justify-between`}>
           <div>
-            <p className={`text-xs font-bold text-ink ${theme.fontHeading}`}>{data.author}</p>
-            {data?.designation && <p className="text-[10px] text-draft">{data.designation}</p>}
+            <p className={`text-sm font-bold text-ink ${theme.fontHeading}`}>{data.author}</p>
+            {data?.designation && <p className="text-xs text-draft">{data.designation}</p>}
           </div>
         </div>
       )}
@@ -187,18 +189,24 @@ function ArticlePage({ data, theme = getTemplate('modern-academic') }) {
 
 function TwoColumnPage({ data, theme = getTemplate('modern-academic') }) {
   return (
-    <div className={`w-full h-full p-9 flex flex-col ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
-      <div className={`mb-4 pb-2 ${theme.headerDivider}`}>
-        <h2 className={`${theme.fontHeading} text-xl font-bold text-ink`}>{data?.title || 'Title'}</h2>
+    <div className={`w-full h-full p-9 pb-12 flex flex-col justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
+      <div>
+        <div className={`mb-4 pb-2 ${theme.headerDivider}`}>
+          <h2 className={`${theme.fontHeading} text-2xl font-bold text-ink`}>{data?.title || 'Title'}</h2>
+        </div>
+        <div className="grid grid-cols-2 gap-6">
+          {[0, 1].map(col => (
+            <div key={col} className="space-y-3">
+              <p className="text-[14px] text-ink leading-relaxed text-justify">
+                {data?.columns?.[col] || 'Column content goes here.'}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
-      <div className="flex-1 grid grid-cols-2 gap-6">
-        {[0, 1].map(col => (
-          <div key={col} className="space-y-3">
-            <p className="text-[11px] text-ink leading-relaxed text-justify">
-              {data?.columns?.[col] || 'Column content goes here.'}
-            </p>
-          </div>
-        ))}
+      <div className="pt-2 border-t border-rule/60 flex items-center justify-between text-[10px] text-draft opacity-80 flex-shrink-0">
+        <span>Department of Computer Engineering</span>
+        <span>Academic Documentation</span>
       </div>
     </div>
   );
@@ -206,31 +214,54 @@ function TwoColumnPage({ data, theme = getTemplate('modern-academic') }) {
 
 function PhotoGridPage({ data, theme = getTemplate('modern-academic') }) {
   const photos = data?.photos || [];
-  const gridClass = photos.length <= 2 ? 'grid-cols-2' : photos.length <= 4 ? 'grid-cols-2' : 'grid-cols-3';
 
   return (
-    <div className={`w-full h-full p-8 flex flex-col ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
-      <div className={`mb-4 pb-2 ${theme.headerDivider} flex items-center justify-between`}>
-        <h2 className={`${theme.fontHeading} text-lg font-bold text-ink`}>{data?.title || 'Photo Gallery'}</h2>
-        <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm ${theme.badgeStyle}`}>
-          Gallery Archive
-        </span>
+    <div className={`w-full h-full p-8 pb-12 flex flex-col justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
+      <div className={`pb-2.5 ${theme.headerDivider} flex items-end justify-between flex-shrink-0`}>
+        <div>
+          <span className={`text-xs font-bold uppercase tracking-wider px-2.5 py-1 min-h-[24px] inline-flex items-center rounded-sm ${theme.badgeStyle}`}>
+            Gallery Archive
+          </span>
+          <h2 className={`${theme.fontHeading} text-2xl font-bold text-ink leading-tight mt-1`}>
+            {data?.title || 'Photo Gallery'}
+          </h2>
+          {data?.subtitle && <p className="text-xs text-draft font-medium mt-0.5">{data.subtitle}</p>}
+        </div>
+        {data?.part && data?.totalParts && (
+          <span className="text-xs font-semibold text-draft px-2 py-0.5 bg-paper rounded border border-rule">
+            Part {data.part} of {data.totalParts}
+          </span>
+        )}
       </div>
-      <div className={`flex-1 grid ${gridClass} gap-3.5`}>
+
+      <div className="flex-1 grid grid-cols-2 gap-4 py-2">
         {(photos.length ? photos : Array(4).fill(null)).map((ph, i) => (
-          <div key={i} className={`${theme.cardStyle} overflow-hidden flex flex-col justify-between p-1 bg-paper/30`}>
-            <div className="flex-1 overflow-hidden rounded-xs flex items-center justify-center bg-paper">
+          <div key={i} className={`${theme.cardStyle} overflow-hidden flex flex-col justify-between p-2.5 bg-paper/30 border border-rule/70 shadow-2xs`}>
+            <div className="w-full h-44 overflow-hidden rounded-xs flex items-center justify-center bg-paper border border-rule/40 flex-shrink-0">
               {ph?.url ? (
                 <img src={ph.url} alt={ph.caption || ''} className="w-full h-full object-cover" />
               ) : (
                 <div className="text-xs text-draft opacity-50 font-medium">Photo {i + 1}</div>
               )}
             </div>
-            {ph?.caption && (
-              <p className="text-[9px] text-draft truncate px-1 pt-1 font-medium">{ph.caption}</p>
-            )}
+            <div className="pt-2 px-1 flex flex-col gap-1 min-h-[46px] justify-center">
+              {(ph?.date || ph?.venue) && (
+                <div className="flex items-center gap-2 text-[11px] text-draft font-medium flex-wrap">
+                  {ph.date && <span>📅 {ph.date}</span>}
+                  {ph.venue && <span>📍 {ph.venue}</span>}
+                </div>
+              )}
+              <p className="text-xs font-semibold text-ink leading-snug">
+                {ph?.caption || ph?.eventTitle || 'Campus Event Moment'}
+              </p>
+            </div>
           </div>
         ))}
+      </div>
+
+      <div className="pt-2 border-t border-rule/60 flex items-center justify-between text-[10px] text-draft opacity-80 flex-shrink-0">
+        <span>MES Wadia COE · Department of Computer Engineering</span>
+        <span>Campus Life & Photographic Record</span>
       </div>
     </div>
   );
@@ -242,35 +273,35 @@ function TablePage({ data, theme = getTemplate('modern-academic') }) {
 
   const renderCell = (colName, val) => {
     if (colName === 'Mode') {
-      if (val === 'Online') return <span className="px-2 py-0.5 rounded text-[8px] font-bold bg-green-50 text-pass border border-green-200">Online</span>;
-      if (val === 'Offline') return <span className="px-2 py-0.5 rounded text-[8px] font-bold bg-blue-50 text-navy border border-blue-200">Offline</span>;
-      if (val === 'Hybrid') return <span className="px-2 py-0.5 rounded text-[8px] font-bold bg-amber-50 text-amber-800 border border-amber-200">Hybrid</span>;
+      if (val === 'Online') return <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-green-50 text-pass border border-green-200">Online</span>;
+      if (val === 'Offline') return <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-navy border border-blue-200">Offline</span>;
+      if (val === 'Hybrid') return <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">Hybrid</span>;
     }
     return val;
   };
 
   return (
-    <div className={`w-full h-full p-8 flex flex-col justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
+    <div className={`w-full h-full p-8 pb-12 flex flex-col justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
       <div>
-        <div className={`mb-4 pb-2 ${theme.headerDivider} flex items-center justify-between`}>
+        <div className={`mb-4 pb-2.5 ${theme.headerDivider} flex items-center justify-between`}>
           <div>
-            <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm ${theme.badgeStyle}`}>
+            <span className={`text-xs font-bold uppercase tracking-wider px-2.5 py-1 min-h-[24px] inline-flex items-center rounded-sm ${theme.badgeStyle}`}>
               Faculty Development
             </span>
-            <h2 className={`${theme.fontHeading} text-xl font-bold text-ink mt-1`}>{data?.title || 'Table'}</h2>
+            <h2 className={`${theme.fontHeading} text-2xl font-bold text-ink mt-1`}>{data?.title || 'Table'}</h2>
           </div>
-          <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm ${theme.badgeStyle}`}>
+          <span className={`text-xs font-bold uppercase tracking-wider px-2.5 py-1 min-h-[24px] inline-flex items-center rounded-sm ${theme.badgeStyle}`}>
             Record Summary
           </span>
         </div>
         <div className="overflow-hidden border border-rule rounded-sm shadow-2xs">
-          <table className="w-full text-[10px] border-collapse">
+          <table className="w-full text-xs border-collapse">
             <thead>
               <tr>
                 {cols.map(c => (
                   <th
                     key={c}
-                    className="px-3 py-2 text-left font-bold uppercase tracking-wide border-b-2 text-[9px]"
+                    className="px-3 py-2.5 text-left font-bold uppercase tracking-wide border-b-2 text-[11px]"
                     style={{
                       color: theme.accentColor || '#1E2D5A',
                       borderColor: theme.accentColor || '#1E2D5A',
@@ -286,7 +317,7 @@ function TablePage({ data, theme = getTemplate('modern-academic') }) {
               {(rows.length ? rows : Array(5).fill(null)).map((row, i) => (
                 <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-paper/40'}>
                   {cols.map((c, j) => (
-                    <td key={j} className="px-3 py-2.5 border-b border-rule text-ink leading-relaxed">
+                    <td key={j} className="px-3 py-2.5 border-b border-rule text-ink leading-relaxed text-[12px]">
                       {renderCell(c, row?.[j] || (j === 0 ? i + 1 : '—'))}
                     </td>
                   ))}
@@ -297,7 +328,7 @@ function TablePage({ data, theme = getTemplate('modern-academic') }) {
         </div>
       </div>
 
-      <div className="pt-2 border-t border-rule/60 flex items-center justify-between text-[8px] text-draft opacity-70 flex-shrink-0">
+      <div className="pt-2 border-t border-rule/60 flex items-center justify-between text-[10px] text-draft opacity-80 flex-shrink-0">
         <span>Department of Computer Engineering</span>
         <span>Faculty Continuous Professional Development</span>
       </div>
@@ -308,10 +339,10 @@ function TablePage({ data, theme = getTemplate('modern-academic') }) {
 function EventsPage({ data, theme = getTemplate('modern-academic') }) {
   const events = data?.events || [];
   return (
-    <div className={`w-full h-full p-8 flex flex-col justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
+    <div className={`w-full h-full p-8 pb-12 flex flex-col justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
       <div className={`pb-2.5 ${theme.headerDivider} flex items-end justify-between flex-shrink-0`}>
         <div>
-          <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm ${theme.badgeStyle}`}>
+          <span className={`text-xs font-bold uppercase tracking-wider px-2.5 py-1 min-h-[24px] inline-flex items-center rounded-sm ${theme.badgeStyle}`}>
             Department Events
           </span>
           <h2 className={`${theme.fontHeading} text-2xl font-bold text-ink leading-tight mt-1`}>
@@ -325,42 +356,42 @@ function EventsPage({ data, theme = getTemplate('modern-academic') }) {
         {events.map((ev, idx) => {
           const photoUrl = typeof ev.photos?.[0] === 'string' ? ev.photos[0] : ev.photos?.[0]?.url;
           return (
-            <div key={ev.id || idx} className={`${theme.cardStyle} p-3.5 bg-paper/30 flex flex-col gap-2`}>
+            <div key={ev.id || idx} className={`${theme.cardStyle} p-4 bg-paper/30 flex flex-col gap-2.5 border border-rule/70 shadow-2xs`}>
               <div className="flex items-start justify-between gap-3 flex-wrap">
-                <div>
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-navy text-white">
+                <div className="w-full">
+                  <div className="flex items-center gap-2 mb-2 flex-wrap min-h-[28px] overflow-visible">
+                    <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-1 min-h-[26px] inline-flex items-center rounded bg-navy text-white leading-normal shadow-2xs">
                       {ev.date || 'Academic Year'}
                     </span>
                     {ev.venue && (
-                      <span className="text-[9px] text-draft font-medium bg-white px-1.5 py-0.5 rounded border border-rule">
+                      <span className="text-xs text-ink/80 font-medium bg-white px-2.5 py-1 min-h-[26px] inline-flex items-center rounded border border-rule leading-normal shadow-2xs">
                         📍 {ev.venue}
                       </span>
                     )}
                     {ev.participants && (
-                      <span className="text-[9px] font-semibold text-pass bg-green-50 px-1.5 py-0.5 rounded border border-green-200">
+                      <span className="text-xs font-semibold text-pass bg-green-50 px-2.5 py-1 min-h-[26px] inline-flex items-center rounded border border-green-200 leading-normal shadow-2xs">
                         👥 {ev.participants} Participants
                       </span>
                     )}
                   </div>
-                  <h3 className={`${theme.fontHeading} text-sm font-bold text-ink leading-snug`}>
+                  <h3 className={`${theme.fontHeading} text-base font-bold text-ink leading-snug`}>
                     {ev.title}
                   </h3>
                   {ev.organizer && (
-                    <p className="text-[9.5px] text-draft font-medium mt-0.5">
+                    <p className="text-xs text-draft font-medium mt-1">
                       Organized by: <span className="text-ink font-semibold">{ev.organizer}</span>
                     </p>
                   )}
                 </div>
               </div>
 
-              <div className="flex gap-3 items-center">
+              <div className="flex gap-3.5 items-center">
                 {photoUrl && (
-                  <div className="w-32 h-22 flex-shrink-0 overflow-hidden rounded border border-rule bg-paper shadow-2xs">
+                  <div className="w-36 h-28 flex-shrink-0 overflow-hidden rounded border border-rule bg-paper shadow-2xs">
                     <img src={photoUrl} alt={ev.title} className="w-full h-full object-cover" />
                   </div>
                 )}
-                <p className="flex-1 text-[10.5px] text-ink leading-relaxed text-justify">
+                <p className="flex-1 text-[13.5px] text-ink leading-relaxed text-justify">
                   {ev.description}
                 </p>
               </div>
@@ -369,7 +400,7 @@ function EventsPage({ data, theme = getTemplate('modern-academic') }) {
         })}
       </div>
 
-      <div className="pt-2 border-t border-rule/60 flex items-center justify-between text-[8px] text-draft opacity-70 flex-shrink-0">
+      <div className="pt-2 border-t border-rule/60 flex items-center justify-between text-[10px] text-draft opacity-80 flex-shrink-0">
         <span>MES Wadia COE · Department of Computer Engineering</span>
         <span>Event Highlights & Campus Initiatives</span>
       </div>
@@ -380,10 +411,10 @@ function EventsPage({ data, theme = getTemplate('modern-academic') }) {
 function WorkshopsPage({ data, theme = getTemplate('modern-academic') }) {
   const workshops = data?.workshops || [];
   return (
-    <div className={`w-full h-full p-8 flex flex-col justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
+    <div className={`w-full h-full p-8 pb-12 flex flex-col justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
       <div className={`pb-2.5 ${theme.headerDivider} flex items-end justify-between flex-shrink-0`}>
         <div>
-          <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm ${theme.badgeStyle}`}>
+          <span className={`text-xs font-bold uppercase tracking-wider px-2.5 py-1 min-h-[24px] inline-flex items-center rounded-sm ${theme.badgeStyle}`}>
             Student Workshops
           </span>
           <h2 className={`${theme.fontHeading} text-2xl font-bold text-ink leading-tight mt-1`}>
@@ -397,14 +428,16 @@ function WorkshopsPage({ data, theme = getTemplate('modern-academic') }) {
         {workshops.map((w, idx) => {
           const photoUrl = typeof w.photos?.[0] === 'string' ? w.photos[0] : w.photos?.[0]?.url;
           return (
-            <div key={w.id || idx} className={`${theme.cardStyle} p-3.5 bg-paper/30 flex flex-col gap-2`}>
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded bg-blue-100 text-navy border border-blue-200">
-                  {w.date}
-                </span>
-                <div className="flex items-center gap-1.5 text-[9px] text-draft">
-                  {w.targetClass && <span className="bg-white px-1.5 py-0.5 rounded border border-rule font-medium">Audience: {w.targetClass}</span>}
-                  {w.participants && <span className="bg-green-50 text-pass px-1.5 py-0.5 rounded border border-green-200 font-semibold">👥 {w.participants} Attended</span>}
+            <div key={w.id || idx} className={`${theme.cardStyle} p-4 bg-paper/30 flex flex-col gap-2.5 border border-rule/70 shadow-2xs`}>
+              <div className="flex items-center justify-between gap-2 flex-wrap min-h-[28px]">
+                {w.date && (
+                  <span className="text-xs font-bold uppercase px-2.5 py-1 min-h-[26px] inline-flex items-center rounded bg-blue-100 text-navy border border-blue-200 leading-normal">
+                    {w.date}
+                  </span>
+                )}
+                <div className="flex items-center gap-1.5 text-xs text-draft">
+                  {w.targetClass && <span className="bg-white px-2 py-0.5 rounded border border-rule font-medium">Audience: {w.targetClass}</span>}
+                  {w.participants && <span className="bg-green-50 text-pass px-2 py-0.5 rounded border border-green-200 font-semibold">👥 {w.participants} Attended</span>}
                 </div>
               </div>
 
@@ -412,19 +445,19 @@ function WorkshopsPage({ data, theme = getTemplate('modern-academic') }) {
                 {w.title}
               </h3>
 
-              <div className="flex items-center gap-2 p-1.5 bg-white rounded border border-rule/60 text-xs flex-wrap">
-                <span className="font-bold text-navy text-[11px]">Speaker:</span>
-                <span className="text-ink font-semibold text-[11px]">{w.speaker}</span>
-                {w.designation && <span className="text-draft text-[10px]">({w.designation}, {w.organization})</span>}
+              <div className="flex items-center gap-2 p-2 bg-white rounded border border-rule/60 text-xs flex-wrap">
+                <span className="font-bold text-navy text-xs">Speaker:</span>
+                <span className="text-ink font-semibold text-xs">{w.speaker}</span>
+                {w.designation && <span className="text-draft text-[11px]">({w.designation}, {w.organization})</span>}
               </div>
 
-              <div className="flex gap-3 items-center">
+              <div className="flex gap-3.5 items-center">
                 {photoUrl && (
-                  <div className="w-34 h-26 flex-shrink-0 overflow-hidden rounded border border-rule bg-paper shadow-2xs">
+                  <div className="w-36 h-28 flex-shrink-0 overflow-hidden rounded border border-rule bg-paper shadow-2xs">
                     <img src={photoUrl} alt={w.title} className="w-full h-full object-cover" />
                   </div>
                 )}
-                <p className="flex-1 text-[10.5px] text-ink leading-relaxed text-justify">
+                <p className="flex-1 text-[13px] text-ink leading-relaxed text-justify">
                   {w.description}
                 </p>
               </div>
@@ -433,7 +466,7 @@ function WorkshopsPage({ data, theme = getTemplate('modern-academic') }) {
         })}
       </div>
 
-      <div className="pt-2 border-t border-rule/60 flex items-center justify-between text-[8px] text-draft opacity-70 flex-shrink-0">
+      <div className="pt-2 border-t border-rule/60 flex items-center justify-between text-[10px] text-draft opacity-80 flex-shrink-0">
         <span>Department of Computer Engineering</span>
         <span>Hands-on Skill Development Series</span>
       </div>
@@ -444,10 +477,10 @@ function WorkshopsPage({ data, theme = getTemplate('modern-academic') }) {
 function LecturesPage({ data, theme = getTemplate('modern-academic') }) {
   const lectures = data?.lectures || [];
   return (
-    <div className={`w-full h-full p-8 flex flex-col justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
+    <div className={`w-full h-full p-8 pb-12 flex flex-col justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
       <div className={`pb-2.5 ${theme.headerDivider} flex items-end justify-between flex-shrink-0`}>
         <div>
-          <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm ${theme.badgeStyle}`}>
+          <span className={`text-xs font-bold uppercase tracking-wider px-2.5 py-1 min-h-[24px] inline-flex items-center rounded-sm ${theme.badgeStyle}`}>
             Guest Lectures
           </span>
           <h2 className={`${theme.fontHeading} text-2xl font-bold text-ink leading-tight mt-1`}>
@@ -461,34 +494,36 @@ function LecturesPage({ data, theme = getTemplate('modern-academic') }) {
         {lectures.map((lec, idx) => {
           const photoUrl = typeof lec.photos?.[0] === 'string' ? lec.photos[0] : lec.photos?.[0]?.url;
           return (
-            <div key={lec.id || idx} className={`${theme.cardStyle} p-3.5 bg-paper/30 flex flex-col gap-2`}>
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-200">
-                  {lec.date}
-                </span>
-                <div className="flex items-center gap-1.5 text-[9px] text-draft">
-                  {lec.venue && <span className="bg-white px-1.5 py-0.5 rounded border border-rule">📍 {lec.venue}</span>}
-                  {lec.participants && <span className="bg-green-50 text-pass px-1.5 py-0.5 rounded border border-green-200 font-semibold">👥 {lec.participants} Students</span>}
+            <div key={lec.id || idx} className={`${theme.cardStyle} p-4 bg-paper/30 flex flex-col gap-2.5 border border-rule/70 shadow-2xs`}>
+              <div className="flex items-center justify-between gap-2 flex-wrap min-h-[28px]">
+                {lec.date && (
+                  <span className="text-xs font-bold uppercase px-2.5 py-1 min-h-[26px] inline-flex items-center rounded bg-purple-100 text-purple-800 border border-purple-200 leading-normal">
+                    {lec.date}
+                  </span>
+                )}
+                <div className="flex items-center gap-1.5 text-xs text-draft">
+                  {lec.venue && <span className="bg-white px-2 py-0.5 rounded border border-rule">📍 {lec.venue}</span>}
+                  {lec.participants && <span className="bg-green-50 text-pass px-2 py-0.5 rounded border border-green-200 font-semibold">👥 {lec.participants} Students</span>}
                 </div>
               </div>
 
-              <h3 className={`${theme.fontHeading} text-sm font-bold text-ink leading-snug`}>
+              <h3 className={`${theme.fontHeading} text-base font-bold text-ink leading-snug`}>
                 {lec.topic || lec.title}
               </h3>
 
-              <div className="flex items-center gap-2 p-1.5 bg-white rounded border border-rule/60 text-xs flex-wrap">
-                <span className="font-bold text-navy text-[11px]">Distinguished Speaker:</span>
-                <span className="text-ink font-semibold text-[11px]">{lec.speaker}</span>
-                {lec.designation && <span className="text-draft text-[10px]">({lec.designation}, {lec.organization})</span>}
+              <div className="flex items-center gap-2 p-2 bg-white rounded border border-rule/60 text-xs flex-wrap">
+                <span className="font-bold text-navy text-xs">Distinguished Speaker:</span>
+                <span className="text-ink font-semibold text-xs">{lec.speaker}</span>
+                {lec.designation && <span className="text-draft text-[11px]">({lec.designation}, {lec.organization})</span>}
               </div>
 
-              <div className="flex gap-3 items-center">
+              <div className="flex gap-3.5 items-center">
                 {photoUrl && (
-                  <div className="w-34 h-26 flex-shrink-0 overflow-hidden rounded border border-rule bg-paper shadow-2xs">
+                  <div className="w-36 h-28 flex-shrink-0 overflow-hidden rounded border border-rule bg-paper shadow-2xs">
                     <img src={photoUrl} alt={lec.speaker} className="w-full h-full object-cover" />
                   </div>
                 )}
-                <p className="flex-1 text-[10.5px] text-ink leading-relaxed text-justify">
+                <p className="flex-1 text-[13px] text-ink leading-relaxed text-justify">
                   {lec.description}
                 </p>
               </div>
@@ -497,7 +532,7 @@ function LecturesPage({ data, theme = getTemplate('modern-academic') }) {
         })}
       </div>
 
-      <div className="pt-2 border-t border-rule/60 flex items-center justify-between text-[8px] text-draft opacity-70 flex-shrink-0">
+      <div className="pt-2 border-t border-rule/60 flex items-center justify-between text-[10px] text-draft opacity-80 flex-shrink-0">
         <span>Department of Computer Engineering</span>
         <span>Industry-Academia Keynote Series</span>
       </div>
@@ -508,10 +543,10 @@ function LecturesPage({ data, theme = getTemplate('modern-academic') }) {
 function AchievementsPage({ data, theme = getTemplate('modern-academic') }) {
   const achievements = data?.achievements || [];
   return (
-    <div className={`w-full h-full p-8 flex flex-col justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
+    <div className={`w-full h-full p-8 pb-12 flex flex-col justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
       <div className={`pb-2.5 ${theme.headerDivider} flex items-end justify-between flex-shrink-0`}>
         <div>
-          <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm ${theme.badgeStyle}`}>
+          <span className={`text-xs font-bold uppercase tracking-wider px-2.5 py-1 min-h-[24px] inline-flex items-center rounded-sm ${theme.badgeStyle}`}>
             Student Laurels
           </span>
           <h2 className={`${theme.fontHeading} text-2xl font-bold text-ink leading-tight mt-1`}>
@@ -521,13 +556,13 @@ function AchievementsPage({ data, theme = getTemplate('modern-academic') }) {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col justify-around py-1 gap-2">
+      <div className="flex-1 flex flex-col justify-around py-1 gap-2.5">
         {achievements.map((a, idx) => {
           const photoUrl = a.photo;
           return (
-            <div key={a.id || idx} className={`${theme.cardStyle} p-2.5 bg-paper/30 flex items-center gap-3`}>
+            <div key={a.id || idx} className={`${theme.cardStyle} p-3 bg-paper/30 flex items-center gap-3.5 border border-rule/70 shadow-2xs`}>
               {photoUrl ? (
-                <div className="w-13 h-13 rounded-full overflow-hidden flex-shrink-0 border-2 border-rule bg-white shadow-2xs">
+                <div className="w-14 h-14 rounded-full overflow-hidden flex-shrink-0 border-2 border-rule bg-white shadow-2xs">
                   <img src={photoUrl} alt={a.name} className="w-full h-full object-cover" />
                 </div>
               ) : (
@@ -538,26 +573,26 @@ function AchievementsPage({ data, theme = getTemplate('modern-academic') }) {
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <span className="text-[11.5px] font-bold text-ink truncate">
-                    {a.name} <span className="text-[10px] text-draft font-semibold">({a.class})</span>
+                  <span className="text-sm font-bold text-ink truncate">
+                    {a.name} <span className="text-xs text-draft font-semibold">({a.class})</span>
                   </span>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[8.5px] font-bold uppercase px-1.5 py-0.5 rounded bg-blue-50 text-navy border border-blue-200">
+                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-blue-50 text-navy border border-blue-200">
                       {a.level}
                     </span>
                     {a.position && (
-                      <span className="text-[8.5px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
                         {a.position}
                       </span>
                     )}
                   </div>
                 </div>
 
-                <p className="text-[10.5px] font-semibold text-navy mt-0.5">
+                <p className="text-xs font-bold text-navy mt-0.5">
                   {a.achievement} {a.prize ? `— ${a.prize}` : ''}
                 </p>
 
-                <p className="text-[10px] text-ink/80 leading-relaxed text-justify line-clamp-2 mt-0.5">
+                <p className="text-[11.5px] text-ink/90 leading-relaxed text-justify mt-0.5">
                   {a.description}
                 </p>
               </div>
@@ -566,7 +601,7 @@ function AchievementsPage({ data, theme = getTemplate('modern-academic') }) {
         })}
       </div>
 
-      <div className="pt-2 border-t border-rule/60 flex items-center justify-between text-[8px] text-draft opacity-70 flex-shrink-0">
+      <div className="pt-2 border-t border-rule/60 flex items-center justify-between text-[10px] text-draft opacity-80 flex-shrink-0">
         <span>Department of Computer Engineering</span>
         <span>Student Recognition & Competitive Excellence</span>
       </div>
@@ -580,17 +615,17 @@ function CoEFeaturePage({ data, theme = getTemplate('modern-academic') }) {
 
   if (isPart1) {
     return (
-      <div className={`w-full h-full p-8 flex flex-col justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
+      <div className={`w-full h-full p-8 pb-12 flex flex-col justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
         <div className={`pb-2.5 ${theme.headerDivider} flex items-end justify-between flex-shrink-0`}>
           <div>
-            <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm ${theme.badgeStyle}`}>
+            <span className={`text-xs font-bold uppercase tracking-wider px-2.5 py-1 min-h-[24px] inline-flex items-center rounded-sm ${theme.badgeStyle}`}>
               Centre of Excellence
             </span>
             <h2 className={`${theme.fontHeading} text-2xl font-bold text-ink leading-tight mt-1`}>
               {coe.name || 'Centre of Excellence'}
             </h2>
             {coe.partner && (
-              <p className="text-xs text-navy font-semibold mt-0.5">
+              <p className="text-sm text-navy font-semibold mt-0.5">
                 Industry Partner: {coe.partner} · Established {coe.dateEstablished || '2024'}
               </p>
             )}
@@ -599,7 +634,7 @@ function CoEFeaturePage({ data, theme = getTemplate('modern-academic') }) {
 
         <div className="flex-1 flex flex-col justify-around py-2 gap-3">
           {coe.tagline && (
-            <div className="p-2 bg-navy/5 border-l-4 border-navy rounded-r text-xs italic text-navy font-medium">
+            <div className="p-2.5 bg-navy/5 border-l-4 border-navy rounded-r text-sm italic text-navy font-medium">
               "{coe.tagline}"
             </div>
           )}
@@ -607,40 +642,40 @@ function CoEFeaturePage({ data, theme = getTemplate('modern-academic') }) {
           {coe.photos?.[0]?.url && (
             <div className="w-full h-44 rounded overflow-hidden border border-rule relative shadow-sm">
               <img src={coe.photos[0].url} alt="CoE Lab" className="w-full h-full object-cover" />
-              <div className="absolute bottom-0 inset-x-0 bg-black/65 backdrop-blur-xs text-white text-[9px] px-3 py-1">
+              <div className="absolute bottom-0 inset-x-0 bg-black/65 backdrop-blur-xs text-white text-xs px-3 py-1.5">
                 {coe.photos[0].caption || 'Advanced Computing & XR Simulation Facility'}
               </div>
             </div>
           )}
 
           <div className="space-y-1">
-            <h4 className="text-xs font-bold text-navy uppercase tracking-wider">About the Centre</h4>
-            <p className="text-[10.5px] text-ink leading-relaxed text-justify">
+            <h4 className="text-sm font-bold text-navy uppercase tracking-wider">About the Centre</h4>
+            <p className="text-[13px] text-ink leading-relaxed text-justify">
               {coe.description}
             </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="p-2.5 rounded border border-rule bg-paper/40">
-              <h5 className="text-[11px] font-bold text-navy mb-1 flex items-center gap-1.5">
+            <div className="p-3 rounded border border-rule bg-paper/40">
+              <h5 className="text-xs font-bold text-navy mb-1 flex items-center gap-1.5">
                 <span>🎯</span> Vision
               </h5>
-              <p className="text-[10px] text-ink leading-relaxed text-justify">
+              <p className="text-[12px] text-ink leading-relaxed text-justify">
                 {coe.vision || 'To achieve international recognition in emerging computing architectures and spatial intelligence.'}
               </p>
             </div>
-            <div className="p-2.5 rounded border border-rule bg-paper/40">
-              <h5 className="text-[11px] font-bold text-navy mb-1 flex items-center gap-1.5">
+            <div className="p-3 rounded border border-rule bg-paper/40">
+              <h5 className="text-xs font-bold text-navy mb-1 flex items-center gap-1.5">
                 <span>🚀</span> Mission
               </h5>
-              <p className="text-[10px] text-ink leading-relaxed text-justify">
+              <p className="text-[12px] text-ink leading-relaxed text-justify">
                 {coe.mission || 'Equip engineering students with cutting-edge industry competencies, research publications, and patented innovations.'}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="pt-2 border-t border-rule/60 flex items-center justify-between text-[8px] text-draft opacity-70 flex-shrink-0">
+        <div className="pt-2 border-t border-rule/60 flex items-center justify-between text-[10px] text-draft opacity-80 flex-shrink-0">
           <span>Department of Computer Engineering</span>
           <span>Centre of Excellence · Strategic Research Hub</span>
         </div>
@@ -650,10 +685,10 @@ function CoEFeaturePage({ data, theme = getTemplate('modern-academic') }) {
 
   // Part 2: Activities, Projects & Gallery
   return (
-    <div className={`w-full h-full p-8 flex flex-col justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
+    <div className={`w-full h-full p-8 pb-12 flex flex-col justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
       <div className={`pb-2.5 ${theme.headerDivider} flex items-end justify-between flex-shrink-0`}>
         <div>
-          <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm ${theme.badgeStyle}`}>
+          <span className={`text-xs font-bold uppercase tracking-wider px-2.5 py-1 min-h-[24px] inline-flex items-center rounded-sm ${theme.badgeStyle}`}>
             Centre of Excellence
           </span>
           <h2 className={`${theme.fontHeading} text-2xl font-bold text-ink leading-tight mt-1`}>
@@ -665,18 +700,18 @@ function CoEFeaturePage({ data, theme = getTemplate('modern-academic') }) {
 
       <div className="flex-1 flex flex-col justify-around py-2 gap-3">
         <div className="grid grid-cols-2 gap-3">
-          <div className="p-2.5 rounded border border-rule bg-paper/40">
-            <h5 className="text-[11px] font-bold text-navy mb-1">Key Activities & Certifications</h5>
-            <div className="text-[10px] text-ink leading-relaxed space-y-1">
+          <div className="p-3 rounded border border-rule bg-paper/40">
+            <h5 className="text-xs font-bold text-navy mb-1.5">Key Activities & Certifications</h5>
+            <div className="text-[12px] text-ink leading-relaxed space-y-1">
               {(typeof coe.activities === 'string' ? coe.activities.split('\n') : []).map((line, i) => (
                 <p key={i} className="text-justify">{line}</p>
               ))}
             </div>
           </div>
 
-          <div className="p-2.5 rounded border border-rule bg-paper/40">
-            <h5 className="text-[11px] font-bold text-navy mb-1">Achievements & Grants</h5>
-            <div className="text-[10px] text-ink leading-relaxed space-y-1">
+          <div className="p-3 rounded border border-rule bg-paper/40">
+            <h5 className="text-xs font-bold text-navy mb-1.5">Achievements & Grants</h5>
+            <div className="text-[12px] text-ink leading-relaxed space-y-1">
               {(typeof coe.achievements === 'string' ? coe.achievements.split('\n') : []).map((line, i) => (
                 <p key={i} className="text-justify">{line}</p>
               ))}
@@ -685,26 +720,26 @@ function CoEFeaturePage({ data, theme = getTemplate('modern-academic') }) {
         </div>
 
         {/* 4-Image Grid */}
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-4 gap-2.5">
           {(coe.photos?.slice(1, 5) || []).map((p, i) => (
-            <div key={i} className="h-24 rounded overflow-hidden border border-rule bg-paper flex flex-col shadow-2xs">
+            <div key={i} className="h-26 rounded overflow-hidden border border-rule bg-paper flex flex-col shadow-2xs">
               <img src={p.url} alt={p.caption || ''} className="w-full h-18 object-cover flex-1" />
-              <p className="text-[7.5px] text-draft truncate px-1 py-0.5 bg-white font-medium">{p.caption}</p>
+              <p className="text-[9px] text-ink/80 truncate px-1.5 py-1 bg-white font-medium">{p.caption}</p>
             </div>
           ))}
         </div>
 
         {coe.futurePlans && (
-          <div className="p-2.5 rounded border border-blue-200 bg-blue-50/50">
-            <h5 className="text-[10.5px] font-bold text-navy mb-0.5">Future Expansion Roadmap</h5>
-            <p className="text-[9.5px] text-ink leading-relaxed text-justify">
+          <div className="p-3 rounded border border-blue-200 bg-blue-50/50">
+            <h5 className="text-xs font-bold text-navy mb-1">Future Expansion Roadmap</h5>
+            <p className="text-[12px] text-ink leading-relaxed text-justify">
               {coe.futurePlans}
             </p>
           </div>
         )}
       </div>
 
-      <div className="pt-2 border-t border-rule/60 flex items-center justify-between text-[8px] text-draft opacity-70 flex-shrink-0">
+      <div className="pt-2 border-t border-rule/60 flex items-center justify-between text-[10px] text-draft opacity-80 flex-shrink-0">
         <span>Department of Computer Engineering</span>
         <span>Centre of Excellence · Innovation & Technology Transfer</span>
       </div>
@@ -715,10 +750,10 @@ function CoEFeaturePage({ data, theme = getTemplate('modern-academic') }) {
 function StaffAchievementsPage({ data, theme = getTemplate('modern-academic') }) {
   const staff = data?.staff || [];
   return (
-    <div className={`w-full h-full p-8 flex flex-col justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
+    <div className={`w-full h-full p-8 pb-12 flex flex-col justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
       <div className={`pb-2.5 ${theme.headerDivider} flex items-end justify-between flex-shrink-0`}>
         <div>
-          <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm ${theme.badgeStyle}`}>
+          <span className={`text-xs font-bold uppercase tracking-wider px-2.5 py-1 min-h-[24px] inline-flex items-center rounded-sm ${theme.badgeStyle}`}>
             Faculty Distinction
           </span>
           <h2 className={`${theme.fontHeading} text-2xl font-bold text-ink leading-tight mt-1`}>
@@ -728,18 +763,18 @@ function StaffAchievementsPage({ data, theme = getTemplate('modern-academic') })
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col justify-around py-2 gap-2.5">
+      <div className="flex-1 flex flex-col justify-around py-2 gap-3">
         {staff.map((s, idx) => {
           const ach = s.achievements?.[0] || {};
           const photoUrl = ach.photo;
           return (
-            <div key={s.id || idx} className={`${theme.cardStyle} p-3 bg-paper/30 flex gap-3 items-center`}>
+            <div key={s.id || idx} className={`${theme.cardStyle} p-3.5 bg-paper/30 flex gap-3.5 items-center border border-rule/70 shadow-2xs`}>
               {photoUrl ? (
-                <div className="w-14 h-18 rounded border border-rule overflow-hidden flex-shrink-0 bg-white shadow-2xs">
+                <div className="w-16 h-20 rounded border border-rule overflow-hidden flex-shrink-0 bg-white shadow-2xs">
                   <img src={photoUrl} alt={s.facultyName} className="w-full h-full object-cover" />
                 </div>
               ) : (
-                <div className="w-14 h-18 rounded border border-rule bg-navy/10 flex items-center justify-center text-xl flex-shrink-0">
+                <div className="w-16 h-20 rounded border border-rule bg-navy/10 flex items-center justify-center text-xl flex-shrink-0">
                   🏅
                 </div>
               )}
@@ -747,28 +782,28 @@ function StaffAchievementsPage({ data, theme = getTemplate('modern-academic') })
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2 flex-wrap mb-0.5">
                   <div>
-                    <h3 className={`${theme.fontHeading} text-[12.5px] font-bold text-ink`}>
+                    <h3 className={`${theme.fontHeading} text-sm font-bold text-ink`}>
                       {s.facultyName}
                     </h3>
-                    <p className="text-[9.5px] text-draft font-medium">{s.designation}</p>
+                    <p className="text-xs text-draft font-medium">{s.designation}</p>
                   </div>
                   {ach.type && (
-                    <span className="text-[8.5px] font-bold uppercase px-1.5 py-0.5 rounded bg-purple-100 text-purple-900 border border-purple-200">
+                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-purple-100 text-purple-900 border border-purple-200">
                       {ach.type}
                     </span>
                   )}
                 </div>
 
-                <p className="text-[11px] font-bold text-navy leading-snug">
+                <p className="text-xs font-bold text-navy leading-snug">
                   {ach.title}
                 </p>
                 {ach.organization && (
-                  <p className="text-[9.5px] text-draft font-medium">
+                  <p className="text-xs text-draft font-medium">
                     {ach.organization} {ach.date ? `· ${ach.date}` : ''}
                   </p>
                 )}
 
-                <p className="text-[10px] text-ink leading-relaxed text-justify line-clamp-2 mt-0.5">
+                <p className="text-[12px] text-ink leading-relaxed text-justify mt-1">
                   {ach.description}
                 </p>
               </div>
@@ -777,7 +812,7 @@ function StaffAchievementsPage({ data, theme = getTemplate('modern-academic') })
         })}
       </div>
 
-      <div className="pt-2 border-t border-rule/60 flex items-center justify-between text-[8px] text-draft opacity-70 flex-shrink-0">
+      <div className="pt-2 border-t border-rule/60 flex items-center justify-between text-[10px] text-draft opacity-80 flex-shrink-0">
         <span>Department of Computer Engineering</span>
         <span>Faculty Excellence & Scholarly Contributions</span>
       </div>
@@ -788,10 +823,10 @@ function StaffAchievementsPage({ data, theme = getTemplate('modern-academic') })
 function PublicationsPage({ data, theme = getTemplate('modern-academic') }) {
   const publications = data?.publications || [];
   return (
-    <div className={`w-full h-full p-8 flex flex-col justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
+    <div className={`w-full h-full p-8 pb-12 flex flex-col justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
       <div className={`pb-2.5 ${theme.headerDivider} flex items-end justify-between flex-shrink-0`}>
         <div>
-          <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm ${theme.badgeStyle}`}>
+          <span className={`text-xs font-bold uppercase tracking-wider px-2.5 py-1 min-h-[24px] inline-flex items-center rounded-sm ${theme.badgeStyle}`}>
             Research Publications
           </span>
           <h2 className={`${theme.fontHeading} text-2xl font-bold text-ink leading-tight mt-1`}>
@@ -801,32 +836,32 @@ function PublicationsPage({ data, theme = getTemplate('modern-academic') }) {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col justify-around py-1 gap-2">
+      <div className="flex-1 flex flex-col justify-around py-1 gap-2.5">
         {publications.map((p, idx) => (
-          <div key={p.id || idx} className={`${theme.cardStyle} p-2.5 bg-paper/30 flex flex-col gap-0.5`}>
+          <div key={p.id || idx} className={`${theme.cardStyle} p-3 bg-paper/30 flex flex-col gap-1 border border-rule/70 shadow-2xs`}>
             <div className="flex items-center justify-between gap-2 flex-wrap">
-              <span className="text-[8.5px] font-bold uppercase px-1.5 py-0.5 rounded bg-blue-100 text-navy border border-blue-200">
+              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-blue-100 text-navy border border-blue-200">
                 {p.type || 'Research Paper'}
               </span>
-              <span className="text-[8.5px] text-draft font-mono font-medium">
+              <span className="text-xs text-draft font-mono font-medium">
                 {p.date}
               </span>
             </div>
 
-            <h3 className={`${theme.fontHeading} text-[11px] font-bold text-ink leading-snug mt-0.5`}>
+            <h3 className={`${theme.fontHeading} text-xs font-bold text-ink leading-snug mt-0.5`}>
               "{p.title}"
             </h3>
 
-            <p className="text-[10px] font-semibold text-navy">
+            <p className="text-xs font-bold text-navy">
               {p.facultyName}
             </p>
 
-            <p className="text-[9.5px] text-draft italic">
+            <p className="text-xs text-draft italic">
               {p.journal}
             </p>
 
             {p.description && (
-              <p className="text-[9.5px] text-ink leading-relaxed text-justify line-clamp-2">
+              <p className="text-[11.5px] text-ink leading-relaxed text-justify">
                 {p.description}
               </p>
             )}
@@ -837,7 +872,7 @@ function PublicationsPage({ data, theme = getTemplate('modern-academic') }) {
                   href={p.url || `https://doi.org/${p.doi}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-[8.5px] font-mono text-blue-600 hover:underline inline-flex items-center gap-1 font-semibold"
+                  className="text-[10.5px] font-mono text-blue-600 hover:underline inline-flex items-center gap-1 font-semibold"
                 >
                   🔗 DOI: {p.doi}
                 </a>
@@ -847,7 +882,7 @@ function PublicationsPage({ data, theme = getTemplate('modern-academic') }) {
         ))}
       </div>
 
-      <div className="pt-2 border-t border-rule/60 flex items-center justify-between text-[8px] text-draft opacity-70 flex-shrink-0">
+      <div className="pt-2 border-t border-rule/60 flex items-center justify-between text-[10px] text-draft opacity-80 flex-shrink-0">
         <span>Department of Computer Engineering</span>
         <span>Peer-Reviewed Scholarly Publications</span>
       </div>
@@ -864,21 +899,21 @@ export function StudentPreviewCard({ student, index, theme = getTemplate('modern
   const rankBadgeStyle = theme.topperRankStyle?.[displayRank] || theme.topperRankStyle?.other || 'bg-blue-50 text-navy border-blue-200 font-semibold';
 
   return (
-    <div className={`flex flex-col items-center justify-between p-2.5 ${theme.cardStyle} hover:shadow-sm transition-all text-center relative overflow-visible min-h-[145px]`}>
-      {/* Top row: Rank badge + Division tag */}
-      <div className="flex items-center justify-between w-full mb-1 flex-shrink-0">
-        <span className={`text-[9px] px-1.5 py-0.5 rounded border ${rankBadgeStyle}`}>
+    <div className={`flex flex-col items-center justify-between p-3 ${theme.cardStyle} hover:shadow-sm transition-all text-center relative overflow-visible min-h-[160px] border border-rule/70 shadow-2xs`}>
+      {/* Top row: Perfectly centered Rank badge with pinned Division tag */}
+      <div className="relative w-full mb-1.5 flex items-center justify-center flex-shrink-0 min-h-[22px]">
+        <span className={`text-[11px] font-bold px-3 py-0.5 rounded-full border shadow-2xs inline-flex items-center justify-center ${rankBadgeStyle}`}>
           Rank {displayRank}
         </span>
         {student.division && (
-          <span className="text-[8px] text-draft font-semibold uppercase bg-paper px-1 rounded border border-rule/50">
+          <span className="absolute right-0 top-1/2 -translate-y-1/2 text-[9px] text-draft font-semibold uppercase bg-paper px-1.5 py-0.5 rounded border border-rule/50">
             Div {student.division}
           </span>
         )}
       </div>
 
       {/* Photo circle or placeholder */}
-      <div className={`w-11 h-11 ${theme.id === 'minimal' ? 'rounded-none' : theme.id === 'campus-creative' ? 'rounded-lg' : 'rounded-full'} overflow-hidden bg-navy/10 border border-rule flex items-center justify-center flex-shrink-0 my-1`}>
+      <div className={`w-14 h-14 ${theme.id === 'minimal' ? 'rounded-none' : theme.id === 'campus-creative' ? 'rounded-lg' : 'rounded-full'} overflow-hidden bg-navy/10 border-2 border-rule flex items-center justify-center flex-shrink-0 my-1 shadow-2xs`}>
         {photo ? (
           <img
             src={photo}
@@ -891,7 +926,7 @@ export function StudentPreviewCard({ student, index, theme = getTemplate('modern
           />
         ) : null}
         <svg
-          className={`w-5 h-5 text-draft opacity-70 ${photo ? 'hidden' : 'block'}`}
+          className={`w-6 h-6 text-draft opacity-70 ${photo ? 'hidden' : 'block'}`}
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -903,19 +938,17 @@ export function StudentPreviewCard({ student, index, theme = getTemplate('modern
 
       {/* Student Name */}
       <div
-        className="w-full min-h-[38px] flex items-center justify-center px-1 my-0.5"
+        className="w-full min-h-[42px] flex items-center justify-center px-1 my-0.5"
         style={{ overflow: 'visible' }}
       >
         <p
-          className={`text-[13.5px] font-bold text-ink text-center tracking-tight ${theme.fontHeading}`}
+          className={`text-[14.5px] font-bold text-ink text-center tracking-tight leading-snug ${theme.fontHeading}`}
           style={{
             overflow: 'visible',
             whiteSpace: 'normal',
             wordBreak: 'break-word',
-            lineHeight: '1.25',
             margin: 0,
             padding: 0,
-            maxHeight: '40px',
           }}
           title={student.name}
         >
@@ -924,7 +957,7 @@ export function StudentPreviewCard({ student, index, theme = getTemplate('modern
       </div>
 
       {/* CGPA */}
-      <p className="text-[10px] font-semibold font-mono mt-0.5 flex-shrink-0" style={{ color: theme.accentColor || '#1E2D5A' }}>
+      <p className="text-[12.5px] font-bold font-mono mt-0.5 flex-shrink-0" style={{ color: theme.accentColor || '#1E2D5A' }}>
         {student.cgpa ? `${student.cgpa} CGPA` : '—'}
       </p>
     </div>
@@ -938,20 +971,20 @@ function ToppersPage({ data, theme = getTemplate('modern-academic') }) {
   const classYear = data?.classYear || 'SE';
 
   return (
-    <div className={`w-full h-full p-8 flex flex-col overflow-hidden justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
+    <div className={`w-full h-full p-8 pb-12 flex flex-col overflow-hidden justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
       {/* Header */}
       <div className={`pb-2.5 ${theme.headerDivider} flex items-end justify-between flex-shrink-0`}>
         <div>
-          <p className="text-[8px] font-bold uppercase tracking-widest" style={{ color: theme.accentColor || '#1E2D5A' }}>
+          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: theme.accentColor || '#1E2D5A' }}>
             Academic Excellence
           </p>
-          <h2 className={`${theme.fontHeading} text-xl font-bold text-ink leading-tight`}>
+          <h2 className={`${theme.fontHeading} text-2xl font-bold text-ink leading-tight`}>
             Class Toppers — {classYear}
           </h2>
           <p className="text-xs text-draft font-medium">{classLabel}</p>
         </div>
         {totalStudents > 0 && (
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-sm ${theme.badgeStyle}`}>
+          <span className={`text-xs font-bold px-2.5 py-1 rounded-sm ${theme.badgeStyle}`}>
             {totalStudents} Student{totalStudents > 1 ? 's' : ''} · {divisions.length} Division{divisions.length > 1 ? 's' : ''}
           </span>
         )}
@@ -968,24 +1001,24 @@ function ToppersPage({ data, theme = getTemplate('modern-academic') }) {
           </p>
         </div>
       ) : (
-        <div className="flex-1 flex flex-col justify-around py-2 gap-3 overflow-visible">
+        <div className="flex-1 flex flex-col justify-around py-2 gap-3.5 overflow-visible">
           {divisions.map((div) => (
-            <div key={div.name} className={`${theme.cardStyle} p-3 bg-paper/30`}>
+            <div key={div.name} className={`${theme.cardStyle} p-3.5 bg-paper/30 border border-rule/70`}>
               {/* Division Header */}
-              <div className="flex items-center justify-between border-b border-rule/60 pb-1 mb-2">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: theme.accentColor || '#1E2D5A' }} />
-                  <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: theme.accentColor || '#1E2D5A' }}>
+              <div className="flex items-center justify-between border-b border-rule/60 pb-1.5 mb-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: theme.accentColor || '#1E2D5A' }} />
+                  <span className="text-xs font-bold uppercase tracking-wider" style={{ color: theme.accentColor || '#1E2D5A' }}>
                     {div.name}
                   </span>
                 </div>
-                <span className="text-[8px] text-draft font-semibold bg-white px-1.5 py-0.5 rounded border border-rule">
+                <span className="text-[10px] text-draft font-semibold bg-white px-2 py-0.5 rounded border border-rule">
                   {div.students.length} Topper{div.students.length > 1 ? 's' : ''}
                 </span>
               </div>
 
               {/* Students Grid */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-3.5">
                 {div.students.map((student, idx) => (
                   <StudentPreviewCard key={student.id || idx} student={student} index={idx} theme={theme} />
                 ))}
@@ -996,7 +1029,7 @@ function ToppersPage({ data, theme = getTemplate('modern-academic') }) {
       )}
 
       {/* Footer */}
-      <div className="pt-2 border-t border-rule/60 flex items-center justify-between text-[8px] text-draft opacity-70 flex-shrink-0">
+      <div className="pt-2 border-t border-rule/60 flex items-center justify-between text-[10px] text-draft opacity-80 flex-shrink-0">
         <span>Department of Computer Engineering</span>
         <span>Theme: {theme.name} · Auto-arranged by Rank</span>
       </div>
@@ -1074,12 +1107,12 @@ export function MagazinePageSheet({ page, pageNumber, totalPages, currentMagazin
             justifyContent: 'space-between',
             borderTop: theme.id === 'editorial' ? '1px solid #E5DFD5' : '1px solid #E2E8F0',
             paddingTop: '6px',
-            fontSize: '9px',
+            fontSize: '11px',
             color: '#64748B',
             fontFamily: theme.id === 'editorial' || theme.id === 'institutional-premium' ? 'serif' : 'sans-serif',
           }}
         >
-          <span>{currentMagazine?.title || 'Reflection'} · Issue {currentMagazine?.issueNumber || '32'}</span>
+          <span>{currentMagazine?.title || 'Reflection'} · Issue {currentMagazine?.issueNumber || '33'}</span>
           <span style={{ fontWeight: 'bold', color: theme.accentColor || '#1E2D5A' }}>Page {pageNumber}</span>
         </div>
       )}

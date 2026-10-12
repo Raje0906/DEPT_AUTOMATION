@@ -74,7 +74,7 @@ export default function MagazinePreview() {
       const filename = await generateMagazinePDF({
         containerElement: printContainerRef.current,
         magazineTitle: currentMagazine?.title || 'Reflection',
-        issueNumber: currentMagazine?.issueNumber || '32',
+        issueNumber: currentMagazine?.issueNumber || '33',
         onProgress: (msg) => {
           setPdfProgress(msg);
           toast.loading(msg, { id: toastId });

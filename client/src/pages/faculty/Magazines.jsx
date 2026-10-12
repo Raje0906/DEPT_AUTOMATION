@@ -3,12 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { useMagazine } from '../../contexts/MagazineContext';
 import MagazineCard from '../../components/magazine/MagazineCard';
 import { useAuth } from '../../contexts/AuthContext';
+import { isAuthorizedMagazineCreator } from '../../utils/magazinePermissions';
 
 export default function MagazineDashboard() {
   const { magazines } = useMagazine();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [filter, setFilter] = useState('All');
+
+  const canCreate = isAuthorizedMagazineCreator(user);
 
   const FILTERS = ['All', 'Published', 'Draft', 'Under Review', 'Archived'];
 
@@ -25,22 +28,24 @@ export default function MagazineDashboard() {
           <p className="text-[10px] font-bold text-draft uppercase tracking-widest mb-1">Department Publications</p>
           <h1 className="font-serif text-3xl font-bold text-ink">College Magazine</h1>
           <p className="text-sm text-draft mt-1 font-medium">
-            Manage previous issues and create a new magazine.
+            Manage previous issues and browse departmental publications.
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 sm:items-center flex-shrink-0">
           <span className="text-xs text-draft hidden sm:block">
             Welcome, <span className="font-semibold text-ink">{user?.name}</span>
           </span>
-          <button
-            onClick={() => navigate('/faculty/magazines/create')}
-            className="btn-primary self-start sm:self-auto"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-            Create New Magazine
-          </button>
+          {canCreate && (
+            <button
+              onClick={() => navigate('/faculty/magazines/create')}
+              className="btn-primary self-start sm:self-auto"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              Create New Magazine
+            </button>
+          )}
         </div>
       </div>
 
@@ -63,27 +68,29 @@ export default function MagazineDashboard() {
         </div>
         <div className="p-4 bg-white border border-rule rounded-sm">
           <p className="text-xs uppercase tracking-wider text-draft font-semibold">Latest Issue</p>
-          <p className="font-serif text-xl font-bold text-navy mt-1">Issue 32</p>
-          <p className="text-xs text-draft mt-1 font-medium">Reflection · 2025–26</p>
+          <p className="font-serif text-xl font-bold text-navy mt-1">Issue 33</p>
+          <p className="text-xs text-draft mt-1 font-medium">Reflection · 2026–27</p>
         </div>
       </div>
 
       {/* Primary action cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-        <div
-          onClick={() => navigate('/faculty/magazines/create')}
-          className="border-2 border-dashed border-navy rounded-sm p-6 flex items-center gap-5 cursor-pointer hover:bg-blue-50/30 transition-colors group"
-        >
-          <div className="w-12 h-12 rounded-sm bg-navy text-white flex items-center justify-center flex-shrink-0 group-hover:bg-[#162142] transition-colors">
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
+      <div className={`grid grid-cols-1 ${canCreate ? 'md:grid-cols-2' : ''} gap-4 mb-8`}>
+        {canCreate && (
+          <div
+            onClick={() => navigate('/faculty/magazines/create')}
+            className="border-2 border-dashed border-navy rounded-sm p-6 flex items-center gap-5 cursor-pointer hover:bg-blue-50/30 transition-colors group"
+          >
+            <div className="w-12 h-12 rounded-sm bg-navy text-white flex items-center justify-center flex-shrink-0 group-hover:bg-[#162142] transition-colors">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-base font-bold text-navy">Create New Magazine</p>
+              <p className="text-xs text-draft mt-0.5">Start a new edition of Reflection or any departmental publication.</p>
+            </div>
           </div>
-          <div>
-            <p className="text-base font-bold text-navy">Create New Magazine</p>
-            <p className="text-xs text-draft mt-0.5">Start a new edition of Reflection or any departmental publication.</p>
-          </div>
-        </div>
+        )}
 
         <div
           onClick={() => document.getElementById('previous-issues')?.scrollIntoView({ behavior: 'smooth' })}
