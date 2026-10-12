@@ -9,13 +9,15 @@ const pool = require('../db/pool');
  * @param {string} acadYear - Academic year (e.g. '2026-27')
  * @returns {Promise<{ groupsCount: number, membersCount: number }>}
  */
-async function importBEProjectWorkbook(wb, acadYear = '2026-27') {
+async function importBEProjectWorkbook(wb, acadYear = '2026-27', options = {}) {
   if (!wb) {
     throw new Error('No workbook provided');
   }
 
+  const { maxGroups = null } = options;
+
   const s1Sheet = wb.Sheets['Form Responses 1'] || wb.Sheets[wb.SheetNames[0]];
-  const s2Sheet = wb.Sheets['Sheet2'] || wb.Sheets[wb.SheetNames[1]];
+  const s2Sheet = wb.Sheets['Guide Assignments'] || wb.Sheets['Sheet2'] || wb.Sheets[wb.SheetNames[1]];
 
   const s1 = s1Sheet ? XLSX.utils.sheet_to_json(s1Sheet) : [];
   const s2 = s2Sheet ? XLSX.utils.sheet_to_json(s2Sheet, { header: 1 }) : [];
@@ -150,12 +152,16 @@ async function importBEProjectWorkbook(wb, acadYear = '2026-27') {
     let importedGroupsCount = 0;
     let importedMembersCount = 0;
 
-    for (const g of groupsList) {
+    const groupsToImport = (maxGroups && maxGroups > 0) ? groupsList.slice(0, maxGroups) : groupsList;
+
+    for (const g of groupsToImport) {
       const prns = g.students.map(s => s.prn.toUpperCase());
       const resp = s1.find(r => {
         const rPrns = [
           r['Student-1 PRN No (College PRN)'],
           r['Student-2 PRN No (College PRN)'],
+          r['Student-3 PRN No (College PRN)'],
+          r['Student-4 PRN No (College PRN)'],
           r['Student-3 PRN No '],
           r['Student- PRN No ']
         ].map(p => (p || '').toString().trim().toUpperCase()).filter(Boolean);
@@ -163,8 +169,8 @@ async function importBEProjectWorkbook(wb, acadYear = '2026-27') {
       });
 
       let domain = g.domain;
-      if (!domain && resp && resp['Project Domain (Write project Domain Name)']) {
-        domain = String(resp['Project Domain (Write project Domain Name)']).trim();
+      if (!domain && resp && (resp['Domain Name'] || resp['Project Domain (Write project Domain Name)'])) {
+        domain = String(resp['Domain Name'] || resp['Project Domain (Write project Domain Name)']).trim();
       }
       if (!domain) domain = 'General';
 
@@ -172,9 +178,9 @@ async function importBEProjectWorkbook(wb, acadYear = '2026-27') {
       let t2 = '';
       let t3 = '';
       if (resp) {
-        t1 = (resp['Project Title 1'] || g.titles[0] || '').toString().trim().replace(/^[1-3]\.\s*/, '');
-        t2 = (resp['Project Title 2'] || g.titles[1] || '').toString().trim().replace(/^[1-3]\.\s*/, '');
-        t3 = (resp['Project Title 3'] || g.titles[2] || '').toString().trim().replace(/^[1-3]\.\s*/, '');
+        t1 = (resp['Project Topic 1'] || resp['Project Title 1'] || g.titles[0] || '').toString().trim().replace(/^[1-3]\.\s*/, '');
+        t2 = (resp['Project Topic 2'] || resp['Project Title 2'] || g.titles[1] || '').toString().trim().replace(/^[1-3]\.\s*/, '');
+        t3 = (resp['Project Topic 3'] || resp['Project Title 3'] || g.titles[2] || '').toString().trim().replace(/^[1-3]\.\s*/, '');
       } else {
         t1 = (g.titles[0] || 'Untitled Project').replace(/^[1-3]\.\s*/, '');
         t2 = (g.titles[1] || '').replace(/^[1-3]\.\s*/, '');
@@ -212,7 +218,8 @@ async function importBEProjectWorkbook(wb, acadYear = '2026-27') {
         if (resp) {
           const sPrnClean = s.prn.toUpperCase().trim();
           for (let k = 1; k <= 4; k++) {
-            const rP = (resp[`Student-${k === 4 ? '' : k} PRN No ${k === 1 || k === 2 ? '(College PRN)' : ''}`] ||
+            const rP = (resp[`Student-${k} PRN No (College PRN)`] ||
+                        resp[`Student-${k === 4 ? '' : k} PRN No ${k === 1 || k === 2 ? '(College PRN)' : ''}`] ||
                         resp[`Student-PRN No `] ||
                         resp[`Student-${k} PRN No`]) || '';
             if (rP.toString().trim().toUpperCase() === sPrnClean) {

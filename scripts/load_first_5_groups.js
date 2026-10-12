@@ -1,0 +1,283 @@
+'use strict';
+
+const path = require('path');
+const XLSX = require('xlsx');
+const pool = require('../db/pool');
+
+async function loadFirst5Groups() {
+  const filePath = path.join(__dirname, '..', 'BE Project Topic Preferences form (AY 2026-27) (Responses) (2).xlsx');
+  console.log(`[Load Script] Reading Excel from: ${filePath}`);
+
+  const wb = XLSX.readFile(filePath);
+  const s1Sheet = wb.Sheets['Form Responses 1'] || wb.Sheets[wb.SheetNames[0]];
+  const s2Sheet = wb.Sheets['Guide Assignments'] || wb.Sheets['Sheet2'] || wb.Sheets[wb.SheetNames[1]];
+
+  const s1 = s1Sheet ? XLSX.utils.sheet_to_json(s1Sheet) : [];
+  const s2 = s2Sheet ? XLSX.utils.sheet_to_json(s2Sheet, { header: 1 }) : [];
+
+  console.log(`[Load Script] Form Responses: ${s1.length} rows | Guide Assignments: ${s2.length} rows`);
+
+  // Parse Guide Assignments sheet
+  const allGroups = [];
+  let curGroup = null;
+
+  for (const row of s2) {
+    if (row[0] !== undefined && row[0] !== null && typeof row[0] === 'number') {
+      if (curGroup) allGroups.push(curGroup);
+      curGroup = {
+        groupNo: row[0],
+        domain: row[4] ? String(row[4]).trim() : '',
+        guide: row[5] ? String(row[5]).trim() : '',
+        titles: row[6] ? [String(row[6]).trim()] : [],
+        students: [{
+          name: row[1] ? String(row[1]).trim() : '',
+          prn: row[2] ? String(row[2]).trim() : '',
+          division: row[3] ? String(row[3]).trim() : ''
+        }]
+      };
+    } else if (curGroup && (row[1] || row[2])) {
+      const name = row[1] ? String(row[1]).trim() : '';
+      const prn = row[2] ? String(row[2]).trim() : '';
+      const div = row[3] ? String(row[3]).trim() : '';
+      if (name && name !== '-' && prn && prn !== '-') {
+        curGroup.students.push({ name, prn, division: div });
+      }
+      if (row[6]) curGroup.titles.push(String(row[6]).trim());
+    } else if (curGroup && row[6]) {
+      curGroup.titles.push(String(row[6]).trim());
+    }
+  }
+  if (curGroup) allGroups.push(curGroup);
+
+  // Take strictly the first 5 groups
+  const first5Groups = allGroups.slice(0, 5);
+  console.log(`[Load Script] Selected first ${first5Groups.length} groups to import.`);
+
+  // Load students and users from DB for ID resolution
+  const dbStudents = await pool.query(`
+    SELECT s.id as student_id, s.user_id, s.roll_no, s.enrollment_no, s.division, s.batch,
+           u.name, u.email
+    FROM students s
+    JOIN users u ON s.user_id = u.id
+  `);
+
+  const studentByPRN = new Map();
+  const studentByEmail = new Map();
+
+  for (const s of dbStudents.rows) {
+    if (s.enrollment_no) studentByPRN.set(s.enrollment_no.trim().toUpperCase(), s);
+    if (s.roll_no) studentByPRN.set(s.roll_no.trim().toUpperCase(), s);
+    if (s.email) studentByEmail.set(s.email.trim().toLowerCase(), s);
+  }
+
+  const typoPrnMap = {
+    'F2311007': 'F23111007',
+    'F2313051': 'F23113051',
+    'F22113077': 'F23113077',
+    'F22111037': '72236970M'
+  };
+
+  function findStudentMatch(studentObj, formResp) {
+    let cleanPrn = (studentObj.prn || '').toUpperCase().trim();
+    if (typoPrnMap[cleanPrn]) cleanPrn = typoPrnMap[cleanPrn];
+
+    let match = studentByPRN.get(cleanPrn);
+
+    if (!match && formResp) {
+      for (let k = 1; k <= 4; k++) {
+        const em = (formResp[`Student ${k} Email ID`] || '').toString().trim().toLowerCase();
+        if (em && studentByEmail.get(em)) {
+          match = studentByEmail.get(em);
+          break;
+        }
+      }
+    }
+
+    if (!match && studentObj.name) {
+      const sWords = studentObj.name.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+      match = dbStudents.rows.find(dbS => {
+        const dbWords = dbS.name.toLowerCase().split(/\s+/);
+        return sWords.every(w => dbWords.some(dw => dw.includes(w) || w.includes(dw)));
+      });
+    }
+
+    return match || null;
+  }
+
+  const hodRes = await pool.query(`SELECT id FROM users WHERE role = 'hod' LIMIT 1`);
+  const fallbackUserId = hodRes.rows[0]?.id || 1;
+
+  const acadYear = '2026-27';
+  const yearPrefix = acadYear.split('-')[0];
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Remove existing first 5 groups (or any existing groups with these group codes) for this academic year
+    const targetGroupCodes = first5Groups.map(g => `GRP-${yearPrefix}-${String(g.groupNo).padStart(2, '0')}`);
+    console.log(`[Load Script] Removing any existing entries for codes:`, targetGroupCodes);
+    await client.query(
+      `DELETE FROM project_groups WHERE academic_year = $1 AND group_code = ANY($2)`,
+      [acadYear, targetGroupCodes]
+    );
+
+    const insertedSummary = [];
+
+    for (const g of first5Groups) {
+      const prns = g.students.map(s => s.prn.toUpperCase());
+      const resp = s1.find(r => {
+        const rPrns = [
+          r['Student-1 PRN No (College PRN)'],
+          r['Student-2 PRN No (College PRN)'],
+          r['Student-3 PRN No (College PRN)'],
+          r['Student-4 PRN No (College PRN)'],
+          r['Student-3 PRN No '],
+          r['Student- PRN No ']
+        ].map(p => (p || '').toString().trim().toUpperCase()).filter(Boolean);
+        return prns.some(p => rPrns.includes(p));
+      });
+
+      let domain = g.domain;
+      if (!domain && resp && (resp['Domain Name'] || resp['Project Domain (Write project Domain Name)'])) {
+        domain = String(resp['Domain Name'] || resp['Project Domain (Write project Domain Name)']).trim();
+      }
+      if (!domain) domain = 'General';
+
+      let t1 = '';
+      let t2 = '';
+      let t3 = '';
+      if (resp) {
+        t1 = (resp['Project Topic 1'] || resp['Project Title 1'] || g.titles[0] || '').toString().trim().replace(/^[1-3]\.\s*/, '');
+        t2 = (resp['Project Topic 2'] || resp['Project Title 2'] || g.titles[1] || '').toString().trim().replace(/^[1-3]\.\s*/, '');
+        t3 = (resp['Project Topic 3'] || resp['Project Title 3'] || g.titles[2] || '').toString().trim().replace(/^[1-3]\.\s*/, '');
+      } else {
+        t1 = (g.titles[0] || 'Untitled Project').replace(/^[1-3]\.\s*/, '');
+        t2 = (g.titles[1] || '').replace(/^[1-3]\.\s*/, '');
+        t3 = (g.titles[2] || '').replace(/^[1-3]\.\s*/, '');
+      }
+      if (!t1) t1 = 'Project Preference Topic 1';
+
+      const groupCode = `GRP-${yearPrefix}-${String(g.groupNo).padStart(2, '0')}`;
+      const batchDiv = g.students[0]?.division || 'BE-1';
+
+      const leaderStudentObj = g.students[0];
+      const leaderMatch = leaderStudentObj ? findStudentMatch(leaderStudentObj, resp) : null;
+      const createdByUserId = leaderMatch ? leaderMatch.user_id : fallbackUserId;
+
+      const insertGroupRes = await client.query(
+        `INSERT INTO project_groups (
+          group_code, academic_year, batch, title, title_2, title_3, domain, abstract, status, created_by
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'DRAFT', $9)
+        RETURNING id`,
+        [groupCode, acadYear, batchDiv, t1, t2, t3, domain, '', createdByUserId]
+      );
+      const groupId = insertGroupRes.rows[0].id;
+
+      const groupMembersData = [];
+
+      for (let i = 0; i < g.students.length; i++) {
+        const s = g.students[i];
+        if (!s.name || s.name === '-' || !s.prn || s.prn === '-') continue;
+
+        const isLeader = (i === 0);
+        const match = findStudentMatch(s, resp);
+
+        let email = '';
+        let mobile = '';
+
+        if (resp) {
+          const sPrnClean = s.prn.toUpperCase().trim();
+          for (let k = 1; k <= 4; k++) {
+            const rP = (resp[`Student-${k} PRN No (College PRN)`] ||
+                        resp[`Student-${k === 4 ? '' : k} PRN No ${k === 1 || k === 2 ? '(College PRN)' : ''}`] ||
+                        resp[`Student-PRN No `] ||
+                        resp[`Student-${k} PRN No`]) || '';
+            if (rP.toString().trim().toUpperCase() === sPrnClean) {
+              email = (resp[`Student ${k} Email ID`] || '').toString().trim();
+              mobile = (resp[`Student ${k} Mobile No`] || '').toString().trim();
+              break;
+            }
+          }
+        }
+
+        if (!email && match?.email) email = match.email;
+        if (!email) email = `${s.prn.toLowerCase()}@meswadiacoe.edu`;
+
+        const memberRes = await client.query(
+          `INSERT INTO project_group_members (
+            group_id, student_id, roll_no, student_name, email, mobile_no, division, is_leader
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          RETURNING id`,
+          [
+            groupId,
+            match ? match.student_id : null,
+            s.prn,
+            match ? match.name : s.name,
+            email,
+            mobile,
+            s.division || batchDiv,
+            isLeader
+          ]
+        );
+
+        groupMembersData.push({
+          memberId: memberRes.rows[0].id,
+          name: match ? match.name : s.name,
+          prn: s.prn,
+          studentId: match ? match.student_id : null,
+          division: s.division || batchDiv,
+          email,
+          mobile,
+          isLeader
+        });
+      }
+
+      insertedSummary.push({
+        groupId,
+        groupCode,
+        domain,
+        title: t1,
+        title_2: t2,
+        title_3: t3,
+        members: groupMembersData
+      });
+    }
+
+    await client.query('COMMIT');
+    console.log(`[Load Script Success] Successfully loaded ${insertedSummary.length} groups with all members!`);
+    return insertedSummary;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[Load Script Failed] Rolled back transaction:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+if (require.main === module) {
+  loadFirst5Groups()
+    .then(summary => {
+      console.log('\n================ IMPORT SUMMARY ================');
+      summary.forEach(g => {
+        console.log(`\nGroup: ${g.groupCode} (DB ID: ${g.groupId})`);
+        console.log(`  Domain:  ${g.domain}`);
+        console.log(`  Topic 1: ${g.title}`);
+        console.log(`  Topic 2: ${g.title_2}`);
+        console.log(`  Topic 3: ${g.title_3}`);
+        console.log('  Members:');
+        g.members.forEach((m, idx) => {
+          console.log(`    ${idx + 1}. [${m.isLeader ? 'LEADER' : 'MEMBER'}] ${m.name} | PRN: ${m.prn} | Div: ${m.division} | Email: ${m.email} | Mobile: ${m.mobile || 'N/A'} (Student ID: ${m.studentId})`);
+        });
+      });
+      console.log('\n================================================\n');
+      process.exit(0);
+    })
+    .catch(err => {
+      console.error(err);
+      process.exit(1);
+    });
+}
+
+module.exports = { loadFirst5Groups };
