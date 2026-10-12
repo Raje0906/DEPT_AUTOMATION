@@ -101,6 +101,34 @@ export default function BEProjectGovernance() {
   const [panelMentorSearch, setPanelMentorSearch] = useState('');
   const [rangeMentorSearch, setRangeMentorSearch] = useState('');
 
+  // Student Member Management State
+  const [studentModal, setStudentModal] = useState(null); // { mode: 'add' | 'edit', group, member }
+  const [studentForm, setStudentForm] = useState({
+    name: '',
+    roll_no: '',
+    division: 'BE-1',
+    email: '',
+    mobile_no: '',
+    is_leader: false,
+  });
+  const [submittingStudent, setSubmittingStudent] = useState(false);
+
+  const [transferModal, setTransferModal] = useState(null); // { group, member }
+  const [transferTargetGroupId, setTransferTargetGroupId] = useState('');
+  const [transferMakeLeader, setTransferMakeLeader] = useState(false);
+  const [transferSearch, setTransferSearch] = useState('');
+
+  // Group Details Edit Modal State
+  const [editGroupModal, setEditGroupModal] = useState(null);
+  const [editGroupForm, setEditGroupForm] = useState({
+    title: '',
+    title_2: '',
+    title_3: '',
+    domain: '',
+    batch: 'BE-1',
+  });
+  const [submittingGroupEdit, setSubmittingGroupEdit] = useState(false);
+
   const guidesCount = useMemo(() => {
     return (dashboardData?.faculty_load || []).filter(
       (f) => Boolean(f.is_designated_guide || Number(f.guided_groups) > 0) && Number(f.panel_assignments) === 0
@@ -223,17 +251,29 @@ export default function BEProjectGovernance() {
     setLoading(true);
     try {
       const [dashRes, groupsRes, stagesRes, guidesRes, settingsRes] = await Promise.all([
-        api.get(`/projects/hod/dashboard?academic_year=${academicYear}`),
-        api.get(`/projects/hod/groups?academic_year=${academicYear}`),
-        api.get(`/projects/hod/stages?academic_year=${academicYear}`),
-        api.get(`/projects/student/available-guides?academic_year=${academicYear}`),
+        api.get(`/projects/hod/dashboard?academic_year=${academicYear}`).catch((err) => {
+          console.error('Error fetching dashboard:', err);
+          return { data: { total_groups: 0, group_status_breakdown: [], stages: [], faculty_load: [] } };
+        }),
+        api.get(`/projects/hod/groups?academic_year=${academicYear}`).catch((err) => {
+          console.error('Error fetching groups:', err);
+          return { data: [] };
+        }),
+        api.get(`/projects/hod/stages?academic_year=${academicYear}`).catch((err) => {
+          console.error('Error fetching stages:', err);
+          return { data: [] };
+        }),
+        api.get(`/projects/student/available-guides?academic_year=${academicYear}`).catch((err) => {
+          console.error('Error fetching guides:', err);
+          return { data: [] };
+        }),
         api.get(`/projects/registration-settings?academic_year=${academicYear}`).catch(() => ({ data: { is_registration_open: true, due_date: null, is_open: true } })),
       ]);
-      setDashboardData(dashRes.data);
-      setGroups(groupsRes.data);
-      setStages(stagesRes.data);
-      setAvailableGuides(guidesRes.data);
-      setRegSettings(settingsRes.data);
+      setDashboardData(dashRes.data || {});
+      setGroups(groupsRes.data || []);
+      setStages(stagesRes.data || []);
+      setAvailableGuides(guidesRes.data || []);
+      setRegSettings(settingsRes.data || { is_registration_open: true, due_date: null, is_open: true });
       if (settingsRes.data?.due_date) {
         const d = new Date(settingsRes.data.due_date);
         const pad = (n) => String(n).padStart(2, '0');
@@ -615,14 +655,160 @@ export default function BEProjectGovernance() {
     }
   };
 
+  const handleOpenAddStudent = (group) => {
+    setStudentModal({ mode: 'add', group });
+    setStudentForm({
+      name: '',
+      roll_no: '',
+      division: group.batch || 'BE-1',
+      email: '',
+      mobile_no: '',
+      is_leader: false,
+    });
+  };
 
+  const handleOpenEditStudent = (group, member) => {
+    setStudentModal({ mode: 'edit', group, member });
+    setStudentForm({
+      name: member.name || member.student_name || '',
+      roll_no: member.roll_no || '',
+      division: member.division || group.batch || 'BE-1',
+      email: member.email || '',
+      mobile_no: member.mobile_no || '',
+      is_leader: Boolean(member.is_leader),
+    });
+  };
+
+  const handleOpenEditGroup = (group) => {
+    setEditGroupModal(group);
+    setEditGroupForm({
+      title: group.title || '',
+      title_2: group.title_2 || '',
+      title_3: group.title_3 || '',
+      domain: group.domain || '',
+      batch: group.batch || 'BE-1',
+    });
+  };
+
+  const handleSaveEditGroup = async (e) => {
+    e.preventDefault();
+    if (!editGroupModal) return;
+    if (!editGroupForm.title.trim()) {
+      return toast.error('Primary project title is required');
+    }
+    setSubmittingGroupEdit(true);
+    try {
+      const res = await api.patch(`/projects/hod/groups/${editGroupModal.id}`, editGroupForm);
+      toast.success(res.data.message || 'Group details updated successfully');
+      setEditGroupModal(null);
+      fetchHODData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update group details');
+    } finally {
+      setSubmittingGroupEdit(false);
+    }
+  };
+
+  const handleDeleteGroup = async (group) => {
+    if (!window.confirm(`⚠️ Are you sure you want to delete Project Group "${group.group_code}"?\n\nThis will remove the group and all its members permanently.`)) {
+      return;
+    }
+    try {
+      const res = await api.delete(`/projects/hod/groups/${group.id}`);
+      toast.success(res.data.message || 'Group deleted successfully');
+      fetchHODData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to delete project group');
+    }
+  };
+
+  const handleSaveStudent = async (e) => {
+    e.preventDefault();
+    if (!studentModal) return;
+    if (!studentForm.name.trim() || !studentForm.roll_no.trim()) {
+      return toast.error('Student Name and PRN / Roll Number are required.');
+    }
+    setSubmittingStudent(true);
+    try {
+      if (studentModal.mode === 'add') {
+        const res = await api.post(`/projects/hod/groups/${studentModal.group.id}/members`, studentForm);
+        toast.success(res.data.message || 'Student added successfully');
+      } else {
+        const res = await api.patch(`/projects/hod/groups/${studentModal.group.id}/members/${studentModal.member.id}`, studentForm);
+        toast.success(res.data.message || 'Student updated successfully');
+      }
+      setStudentModal(null);
+      fetchHODData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to save student details');
+    } finally {
+      setSubmittingStudent(false);
+    }
+  };
+
+  const handleDeleteStudent = async (group, member) => {
+    const studentName = member.name || member.student_name || member.roll_no;
+    if (!window.confirm(`Are you sure you want to remove "${studentName}" (PRN: ${member.roll_no}) from group ${group.group_code}?`)) {
+      return;
+    }
+    try {
+      const res = await api.delete(`/projects/hod/groups/${group.id}/members/${member.id}`);
+      toast.success(res.data.message || 'Student removed successfully');
+      fetchHODData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to delete student');
+    }
+  };
+
+  const handleOpenTransferStudent = (group, member) => {
+    setTransferModal({ group, member });
+    setTransferTargetGroupId('');
+    setTransferMakeLeader(false);
+    setTransferSearch('');
+  };
+
+  const handleSaveTransferStudent = async (e) => {
+    e.preventDefault();
+    if (!transferModal || !transferTargetGroupId) {
+      return toast.error('Please select a destination group to transfer');
+    }
+    setSubmittingStudent(true);
+    try {
+      const res = await api.post(`/projects/hod/groups/${transferModal.group.id}/members/${transferModal.member.id}/transfer`, {
+        target_group_id: Number(transferTargetGroupId),
+        is_leader: transferMakeLeader,
+      });
+      toast.success(res.data.message || 'Student transferred successfully');
+      setTransferModal(null);
+      fetchHODData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to transfer student');
+    } finally {
+      setSubmittingStudent(false);
+    }
+  };
 
   // Memoized sorted groups & range/domain selection calculations
   const sortedGroups = useMemo(() => {
-    return [...groups].sort((a, b) =>
+    return [...(groups || [])].sort((a, b) =>
       (a.group_code || '').localeCompare(b.group_code || '', undefined, { numeric: true })
     );
   }, [groups]);
+
+  const filteredTransferGroups = useMemo(() => {
+    if (!transferModal) return [];
+    const currentGroupId = transferModal.group?.id;
+    let list = (sortedGroups || []).filter((g) => g.id !== currentGroupId);
+    if (transferSearch.trim()) {
+      const q = transferSearch.toLowerCase().trim();
+      list = list.filter((g) =>
+        g.group_code?.toLowerCase().includes(q) ||
+        g.title?.toLowerCase().includes(q) ||
+        g.domain?.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [sortedGroups, transferModal, transferSearch]);
 
   // Distinct available domains with group counts
   const availableDomains = useMemo(() => {
@@ -1347,11 +1533,11 @@ export default function BEProjectGovernance() {
                     <th>Group Code</th>
                     <th>Division</th>
                     <th>Title &amp; Domain</th>
-                    <th>List</th>
+                    <th>Team Members</th>
                     <th>Assigned Guide</th>
                     <th>Assigned Mentors</th>
                     <th>Group Status</th>
-                    <th className="text-right">Action</th>
+                    <th className="text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1390,9 +1576,23 @@ export default function BEProjectGovernance() {
                               <div className="text-xs text-draft mt-0.5 font-medium">{g.domain}</div>
                             </td>
                             <td>
-                              <div className="text-xs text-ink font-semibold">{g.members_count || g.members?.length || 0} members</div>
-                              <div className="text-[11px] text-draft truncate max-w-[180px]">
-                                {g.leader_name || g.members?.find(m => m.is_leader)?.name || 'Leader'} (Leader)
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="px-2 py-0.5 rounded text-xs font-bold font-mono bg-blue-50 border border-blue-200 text-navy">
+                                    👥 {g.members?.length || g.members_count || 0} / 5
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedGroupId(isExpanded ? null : g.id)}
+                                    className="text-[11px] font-bold text-navy hover:underline"
+                                    title="View/manage students in this group"
+                                  >
+                                    {isExpanded ? 'Hide' : 'Manage Team'}
+                                  </button>
+                                </div>
+                                <div className="text-[11px] text-draft truncate max-w-[190px]" title={g.members?.find(m => m.is_leader)?.name || g.leader_name}>
+                                  👑 {g.members?.find(m => m.is_leader)?.name || g.leader_name || 'Leader unassigned'}
+                                </div>
                               </div>
                             </td>
                             <td>
@@ -1485,10 +1685,27 @@ export default function BEProjectGovernance() {
                             <td className="text-right space-x-1.5 whitespace-nowrap">
                               <button
                                 type="button"
-                                onClick={() => setExpandedGroupId(isExpanded ? null : g.id)}
-                                className="px-2.5 py-1 text-xs border border-rule rounded hover:bg-gray-100 text-draft hover:text-ink transition-colors"
+                                onClick={() => handleOpenAddStudent(g)}
+                                className="px-2 py-1 text-xs font-semibold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition-colors"
+                                title="Directly add a student to this group"
                               >
-                                {isExpanded ? 'Hide' : 'Topics & Team'}
+                                ➕ Add
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditGroup(g)}
+                                className="px-2 py-1 text-xs font-semibold rounded bg-white hover:bg-gray-100 text-draft hover:text-ink border border-rule transition-colors"
+                                title="Edit group topic choices"
+                              >
+                                ✏️
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteGroup(g)}
+                                className="px-2 py-1 text-xs font-semibold rounded bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 transition-colors"
+                                title="Delete this group"
+                              >
+                                🗑️
                               </button>
                             </td>
                           </tr>
@@ -1500,9 +1717,18 @@ export default function BEProjectGovernance() {
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 bg-white p-4 rounded border border-blue-200 shadow-2xs">
                                   {/* 3 Project Topic Choices */}
                                   <div className="space-y-3">
-                                    <h4 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-navy flex items-center gap-1.5 border-b border-rule pb-2">
-                                      <span>📑</span> 3 Project Topic Preferences
-                                    </h4>
+                                    <div className="flex items-center justify-between border-b border-rule pb-2">
+                                      <h4 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-navy flex items-center gap-1.5">
+                                        <span>📑</span> 3 Project Topic Preferences
+                                      </h4>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenEditGroup(g)}
+                                        className="px-2 py-0.5 text-[11px] font-semibold text-navy bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded transition-colors"
+                                      >
+                                        ✏️ Edit Topics
+                                      </button>
+                                    </div>
                                     <div className="space-y-2">
                                       <div className="p-2.5 rounded-md bg-blue-50/70 border border-blue-200">
                                         <span className="font-bold text-navy block text-[11px] uppercase tracking-wide">Preference 1 (Primary Topic):</span>
@@ -1525,9 +1751,19 @@ export default function BEProjectGovernance() {
 
                                   {/* Team Members */}
                                   <div className="space-y-3">
-                                    <h4 className="text-xs font-bold uppercase tracking-wider text-navy flex items-center gap-1.5 border-b border-rule pb-2">
-                                      <span>👥</span> Student Team Members ({g.members?.length || 0})
-                                    </h4>
+                                    <div className="flex items-center justify-between border-b border-rule pb-2">
+                                      <h4 className="text-xs font-bold uppercase tracking-wider text-navy flex items-center gap-1.5">
+                                        <span>👥</span> Student Team Members ({g.members?.length || 0})
+                                      </h4>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenAddStudent(g)}
+                                        className="px-2.5 py-1 bg-navy hover:bg-slate-800 text-white rounded text-[11px] font-bold flex items-center gap-1 transition-colors shadow-2xs"
+                                        title="Manually add a student to this project group"
+                                      >
+                                        <span>➕</span> Add Student
+                                      </button>
+                                    </div>
                                     <div className="overflow-x-auto">
                                       <table className="w-full text-xs">
                                         <thead>
@@ -1536,27 +1772,65 @@ export default function BEProjectGovernance() {
                                             <th className="py-1.5 px-2 text-left">Student Name</th>
                                             <th className="py-1.5 px-2 text-left whitespace-nowrap">PRN</th>
                                             <th className="py-1.5 px-3 text-center whitespace-nowrap">Division</th>
+                                            <th className="py-1.5 px-2 text-right whitespace-nowrap">Actions</th>
                                           </tr>
                                         </thead>
                                         <tbody className="divide-y divide-rule/60">
-                                          {(g.members || []).map((m, mIdx) => (
-                                            <tr key={mIdx} className="hover:bg-gray-50/60">
-                                              <td className="py-1.5 px-2 font-medium whitespace-nowrap">
-                                                {m.is_leader ? (
-                                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-navy text-white">Leader</span>
-                                                ) : (
-                                                  <span className="text-draft text-[11px]">Member</span>
-                                                )}
-                                              </td>
-                                              <td className="py-1.5 px-2 font-semibold text-ink">{m.name}</td>
-                                              <td className="py-1.5 px-2 font-mono text-draft whitespace-nowrap">{m.roll_no}</td>
-                                              <td className="py-1.5 px-3 text-center whitespace-nowrap">
-                                                <span className="px-2 py-0.5 rounded text-[11px] font-bold font-mono bg-paper border border-rule text-ink whitespace-nowrap">
-                                                  {m.division || g.batch || 'BE-1'}
-                                                </span>
+                                          {(g.members || []).length === 0 ? (
+                                            <tr>
+                                              <td colSpan={5} className="py-4 text-center text-draft text-xs italic">
+                                                No students in this group yet. Click &quot;+ Add Student&quot; to manually add a member.
                                               </td>
                                             </tr>
-                                          ))}
+                                          ) : (
+                                            (g.members || []).map((m, mIdx) => (
+                                              <tr key={m.id || mIdx} className="hover:bg-gray-50/60">
+                                                <td className="py-1.5 px-2 font-medium whitespace-nowrap">
+                                                  {m.is_leader ? (
+                                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-navy text-white">Leader</span>
+                                                  ) : (
+                                                    <span className="text-draft text-[11px]">Member</span>
+                                                  )}
+                                                </td>
+                                                <td className="py-1.5 px-2">
+                                                  <div className="font-semibold text-ink">{m.name}</div>
+                                                  {m.email && <div className="text-[10px] text-draft font-mono">{m.email}</div>}
+                                                </td>
+                                                <td className="py-1.5 px-2 font-mono text-draft whitespace-nowrap">{m.roll_no}</td>
+                                                <td className="py-1.5 px-3 text-center whitespace-nowrap">
+                                                  <span className="px-2 py-0.5 rounded text-[11px] font-bold font-mono bg-paper border border-rule text-ink whitespace-nowrap">
+                                                    {m.division || g.batch || 'BE-1'}
+                                                  </span>
+                                                </td>
+                                                <td className="py-1.5 px-2 text-right whitespace-nowrap space-x-1">
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => handleOpenEditStudent(g, m)}
+                                                    className="px-2 py-0.5 text-[11px] font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-rule rounded transition-colors shadow-2xs"
+                                                    title="Edit student details"
+                                                  >
+                                                    ✏️ Edit
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => handleOpenTransferStudent(g, m)}
+                                                    className="px-2 py-0.5 text-[11px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded transition-colors shadow-2xs"
+                                                    title="Transfer student to another project group"
+                                                  >
+                                                    🔄 Transfer
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => handleDeleteStudent(g, m)}
+                                                    className="px-2 py-0.5 text-[11px] font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded transition-colors shadow-2xs"
+                                                    title="Remove student from this group"
+                                                  >
+                                                    🗑️ Remove
+                                                  </button>
+                                                </td>
+                                              </tr>
+                                            ))
+                                          )}
                                         </tbody>
                                       </table>
                                     </div>
@@ -2576,6 +2850,356 @@ export default function BEProjectGovernance() {
                 </button>
                 <button type="submit" disabled={submitting} className="btn-primary py-2 px-5 text-xs font-bold">
                   {submitting ? 'Saving Stage...' : 'Save Evaluation Stage'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+      {/* STUDENT MODAL (ADD / EDIT) */}
+      {studentModal && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg border border-rule max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto animate-fade-in">
+            <div className="border-b border-rule pb-3 flex items-center justify-between">
+              <div>
+                <h3 className="font-serif text-lg font-bold text-ink flex items-center gap-2">
+                  <span>{studentModal.mode === 'add' ? '➕' : '✏️'}</span>
+                  <span>{studentModal.mode === 'add' ? 'Add Student Member' : 'Edit Student Member'}</span>
+                </h3>
+                <p className="text-xs text-draft mt-0.5">
+                  Group: <strong className="text-navy">{studentModal.group.group_code}</strong> — {studentModal.group.title?.substring(0, 45)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStudentModal(null)}
+                className="text-draft hover:text-ink font-bold text-lg p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveStudent} className="space-y-4 pt-1">
+              <div>
+                <label className="input-label mb-1 block">Full Student Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Rahul Sharma"
+                  value={studentForm.name}
+                  onChange={(e) => setStudentForm({ ...studentForm, name: e.target.value })}
+                  className="input-field text-sm"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="input-label mb-1 block">College PRN / Roll No *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 121B1B045"
+                    value={studentForm.roll_no}
+                    onChange={(e) => setStudentForm({ ...studentForm, roll_no: e.target.value })}
+                    className="input-field text-sm font-mono uppercase"
+                  />
+                </div>
+
+                <div>
+                  <label className="input-label mb-1 block">Division *</label>
+                  <select
+                    value={studentForm.division}
+                    onChange={(e) => setStudentForm({ ...studentForm, division: e.target.value })}
+                    className="input-field text-sm font-semibold"
+                  >
+                    <option value="BE-1">BE-1</option>
+                    <option value="BE-2">BE-2</option>
+                    <option value="BE-3">BE-3</option>
+                    <option value="BE-4">BE-4</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="input-label mb-1 block">Email (Optional)</label>
+                  <input
+                    type="email"
+                    placeholder="student@college.edu"
+                    value={studentForm.email}
+                    onChange={(e) => setStudentForm({ ...studentForm, email: e.target.value })}
+                    className="input-field text-xs font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="input-label mb-1 block">Mobile Number (Optional)</label>
+                  <input
+                    type="tel"
+                    placeholder="e.g. 9876543210"
+                    value={studentForm.mobile_no}
+                    onChange={(e) => setStudentForm({ ...studentForm, mobile_no: e.target.value })}
+                    className="input-field text-xs font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3 bg-paper rounded border border-rule">
+                <label className="flex items-center gap-2.5 text-xs font-semibold text-ink cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={studentForm.is_leader}
+                    onChange={(e) => setStudentForm({ ...studentForm, is_leader: e.target.checked })}
+                    className="w-4 h-4 rounded text-navy"
+                  />
+                  <span>Set as Group Leader (will replace existing leader)</span>
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-rule">
+                <button
+                  type="button"
+                  onClick={() => setStudentModal(null)}
+                  className="px-4 py-2 border border-rule rounded text-xs font-semibold hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingStudent}
+                  className="btn-primary py-2 px-5 text-xs font-bold"
+                >
+                  {submittingStudent ? 'Saving...' : studentModal.mode === 'add' ? 'Add Student' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* TRANSFER STUDENT MODAL */}
+      {transferModal && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg border border-rule max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto animate-fade-in">
+            <div className="border-b border-rule pb-3 flex items-center justify-between">
+              <div>
+                <h3 className="font-serif text-lg font-bold text-ink flex items-center gap-2">
+                  <span>🔄</span>
+                  <span>Transfer Student to Another Group</span>
+                </h3>
+                <p className="text-xs text-draft mt-0.5">
+                  Move student from current group to a different project group.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTransferModal(null)}
+                className="text-draft hover:text-ink font-bold text-lg p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Student & Source Info */}
+            <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-md text-xs space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-sm text-navy">{transferModal.member.name || transferModal.member.student_name}</span>
+                <span className="font-mono text-draft font-bold">PRN: {transferModal.member.roll_no}</span>
+              </div>
+              <div className="text-slate-600 flex items-center gap-2 pt-1 border-t border-blue-200/60">
+                <span>Current Group: <strong className="text-navy">{transferModal.group.group_code}</strong></span>
+                <span>·</span>
+                <span>Division: <strong>{transferModal.member.division || transferModal.group.batch || 'BE-1'}</strong></span>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveTransferStudent} className="space-y-4 pt-1">
+              <div>
+                <label className="input-label mb-1.5 block">Select Destination Project Group *</label>
+
+                <div className="relative mb-2">
+                  <input
+                    type="text"
+                    placeholder="Search target group by code, title, or domain…"
+                    value={transferSearch}
+                    onChange={(e) => setTransferSearch(e.target.value)}
+                    className="w-full px-3 py-1.5 pl-8 text-xs border border-slate-300 rounded-md focus:ring-1 focus:ring-navy outline-none placeholder:text-slate-400 font-medium"
+                  />
+                  <span className="absolute left-2.5 top-2 text-slate-400 text-xs">🔍</span>
+                  {transferSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setTransferSearch('')}
+                      className="absolute right-2.5 top-1.5 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                <select
+                  value={transferTargetGroupId}
+                  onChange={(e) => setTransferTargetGroupId(e.target.value)}
+                  className="input-field font-semibold text-xs"
+                  size={filteredTransferGroups.length > 5 ? 6 : undefined}
+                  required
+                >
+                  <option value="">-- Select Destination Group --</option>
+                  {filteredTransferGroups.map((tg) => {
+                    const memCount = tg.members?.length || tg.members_count || 0;
+                    const isFull = memCount >= 5;
+                    return (
+                      <option key={tg.id} value={tg.id} disabled={isFull}>
+                        {tg.group_code} — {tg.title?.substring(0, 35)}... ({memCount}/5 members){isFull ? ' [FULL]' : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+                <p className="text-[11px] text-draft mt-1 font-medium">
+                  Showing {filteredTransferGroups.length} available groups
+                </p>
+              </div>
+
+              <div className="p-3 bg-paper rounded border border-rule space-y-2">
+                <label className="flex items-center gap-2.5 text-xs font-semibold text-ink cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={transferMakeLeader}
+                    onChange={(e) => setTransferMakeLeader(e.target.checked)}
+                    className="w-4 h-4 rounded text-navy"
+                  />
+                  <span>Make this student the Team Leader in the destination group</span>
+                </label>
+              </div>
+
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded text-xs text-amber-900 leading-relaxed">
+                <span className="font-bold block mb-0.5">⚠️ Note on Transfer:</span>
+                Previous evaluation scores awarded to this student under the source group&apos;s panel assignments will be safely reset so the student can be newly evaluated with their new team.
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-rule">
+                <button
+                  type="button"
+                  onClick={() => setTransferModal(null)}
+                  className="px-4 py-2 border border-rule rounded text-xs font-semibold hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingStudent || !transferTargetGroupId}
+                  className="btn-primary py-2 px-5 text-xs font-bold bg-indigo-700 hover:bg-indigo-800 disabled:opacity-50"
+                >
+                  {submittingStudent ? 'Transferring...' : 'Confirm Transfer →'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* EDIT GROUP DETAILS MODAL */}
+      {editGroupModal && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg border border-rule max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto animate-fade-in">
+            <div className="border-b border-rule pb-3 flex items-center justify-between">
+              <div>
+                <h3 className="font-serif text-lg font-bold text-ink flex items-center gap-2">
+                  <span>✏️</span>
+                  <span>Edit Project Group Details</span>
+                </h3>
+                <p className="text-xs text-draft mt-0.5">
+                  Update group code: <strong className="text-navy">{editGroupModal.group_code}</strong>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditGroupModal(null)}
+                className="text-draft hover:text-ink font-bold text-lg p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditGroup} className="space-y-4 pt-1">
+              <div>
+                <label className="input-label mb-1 block">Preference 1 (Primary Topic) *</label>
+                <textarea
+                  required
+                  rows={2}
+                  value={editGroupForm.title}
+                  onChange={(e) => setEditGroupForm({ ...editGroupForm, title: e.target.value })}
+                  className="input-field text-xs font-medium"
+                  placeholder="Primary project title..."
+                />
+              </div>
+
+              <div>
+                <label className="input-label mb-1 block">Preference 2 (Alternate Topic)</label>
+                <textarea
+                  rows={2}
+                  value={editGroupForm.title_2}
+                  onChange={(e) => setEditGroupForm({ ...editGroupForm, title_2: e.target.value })}
+                  className="input-field text-xs font-medium"
+                  placeholder="Second preference title..."
+                />
+              </div>
+
+              <div>
+                <label className="input-label mb-1 block">Preference 3 (Alternate Topic)</label>
+                <textarea
+                  rows={2}
+                  value={editGroupForm.title_3}
+                  onChange={(e) => setEditGroupForm({ ...editGroupForm, title_3: e.target.value })}
+                  className="input-field text-xs font-medium"
+                  placeholder="Third preference title..."
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="input-label mb-1 block">Domain Name</label>
+                  <input
+                    type="text"
+                    value={editGroupForm.domain}
+                    onChange={(e) => setEditGroupForm({ ...editGroupForm, domain: e.target.value })}
+                    className="input-field text-xs font-semibold"
+                    placeholder="e.g. AI-ML, Cloud, IoT"
+                  />
+                </div>
+
+                <div>
+                  <label className="input-label mb-1 block">Division</label>
+                  <select
+                    value={editGroupForm.batch}
+                    onChange={(e) => setEditGroupForm({ ...editGroupForm, batch: e.target.value })}
+                    className="input-field text-xs font-semibold"
+                  >
+                    <option value="BE-1">BE-1</option>
+                    <option value="BE-2">BE-2</option>
+                    <option value="BE-3">BE-3</option>
+                    <option value="BE-4">BE-4</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-rule">
+                <button
+                  type="button"
+                  onClick={() => setEditGroupModal(null)}
+                  className="px-4 py-2 border border-rule rounded text-xs font-semibold hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingGroupEdit}
+                  className="btn-primary py-2 px-5 text-xs font-bold"
+                >
+                  {submittingGroupEdit ? 'Saving...' : 'Save Group Details'}
                 </button>
               </div>
             </form>

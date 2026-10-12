@@ -1259,7 +1259,7 @@ router.get('/hod/groups', verifyToken, requireProjectCoordinatorOrHOD, async (re
     if (groupIds.length > 0) {
       const [membersRes, evalProgressRes, mentorsRes] = await Promise.all([
         pool.query(
-          `SELECT gm.group_id, gm.roll_no, gm.is_leader, gm.division, gm.mobile_no,
+          `SELECT gm.id, gm.group_id, gm.student_id, gm.roll_no, gm.student_name, gm.is_leader, gm.division, gm.mobile_no,
                   COALESCE(u.name, gm.student_name, 'Student') as name,
                   COALESCE(u.email, gm.email, '') as email
            FROM project_group_members gm
@@ -1329,6 +1329,99 @@ router.get('/hod/groups', verifyToken, requireProjectCoordinatorOrHOD, async (re
   } catch (err) {
     console.error('[HOD List Groups Error]', err);
     res.status(500).json({ error: 'Failed to fetch project groups' });
+  }
+});
+
+/**
+ * GET /api/projects/hod/students/search
+ * Search students across department with enrollment check for quick adding to groups.
+ */
+router.get('/hod/students/search', verifyToken, requireProjectCoordinatorOrHOD, async (req, res) => {
+  try {
+    const q = (req.query.q || '').trim();
+    if (!q || q.length < 2) return res.json([]);
+
+    const acadYear = req.query.academic_year || '2026-27';
+    const results = await pool.query(
+      `SELECT s.id as student_id, s.user_id, s.roll_no, s.enrollment_no, s.division, s.batch,
+              u.name, u.email,
+              gm.group_id as current_group_id, g.group_code as current_group_code
+       FROM students s
+       JOIN users u ON s.user_id = u.id
+       LEFT JOIN project_group_members gm ON gm.student_id = s.id
+       LEFT JOIN project_groups g ON gm.group_id = g.id AND g.academic_year = $1 AND g.status != 'WITHDRAWN'
+       WHERE (
+         u.name ILIKE $2
+         OR s.roll_no ILIKE $2
+         OR s.enrollment_no ILIKE $2
+         OR u.email ILIKE $2
+       )
+       LIMIT 15`,
+      [acadYear, `%${q}%`]
+    );
+
+    res.json(results.rows);
+  } catch (err) {
+    console.error('[Search Students Error]', err);
+    res.status(500).json({ error: 'Failed to search students' });
+  }
+});
+
+/**
+ * PATCH /api/projects/hod/groups/:id
+ * Update project group details (title, alternate titles, domain, division batch, status).
+ */
+router.patch('/hod/groups/:id', verifyToken, requireProjectCoordinatorOrHOD, async (req, res) => {
+  try {
+    const groupId = parseInt(req.params.id, 10);
+    const { title, title_2, title_3, domain, batch, status } = req.body;
+
+    const groupRes = await pool.query('SELECT * FROM project_groups WHERE id = $1', [groupId]);
+    if (groupRes.rows.length === 0) return res.status(404).json({ error: 'Project group not found' });
+
+    const updated = await pool.query(
+      `UPDATE project_groups
+       SET title = COALESCE($1, title),
+           title_2 = COALESCE($2, title_2),
+           title_3 = COALESCE($3, title_3),
+           domain = COALESCE($4, domain),
+           batch = COALESCE($5, batch),
+           status = COALESCE($6, status)
+       WHERE id = $7
+       RETURNING *`,
+      [
+        title !== undefined ? title.trim() : null,
+        title_2 !== undefined ? title_2.trim() : null,
+        title_3 !== undefined ? title_3.trim() : null,
+        domain !== undefined ? domain.trim() : null,
+        batch !== undefined ? batch.trim() : null,
+        status !== undefined ? status.trim() : null,
+        groupId
+      ]
+    );
+
+    res.json({ message: 'Project group details updated successfully', group: updated.rows[0] });
+  } catch (err) {
+    console.error('[Update Group Error]', err);
+    res.status(500).json({ error: 'Failed to update group details' });
+  }
+});
+
+/**
+ * DELETE /api/projects/hod/groups/:id
+ * Delete an entire project group and cascade delete its members.
+ */
+router.delete('/hod/groups/:id', verifyToken, requireProjectCoordinatorOrHOD, async (req, res) => {
+  try {
+    const groupId = parseInt(req.params.id, 10);
+    const groupRes = await pool.query('SELECT * FROM project_groups WHERE id = $1', [groupId]);
+    if (groupRes.rows.length === 0) return res.status(404).json({ error: 'Project group not found' });
+
+    await pool.query('DELETE FROM project_groups WHERE id = $1', [groupId]);
+    res.json({ message: `Project group ${groupRes.rows[0].group_code} deleted successfully.` });
+  } catch (err) {
+    console.error('[Delete Group Error]', err);
+    res.status(500).json({ error: 'Failed to delete project group' });
   }
 });
 
@@ -1506,6 +1599,365 @@ router.post('/hod/groups/clear-guides', verifyToken, requireProjectCoordinatorOr
   } catch (err) {
     console.error('[Clear Guides Error]', err);
     res.status(500).json({ error: 'Failed to clear guide assignments' });
+  }
+});
+
+/**
+ * POST /api/projects/hod/groups/:groupId/members
+ * Manually add a student member to a project group.
+ */
+router.post('/hod/groups/:groupId/members', verifyToken, requireProjectCoordinatorOrHOD, async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const { name, roll_no, division, email, mobile_no, is_leader } = req.body;
+
+    const studentName = (name || '').trim();
+    const rollNo = (roll_no || '').trim();
+    const studentEmail = (email || '').trim();
+    const studentDivision = (division || '').trim();
+    const studentMobile = (mobile_no || '').trim();
+
+    if (!studentName) return res.status(400).json({ error: 'Student name is required' });
+    if (!rollNo) return res.status(400).json({ error: 'PRN / Roll Number is required' });
+
+    const groupRes = await pool.query('SELECT * FROM project_groups WHERE id = $1', [groupId]);
+    if (groupRes.rows.length === 0) return res.status(404).json({ error: 'Project group not found' });
+    const group = groupRes.rows[0];
+
+    // Check if student already enrolled in another group in the same academic year
+    const existingRes = await pool.query(
+      `SELECT g.id, g.group_code, gm.student_name, gm.roll_no
+       FROM project_group_members gm
+       JOIN project_groups g ON gm.group_id = g.id
+       WHERE g.academic_year = $1 AND g.status != 'WITHDRAWN'
+         AND (
+           LOWER(TRIM(gm.roll_no)) = LOWER($2)
+           OR ($3 != '' AND LOWER(TRIM(gm.email)) = LOWER($3))
+         ) LIMIT 1`,
+      [group.academic_year, rollNo, studentEmail]
+    );
+    if (existingRes.rows.length > 0) {
+      return res.status(400).json({
+        error: `Student with PRN "${rollNo}" is already enrolled in group ${existingRes.rows[0].group_code}. Use "Transfer Student" to move them.`
+      });
+    }
+
+    // Capacity check (max 5 members)
+    const countRes = await pool.query('SELECT COUNT(*) FROM project_group_members WHERE group_id = $1', [groupId]);
+    const curCount = parseInt(countRes.rows[0].count, 10);
+    if (curCount >= 5) {
+      return res.status(400).json({ error: `Group ${group.group_code} already has maximum capacity of 5 members.` });
+    }
+
+    // Match student_id from students/users table if present
+    let matchedStudentId = null;
+    const matchRes = await pool.query(
+      `SELECT s.id FROM students s
+       JOIN users u ON s.user_id = u.id
+       WHERE (
+         LOWER(TRIM(s.roll_no)) = LOWER($1)
+         OR LOWER(TRIM(s.enrollment_no)) = LOWER($1)
+         OR ($2 != '' AND LOWER(TRIM(u.email)) = LOWER($2))
+       ) LIMIT 1`,
+      [rollNo, studentEmail]
+    );
+    if (matchRes.rows.length > 0) {
+      matchedStudentId = matchRes.rows[0].id;
+    }
+
+    const shouldBeLeader = Boolean(is_leader) || curCount === 0;
+    if (shouldBeLeader) {
+      await pool.query('UPDATE project_group_members SET is_leader = false WHERE group_id = $1', [groupId]);
+    }
+
+    const insertRes = await pool.query(
+      `INSERT INTO project_group_members (group_id, student_id, roll_no, student_name, email, mobile_no, division, is_leader)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING *`,
+      [
+        groupId,
+        matchedStudentId,
+        rollNo,
+        studentName,
+        studentEmail,
+        studentMobile,
+        studentDivision || group.batch || 'BE-1',
+        shouldBeLeader
+      ]
+    );
+
+    await pool.query(
+      `INSERT INTO audit_logs (entity_type, entity_id, user_id, action, details)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        'project_groups',
+        groupId,
+        req.user.id,
+        'PROJECT_STUDENT_ADDED',
+        `Student ${studentName} (${rollNo}) manually added to group ${group.group_code} by ${req.user.name || 'Coordinator'}`
+      ]
+    ).catch(() => {});
+
+    res.status(201).json({
+      message: `Student "${studentName}" added to group ${group.group_code} successfully!`,
+      member: {
+        ...insertRes.rows[0],
+        name: insertRes.rows[0].student_name
+      }
+    });
+  } catch (err) {
+    console.error('[Add Student Member Error]', err);
+    res.status(500).json({ error: 'Failed to add student to group' });
+  }
+});
+
+/**
+ * PATCH /api/projects/hod/groups/:groupId/members/:memberId
+ * Update/edit an existing student member's details.
+ */
+router.patch('/hod/groups/:groupId/members/:memberId', verifyToken, requireProjectCoordinatorOrHOD, async (req, res) => {
+  try {
+    const { groupId, memberId } = req.params;
+    const { name, roll_no, division, email, mobile_no, is_leader } = req.body;
+
+    const groupRes = await pool.query('SELECT * FROM project_groups WHERE id = $1', [groupId]);
+    if (groupRes.rows.length === 0) return res.status(404).json({ error: 'Project group not found' });
+    const group = groupRes.rows[0];
+
+    const memberRes = await pool.query('SELECT * FROM project_group_members WHERE id = $1 AND group_id = $2', [memberId, groupId]);
+    if (memberRes.rows.length === 0) return res.status(404).json({ error: 'Student member not found in this group' });
+    const current = memberRes.rows[0];
+
+    const studentName = name !== undefined ? name.trim() : (current.student_name || '');
+    const rollNo = roll_no !== undefined ? roll_no.trim() : current.roll_no;
+    const studentDivision = division !== undefined ? division.trim() : (current.division || group.batch || 'BE-1');
+    const studentEmail = email !== undefined ? email.trim() : (current.email || '');
+    const studentMobile = mobile_no !== undefined ? mobile_no.trim() : (current.mobile_no || '');
+    const newIsLeader = is_leader !== undefined ? Boolean(is_leader) : current.is_leader;
+
+    if (!studentName) return res.status(400).json({ error: 'Student name is required' });
+    if (!rollNo) return res.status(400).json({ error: 'PRN / Roll Number is required' });
+
+    // Conflict check with other groups in the same academic year
+    const conflictRes = await pool.query(
+      `SELECT g.group_code, gm.student_name, gm.roll_no
+       FROM project_group_members gm
+       JOIN project_groups g ON gm.group_id = g.id
+       WHERE g.academic_year = $1 AND g.status != 'WITHDRAWN'
+         AND gm.id != $2
+         AND (
+           LOWER(TRIM(gm.roll_no)) = LOWER($3)
+           OR ($4 != '' AND LOWER(TRIM(gm.email)) = LOWER($4))
+         ) LIMIT 1`,
+      [group.academic_year, memberId, rollNo, studentEmail]
+    );
+    if (conflictRes.rows.length > 0) {
+      return res.status(400).json({
+        error: `PRN "${rollNo}" is already assigned to a student in group ${conflictRes.rows[0].group_code}.`
+      });
+    }
+
+    let studentIdToSet = current.student_id;
+    if (rollNo !== current.roll_no || studentEmail !== current.email) {
+      const matchRes = await pool.query(
+        `SELECT s.id FROM students s JOIN users u ON s.user_id = u.id
+         WHERE LOWER(TRIM(s.roll_no)) = LOWER($1) OR LOWER(TRIM(s.enrollment_no)) = LOWER($1)
+            OR ($2 != '' AND LOWER(TRIM(u.email)) = LOWER($2)) LIMIT 1`,
+        [rollNo, studentEmail]
+      );
+      if (matchRes.rows.length > 0) studentIdToSet = matchRes.rows[0].id;
+    }
+
+    if (newIsLeader) {
+      await pool.query('UPDATE project_group_members SET is_leader = false WHERE group_id = $1 AND id != $2', [groupId, memberId]);
+    }
+
+    const updateRes = await pool.query(
+      `UPDATE project_group_members
+       SET student_name = $1, roll_no = $2, division = $3, email = $4, mobile_no = $5, is_leader = $6, student_id = $7
+       WHERE id = $8 AND group_id = $9
+       RETURNING *`,
+      [studentName, rollNo, studentDivision, studentEmail, studentMobile, newIsLeader, studentIdToSet, memberId, groupId]
+    );
+
+    await pool.query(
+      `INSERT INTO audit_logs (entity_type, entity_id, user_id, action, details)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        'project_groups',
+        groupId,
+        req.user.id,
+        'PROJECT_STUDENT_UPDATED',
+        `Student ${studentName} (${rollNo}) details updated in group ${group.group_code} by ${req.user.name || 'Coordinator'}`
+      ]
+    ).catch(() => {});
+
+    res.json({
+      message: `Student "${studentName}" updated successfully!`,
+      member: {
+        ...updateRes.rows[0],
+        name: updateRes.rows[0].student_name
+      }
+    });
+  } catch (err) {
+    console.error('[Update Student Member Error]', err);
+    res.status(500).json({ error: 'Failed to update student member' });
+  }
+});
+
+/**
+ * DELETE /api/projects/hod/groups/:groupId/members/:memberId
+ * Delete/remove a student member from a project group.
+ */
+router.delete('/hod/groups/:groupId/members/:memberId', verifyToken, requireProjectCoordinatorOrHOD, async (req, res) => {
+  try {
+    const { groupId, memberId } = req.params;
+
+    const memberRes = await pool.query(
+      `SELECT gm.*, g.group_code
+       FROM project_group_members gm
+       JOIN project_groups g ON gm.group_id = g.id
+       WHERE gm.id = $1 AND gm.group_id = $2`,
+      [memberId, groupId]
+    );
+    if (memberRes.rows.length === 0) return res.status(404).json({ error: 'Student member not found in this group' });
+    const member = memberRes.rows[0];
+
+    // If deleting leader, elect another member as leader if available
+    if (member.is_leader) {
+      const nextMember = await pool.query(
+        `SELECT id FROM project_group_members WHERE group_id = $1 AND id != $2 ORDER BY id ASC LIMIT 1`,
+        [groupId, memberId]
+      );
+      if (nextMember.rows.length > 0) {
+        await pool.query('UPDATE project_group_members SET is_leader = true WHERE id = $1', [nextMember.rows[0].id]);
+      }
+    }
+
+    await pool.query('DELETE FROM project_group_members WHERE id = $1 AND group_id = $2', [memberId, groupId]);
+
+    await pool.query(
+      `INSERT INTO audit_logs (entity_type, entity_id, user_id, action, details)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        'project_groups',
+        groupId,
+        req.user.id,
+        'PROJECT_STUDENT_REMOVED',
+        `Student ${member.student_name || member.roll_no} removed from group ${member.group_code} by ${req.user.name || 'Coordinator'}`
+      ]
+    ).catch(() => {});
+
+    res.json({ message: `Student "${member.student_name || member.roll_no}" removed from group ${member.group_code} successfully.` });
+  } catch (err) {
+    console.error('[Delete Student Member Error]', err);
+    res.status(500).json({ error: 'Failed to delete student member' });
+  }
+});
+
+/**
+ * POST /api/projects/hod/groups/:groupId/members/:memberId/transfer
+ * Transfer a student member from one project group to another.
+ */
+router.post('/hod/groups/:groupId/members/:memberId/transfer', verifyToken, requireProjectCoordinatorOrHOD, async (req, res) => {
+  try {
+    const { groupId, memberId } = req.params;
+    const { target_group_id, is_leader } = req.body;
+
+    const srcGroupId = parseInt(groupId, 10);
+    const memId = parseInt(memberId, 10);
+    const targetGroupId = parseInt(target_group_id, 10);
+
+    if (!targetGroupId || targetGroupId === srcGroupId) {
+      return res.status(400).json({ error: 'Please select a valid different target group for transfer' });
+    }
+
+    const [sourceRes, targetRes, memberRes] = await Promise.all([
+      pool.query('SELECT * FROM project_groups WHERE id = $1', [srcGroupId]),
+      pool.query('SELECT * FROM project_groups WHERE id = $1', [targetGroupId]),
+      pool.query('SELECT * FROM project_group_members WHERE id = $1 AND group_id = $2', [memId, srcGroupId])
+    ]);
+
+    if (sourceRes.rows.length === 0) return res.status(404).json({ error: 'Source group not found' });
+    if (targetRes.rows.length === 0) return res.status(404).json({ error: 'Target destination group not found' });
+    if (memberRes.rows.length === 0) return res.status(404).json({ error: 'Student member not found in source group' });
+
+    const sourceGroup = sourceRes.rows[0];
+    const targetGroup = targetRes.rows[0];
+    const member = memberRes.rows[0];
+
+    const targetCountRes = await pool.query('SELECT COUNT(*) FROM project_group_members WHERE group_id = $1', [targetGroupId]);
+    const targetCount = parseInt(targetCountRes.rows[0].count, 10);
+    if (targetCount >= 5) {
+      return res.status(400).json({ error: `Target group ${targetGroup.group_code} already has maximum capacity of 5 members.` });
+    }
+
+    const makeLeader = Boolean(is_leader) || targetCount === 0;
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // If member was leader in source group, promote next member in source group
+      if (member.is_leader) {
+        const nextSource = await client.query(
+          'SELECT id FROM project_group_members WHERE group_id = $1 AND id != $2 ORDER BY id ASC LIMIT 1',
+          [srcGroupId, memId]
+        );
+        if (nextSource.rows.length > 0) {
+          await client.query('UPDATE project_group_members SET is_leader = true WHERE id = $1', [nextSource.rows[0].id]);
+        }
+      }
+
+      if (makeLeader) {
+        await client.query('UPDATE project_group_members SET is_leader = false WHERE group_id = $1', [targetGroupId]);
+      }
+
+      // Reset previous evaluation scores for this member since scores were for old group
+      await client.query('DELETE FROM project_evaluation_scores WHERE member_id = $1', [memId]);
+
+      // Update member record to target group
+      const updRes = await client.query(
+        `UPDATE project_group_members
+         SET group_id = $1, is_leader = $2
+         WHERE id = $3`,
+        [targetGroupId, makeLeader, memId]
+      );
+
+      if (updRes.rowCount === 0) {
+        throw new Error(`Failed to update group for member ID ${memId}`);
+      }
+
+      await client.query('COMMIT');
+
+      pool.query(
+        `INSERT INTO audit_logs (entity_type, entity_id, user_id, action, details)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [
+          'project_groups',
+          targetGroupId,
+          req.user.id,
+          'PROJECT_STUDENT_TRANSFERRED',
+          `Student ${member.student_name || member.roll_no} transferred from ${sourceGroup.group_code} to ${targetGroup.group_code} by ${req.user.name || 'Coordinator'}`
+        ]
+      ).catch(() => {});
+
+      res.json({
+        message: `Student "${member.student_name || member.roll_no}" successfully transferred from ${sourceGroup.group_code} to ${targetGroup.group_code}!`,
+        target_group_code: targetGroup.group_code,
+        member_id: memId,
+        new_group_id: targetGroupId
+      });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      console.error('[Transfer Student Error]', err);
+      res.status(500).json({ error: err.message || 'Failed to transfer student' });
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error('[Transfer Student Precheck Error]', err);
+    res.status(500).json({ error: err.message || 'Failed to process student transfer' });
   }
 });
 
