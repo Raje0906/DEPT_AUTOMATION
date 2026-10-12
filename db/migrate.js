@@ -804,7 +804,6 @@ async function runMigrations() {
         UNIQUE(event_id, user_id)
       );
 
-<<<<<<< HEAD
       -- Dedicated Club Office Bearers table
       CREATE TABLE IF NOT EXISTS club_office_bearers (
         id            SERIAL PRIMARY KEY,
@@ -839,7 +838,7 @@ async function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_club_office_bearers_user ON club_office_bearers(user_id);
       CREATE INDEX IF NOT EXISTS idx_club_office_bearers_club ON club_office_bearers(club_id, academic_year);
       CREATE INDEX IF NOT EXISTS idx_club_events_club_status ON club_events(club_id, status);
-=======
+
       -- Seed sample departmental clubs if none exist
       INSERT INTO clubs (name, code, category, department, description, faculty_coordinator_id, student_lead_name, student_lead_email, student_lead_phone, student_lead_division, academic_year, status, founded_year)
       VALUES 
@@ -893,7 +892,6 @@ async function runMigrations() {
       UPDATE exam_types 
       SET name = 'Univ In-Sem / CCE (Mid Term)'
       WHERE code = 'insem';
->>>>>>> font/system1
     `);
 
     await client.query('COMMIT');
