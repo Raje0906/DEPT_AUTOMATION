@@ -69,46 +69,48 @@ export default function CGPAView() {
         <div className="panel-header">
           <h2 className="font-serif text-lg font-semibold">Semester Summary</h2>
         </div>
-        <table className="result-table">
-          <thead>
-            <tr>
-              <th>Semester</th>
-              <th>Academic Year</th>
-              <th className="numeric">Credits</th>
-              <th className="numeric">SGPA</th>
-              <th className="numeric">Pass</th>
-              <th className="numeric">Fail / Backlog</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(data?.semesters || []).map((sem, i) => {
-              const pass = sem.subjects.filter(s => s.grade !== 'F').length;
-              const fail = sem.subjects.filter(s => s.grade === 'F').length;
-              return (
-                <tr key={i}>
-                  <td className="font-semibold">Semester {sem.semester}</td>
-                  <td className="text-draft text-sm">{sem.academic_year}</td>
-                  <td className="numeric">{sem.totalCredits}</td>
-                  <td className="numeric font-semibold tabular-num">
-                    {sem.published ? sem.sgpa.toFixed(2) : '—'}
-                  </td>
-                  <td className="numeric text-pass font-semibold">{pass}</td>
-                  <td className="numeric">
-                    {fail > 0
-                      ? <span className="text-fail font-bold">{fail}</span>
-                      : <span className="text-pass">—</span>}
-                  </td>
-                  <td>
-                    {sem.published
-                      ? <span className="badge-published">Published</span>
-                      : <span className="badge-draft">Pending</span>}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <div className="overflow-x-auto">
+          <table className="result-table">
+            <thead>
+              <tr>
+                <th>Semester</th>
+                <th>Academic Year</th>
+                <th className="numeric">Credits</th>
+                <th className="numeric">SGPA</th>
+                <th className="numeric">Pass</th>
+                <th className="numeric">Fail / Backlog</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(data?.semesters || []).map((sem, i) => {
+                const pass = sem.subjects.filter(s => s.grade !== 'F').length;
+                const fail = sem.subjects.filter(s => s.grade === 'F').length;
+                return (
+                  <tr key={i}>
+                    <td className="font-semibold">Semester {sem.semester}</td>
+                    <td className="text-draft text-sm">{sem.academic_year}</td>
+                    <td className="numeric">{sem.totalCredits}</td>
+                    <td className="numeric font-semibold tabular-num">
+                      {sem.published ? sem.sgpa.toFixed(2) : '—'}
+                    </td>
+                    <td className="numeric text-pass font-semibold">{pass}</td>
+                    <td className="numeric">
+                      {fail > 0
+                        ? <span className="text-fail font-bold">{fail}</span>
+                        : <span className="text-pass">—</span>}
+                    </td>
+                    <td>
+                      {sem.published
+                        ? <span className="badge-published">Published</span>
+                        : <span className="badge-draft">Pending</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Backlogs section */}
@@ -118,28 +120,30 @@ export default function CGPAView() {
             <h2 className="font-serif text-lg font-semibold text-fail">Backlog subjects</h2>
             <p className="text-xs text-draft mt-0.5">Subjects where you scored below the passing threshold (Grade F)</p>
           </div>
-          <table className="result-table">
-            <thead>
-              <tr>
-                <th>Subject</th>
-                <th>Code</th>
-                <th className="numeric">Semester</th>
-                <th className="numeric">Total Obtained</th>
-                <th className="text-center">Grade</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.backlogs.map((b, i) => (
-                <tr key={i}>
-                  <td>{b.subject_name}</td>
-                  <td className="font-mono text-xs text-draft">{b.subject_code}</td>
-                  <td className="numeric">{b.semester}</td>
-                  <td className="numeric text-fail font-bold">{Number(b.total).toFixed(0)}</td>
-                  <td className="text-center text-fail font-bold">{b.grade}</td>
+          <div className="overflow-x-auto">
+            <table className="result-table">
+              <thead>
+                <tr>
+                  <th>Subject</th>
+                  <th>Code</th>
+                  <th className="numeric">Semester</th>
+                  <th className="numeric">Total Obtained</th>
+                  <th className="text-center">Grade</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {data.backlogs.map((b, i) => (
+                  <tr key={i}>
+                    <td>{b.subject_name}</td>
+                    <td className="font-mono text-xs text-draft">{b.subject_code}</td>
+                    <td className="numeric">{b.semester}</td>
+                    <td className="numeric text-fail font-bold">{Number(b.total).toFixed(0)}</td>
+                    <td className="text-center text-fail font-bold">{b.grade}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

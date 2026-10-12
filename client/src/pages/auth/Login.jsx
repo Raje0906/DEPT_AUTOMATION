@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
-import crestLogo from '../../assets/images/mes-wadia-crest.jpg';
+import crestLogo from '../../assets/images/college-logo.jpg';
 import campusPhoto from '../../assets/images/mes-wadia-campus.jpg';
 
 export default function Login() {

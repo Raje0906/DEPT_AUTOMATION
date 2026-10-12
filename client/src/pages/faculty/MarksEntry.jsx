@@ -468,31 +468,31 @@ export default function MarksEntry() {
 
       {/* ─── 4 DEDICATED EVALUATION SECTIONS TABS ─── */}
       <div className="mb-6">
-        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
-          Select Evaluation Section:
+        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+          Evaluation Section:
         </p>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
           {/* Section 1: Assignments & Term Work */}
           <button
             onClick={() => handleSectionTabClick('assignments')}
-            className={`p-3.5 rounded-2xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
+            className={`p-3 rounded-lg border text-left transition-all flex flex-col justify-between cursor-pointer ${
               activeSection === 'assignments'
-                ? 'bg-amber-500 text-white border-amber-600 shadow-md ring-2 ring-amber-500/20'
-                : 'bg-white text-gray-700 border-gray-200 hover:border-amber-300 hover:bg-amber-50/40 shadow-2xs'
+                ? 'bg-[#1E2D5A] text-white border-[#1E2D5A] shadow-xs'
+                : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="text-lg">📚</span>
-              <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
-                activeSection === 'assignments' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-900'
+              <span className="text-xs font-bold tracking-wide">Part I</span>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                activeSection === 'assignments' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-700'
               }`}>
-                25 Marks Total
+                25 Marks
               </span>
             </div>
             <div className="mt-2">
-              <p className="text-sm font-bold leading-tight">Assignments &amp; TW</p>
-              <p className={`text-[11px] mt-0.5 leading-snug ${activeSection === 'assignments' ? 'text-amber-100' : 'text-gray-400'}`}>
-                Assignment 1, 2, Att., Timely
+              <p className="text-sm font-bold leading-tight">Term Work (TW)</p>
+              <p className={`text-[11px] mt-0.5 ${activeSection === 'assignments' ? 'text-gray-200' : 'text-gray-500'}`}>
+                Attendance, Assignments, Timely
               </p>
             </div>
           </button>
@@ -500,49 +500,49 @@ export default function MarksEntry() {
           {/* Section 2: Unit Tests (UT) */}
           <button
             onClick={() => handleSectionTabClick('ut')}
-            className={`p-3.5 rounded-2xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
+            className={`p-3 rounded-lg border text-left transition-all flex flex-col justify-between cursor-pointer ${
               activeSection === 'ut'
-                ? 'bg-blue-600 text-white border-blue-700 shadow-md ring-2 ring-blue-500/20'
-                : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:bg-blue-50/40 shadow-2xs'
+                ? 'bg-[#1E2D5A] text-white border-[#1E2D5A] shadow-xs'
+                : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="text-lg">📝</span>
-              <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
-                activeSection === 'ut' ? 'bg-blue-700 text-white' : 'bg-blue-100 text-blue-900'
+              <span className="text-xs font-bold tracking-wide">Part II</span>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                activeSection === 'ut' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-700'
               }`}>
                 30 Marks Each
               </span>
             </div>
             <div className="mt-2">
               <p className="text-sm font-bold leading-tight">Unit Tests (UT)</p>
-              <p className={`text-[11px] mt-0.5 leading-snug ${activeSection === 'ut' ? 'text-blue-100' : 'text-gray-400'}`}>
+              <p className={`text-[11px] mt-0.5 ${activeSection === 'ut' ? 'text-gray-200' : 'text-gray-500'}`}>
                 Unit Test 1 &amp; Unit Test 2
               </p>
             </div>
           </button>
 
-          {/* Section 3: In-Sem Exam */}
+          {/* Section 3: In-Sem Exam / CCE */}
           <button
             onClick={() => handleSectionTabClick('insem')}
-            className={`p-3.5 rounded-2xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
+            className={`p-3 rounded-lg border text-left transition-all flex flex-col justify-between cursor-pointer ${
               activeSection === 'insem'
-                ? 'bg-emerald-600 text-white border-emerald-700 shadow-md ring-2 ring-emerald-500/20'
-                : 'bg-white text-gray-700 border-gray-200 hover:border-emerald-300 hover:bg-emerald-50/40 shadow-2xs'
+                ? 'bg-[#1E2D5A] text-white border-[#1E2D5A] shadow-xs'
+                : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="text-lg">📋</span>
-              <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
-                activeSection === 'insem' ? 'bg-emerald-700 text-white' : 'bg-emerald-100 text-emerald-900'
+              <span className="text-xs font-bold tracking-wide">Part III</span>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                activeSection === 'insem' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-700'
               }`}>
-                SPPU 30M
+                30 Marks (CCE)
               </span>
             </div>
             <div className="mt-2">
-              <p className="text-sm font-bold leading-tight">In-Sem Exam</p>
-              <p className={`text-[11px] mt-0.5 leading-snug ${activeSection === 'insem' ? 'text-emerald-100' : 'text-gray-400'}`}>
-                Midterm Theory Exam (30M)
+              <p className="text-sm font-bold leading-tight">In-Sem Exam (CCE)</p>
+              <p className={`text-[11px] mt-0.5 ${activeSection === 'insem' ? 'text-gray-200' : 'text-gray-500'}`}>
+                Mid-Term Theory (Passing: 12M)
               </p>
             </div>
           </button>
@@ -550,24 +550,24 @@ export default function MarksEntry() {
           {/* Section 4: End-Sem & Practicals */}
           <button
             onClick={() => handleSectionTabClick('endsem')}
-            className={`p-3.5 rounded-2xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
+            className={`p-3 rounded-lg border text-left transition-all flex flex-col justify-between cursor-pointer ${
               activeSection === 'endsem'
-                ? 'bg-purple-600 text-white border-purple-700 shadow-md ring-2 ring-purple-500/20'
-                : 'bg-white text-gray-700 border-gray-200 hover:border-purple-300 hover:bg-purple-50/40 shadow-2xs'
+                ? 'bg-[#1E2D5A] text-white border-[#1E2D5A] shadow-xs'
+                : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="text-lg">🎓</span>
-              <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
-                activeSection === 'endsem' ? 'bg-purple-700 text-white' : 'bg-purple-100 text-purple-900'
+              <span className="text-xs font-bold tracking-wide">Part IV</span>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                activeSection === 'endsem' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-700'
               }`}>
                 70M / 25M
               </span>
             </div>
             <div className="mt-2">
-              <p className="text-sm font-bold leading-tight">End-Sem &amp; Practicals</p>
-              <p className={`text-[11px] mt-0.5 leading-snug ${activeSection === 'endsem' ? 'text-purple-100' : 'text-gray-400'}`}>
-                End-Sem, Practical &amp; Mocks
+              <p className="text-sm font-bold leading-tight">End Term Exam - Internal</p>
+              <p className={`text-[11px] mt-0.5 ${activeSection === 'endsem' ? 'text-gray-200' : 'text-gray-500'}`}>
+                Mock Theory &amp; Practicals
               </p>
             </div>
           </button>
@@ -576,40 +576,40 @@ export default function MarksEntry() {
 
       {/* ─── SUB-NAVIGATION PILLS (for sections with multiple exam types) ─── */}
       {activeSection === 'ut' && categorizedExams.ut.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-xl p-3 mb-6 shadow-2xs flex items-center justify-between gap-4">
+        <div className="bg-white border border-gray-200 rounded-lg p-3 mb-6 shadow-2xs flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Select Unit Test:</span>
             {categorizedExams.ut.map(exam => (
               <button
                 key={exam.id}
                 onClick={() => handleSelectExam(exam.id)}
-                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`px-3 py-1.5 rounded text-xs font-semibold transition-all cursor-pointer ${
                   selectedExamId === exam.id
-                    ? 'bg-blue-600 text-white shadow-xs'
+                    ? 'bg-[#1E2D5A] text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
-                {exam.name} (Max {exam.default_max_marks})
+                {exam.name} ({exam.default_max_marks} Marks)
               </button>
             ))}
           </div>
-          <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-100">
+          <span className="text-xs font-medium text-gray-600 bg-gray-50 px-2 py-0.5 rounded border border-gray-200">
             Internal Academic Assessment
           </span>
         </div>
       )}
 
       {activeSection === 'endsem' && categorizedExams.endsem.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-xl p-3 mb-6 shadow-2xs flex items-center justify-between gap-4 flex-wrap">
+        <div className="bg-white border border-gray-200 rounded-lg p-3 mb-6 shadow-2xs flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Select Exam:</span>
+            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Select Component:</span>
             {categorizedExams.endsem.map(exam => (
               <button
                 key={exam.id}
                 onClick={() => handleSelectExam(exam.id)}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`px-3 py-1.5 rounded text-xs font-semibold transition-all cursor-pointer ${
                   selectedExamId === exam.id
-                    ? 'bg-purple-600 text-white shadow-xs'
+                    ? 'bg-[#1E2D5A] text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
@@ -617,35 +617,76 @@ export default function MarksEntry() {
               </button>
             ))}
           </div>
-          <span className={`text-xs font-bold px-2.5 py-1 rounded-md border ${
-            currentExam?.has_result_impact
-              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-              : 'bg-amber-50 text-amber-800 border-amber-200'
-          }`}>
-            {currentExam?.has_result_impact ? '★ Final Result Impact' : 'Internal Mock / Practice'}
+          <span className="text-xs font-medium text-gray-600 bg-gray-50 px-2 py-0.5 rounded border border-gray-200">
+            {currentExam?.has_result_impact ? 'Official University Component' : 'Internal Mock / Practice'}
           </span>
         </div>
       )}
 
       {/* ─── SECTION HEADER INFORMATION BANNER ─── */}
       {activeSection === 'assignments' && (
-        <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-4 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <span className="text-xl mt-0.5">💡</span>
-            <div>
-              <p className="text-sm font-bold text-amber-950">Assignments &amp; Term Work Breakup</p>
-              <p className="text-xs text-amber-800 mt-0.5">
-                Calculated automatically out of <strong>25 Marks</strong>: Attendance (max 5) + Assignment 1 (max 7) + Assignment 2 (max 7) + Timely Submission (max 6).
-              </p>
-            </div>
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3.5 mb-5 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold text-gray-900">Term Work (TW) Component Breakup</p>
+            <p className="text-xs text-gray-600 mt-0.5">
+              Calculated out of 25 Marks: Attendance (5M) + Assignment 1 (7M) + Assignment 2 (7M) + Timely Submission (6M).
+            </p>
           </div>
           <button
             onClick={handleSaveTermWork}
             disabled={saving || isLocked}
-            className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-colors shadow-2xs whitespace-nowrap self-end md:self-auto cursor-pointer"
+            className="px-3.5 py-1.5 bg-[#1E2D5A] hover:bg-[#152042] text-white rounded text-xs font-semibold whitespace-nowrap self-end md:self-auto cursor-pointer"
           >
-            {saving ? 'Saving...' : '💾 Save Assignments & TW'}
+            {saving ? 'Saving...' : 'Save Term Work'}
           </button>
+        </div>
+      )}
+
+      {activeSection === 'insem' && (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3.5 mb-5 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold text-gray-900">
+              In-Semester Examination (CCE — 30 Marks)
+            </p>
+            <p className="text-xs text-gray-600 mt-0.5">
+              Passing benchmark: 12 marks (40%). Students scoring below 12 are flagged for remedial classes.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Link
+              to={`/faculty/marksheet/insem-cce?subjectId=${subjectId}&div=${encodeURIComponent(division)}&sem=${semester}&ay=${encodeURIComponent(academicYear)}`}
+              className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded text-xs font-semibold shadow-2xs whitespace-nowrap"
+            >
+              View In-Sem Marksheet
+            </Link>
+            <Link
+              to={`/faculty/remedial?subjectId=${subjectId}&div=${encodeURIComponent(division)}&sem=${semester}&ay=${encodeURIComponent(academicYear)}`}
+              className="px-3 py-1.5 bg-[#1E2D5A] hover:bg-[#152042] text-white rounded text-xs font-semibold whitespace-nowrap"
+            >
+              Remedial Classes
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {activeSection === 'endsem' && (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3.5 mb-5 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold text-gray-900">
+              End-Term Internal Assessment &amp; Mock Evaluation
+            </p>
+            <p className="text-xs text-gray-600 mt-0.5">
+              Term Work (25M), Practical / Oral (25M), and Mock Theory (70M).
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link
+              to={`/faculty/marksheet/end-term-internal?subjectId=${subjectId}&div=${encodeURIComponent(division)}&sem=${semester}&ay=${encodeURIComponent(academicYear)}`}
+              className="px-3 py-1.5 bg-[#1E2D5A] hover:bg-[#152042] text-white rounded text-xs font-semibold whitespace-nowrap"
+            >
+              View Internal Marksheet
+            </Link>
+          </div>
         </div>
       )}
 

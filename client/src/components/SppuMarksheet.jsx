@@ -72,17 +72,24 @@ export default function SppuMarksheet({ student, subjects = [], semester = 5, ac
           <span className="font-bold tracking-wider uppercase text-gray-900">MES WADIA COE</span>
           <span className="font-mono text-[11px] print:text-[10px]">Download Date: {currentDate}</span>
         </div>
-        <div className="text-center space-y-1 print:space-y-0.5">
-          <h1 className="text-xl sm:text-2xl font-serif font-black tracking-wide uppercase text-black print:text-lg">
-            MES wadia COE
-          </h1>
-          <p className="text-xs font-bold text-gray-800 tracking-wide uppercase print:text-[10px]">
-            Pune, 411001
-          </p>
-          <div className="pt-1.5 print:pt-0.5">
-            <span className="inline-block bg-gray-100 border border-gray-400 px-4 py-1 text-xs font-bold text-gray-950 uppercase tracking-wider print:py-0.5 print:px-2 print:text-[10px]">
-              MESWCOE Online Result Display
-            </span>
+        <div className="flex items-center justify-center gap-4 text-center my-1">
+          <img
+            src="/images/college-logo.jpg"
+            alt="MES Wadia COE Logo"
+            className="h-16 w-auto object-contain flex-shrink-0"
+          />
+          <div className="space-y-0.5">
+            <h1 className="text-xl sm:text-2xl font-serif font-black tracking-wide uppercase text-black print:text-lg">
+              MES Wadia College of Engineering
+            </h1>
+            <p className="text-xs font-bold text-gray-800 tracking-wide uppercase print:text-[10px]">
+              Pune, 411001 · Department of Computer Engineering
+            </p>
+            <div className="pt-1 print:pt-0.5">
+              <span className="inline-block bg-gray-100 border border-gray-400 px-4 py-0.5 text-xs font-bold text-gray-950 uppercase tracking-wider print:py-0.5 print:px-2 print:text-[10px]">
+                MESWCOE Online Result Display
+              </span>
+            </div>
           </div>
         </div>
       </div>
