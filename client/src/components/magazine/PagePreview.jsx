@@ -820,71 +820,205 @@ function StaffAchievementsPage({ data, theme = getTemplate('modern-academic') })
   );
 }
 
-function PublicationsPage({ data, theme = getTemplate('modern-academic') }) {
-  const publications = data?.publications || [];
+function renderPublicationText(pub) {
+  const isPatent = pub.type === 'Patent' || (pub.title && pub.title.toLowerCase().includes('patent'));
+  if (isPatent) {
+    return (
+      <span>
+        Published Patent on <span className="font-semibold">"{pub.title}"</span>
+        {pub.date ? ` on ${pub.date}` : ''}
+        {pub.patentNo ? `. Indian Patent No. ${pub.patentNo}` : ''}
+        {pub.description ? `. ${pub.description}` : ''}
+      </span>
+    );
+  }
+
+  const prefix = pub.title?.toLowerCase().startsWith('published') ? '' : 'Published a paper titled, ';
+  const indexingTag = pub.indexing ? ` [${pub.indexing}]` : pub.type && pub.type !== 'Journal Article' && pub.type !== 'Research Paper' ? ` [${pub.type}]` : pub.journal?.toLowerCase().includes('ieee') ? ' [Scopus Indexed]' : '';
+
   return (
-    <div className={`w-full h-full p-8 pb-12 flex flex-col justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
-      <div className={`pb-2.5 ${theme.headerDivider} flex items-end justify-between flex-shrink-0`}>
-        <div>
-          <span className={`text-xs font-bold uppercase tracking-wider px-2.5 py-1 min-h-[24px] inline-flex items-center rounded-sm ${theme.badgeStyle}`}>
-            Research Publications
+    <span>
+      {prefix}
+      <span className="font-semibold">"{pub.title}"</span>
+      {pub.journal ? `, in ${pub.journal}` : ''}
+      {pub.date ? `, ${pub.date}` : ''}
+      {indexingTag}
+      {pub.doi ? ` DOI: ${pub.doi}` : ''}
+      {pub.description && !pub.journal?.includes(pub.description) ? `. ${pub.description}` : ''}
+    </span>
+  );
+}
+
+function PublicationsPage({ data, theme = getTemplate('modern-academic'), pageNumber, currentMagazine }) {
+  const rawList = data?.publications || [];
+  const rawGroups = data?.facultyGroups;
+
+  // Group by faculty if not already grouped
+  const facultyGroups = useMemo(() => {
+    if (Array.isArray(rawGroups) && rawGroups.length > 0) {
+      return rawGroups;
+    }
+    const map = new Map();
+    rawList.forEach((p) => {
+      const name = (p.facultyName || p.author || p.faculty || '').trim() || 'Faculty Member';
+      if (!map.has(name)) {
+        map.set(name, []);
+      }
+      map.get(name).push(p);
+    });
+    return Array.from(map.entries()).map(([facultyName, items]) => ({
+      facultyName,
+      items,
+    }));
+  }, [rawGroups, rawList]);
+
+  const isFinalPage = data?.isFinalPage !== undefined ? data.isFinalPage : (data?.part === 2 || facultyGroups.length <= 4);
+  const issueNum = data?.issueNumber || currentMagazine?.issueNumber || '33';
+  const startNumber = data?.startNumber || (data?.part === 2 ? 4 : 1);
+
+  // Distribution into columns
+  const [col1, col2] = useMemo(() => {
+    if (isFinalPage) {
+      // On final page: Left column has faculty publications, Right column has College Info + Team Photo
+      return [facultyGroups, []];
+    }
+    const mid = Math.ceil(facultyGroups.length / 2);
+    return [facultyGroups.slice(0, mid), facultyGroups.slice(mid)];
+  }, [facultyGroups, isFinalPage]);
+
+  const defaultQuote = isFinalPage
+    ? '―Anyone who has ever made anything of importance was disciplined.‖ — Andrew Hendrixson.'
+    : '―A person who never made a mistake nev er tried anything new.‖ — Albert Einstein';
+
+  return (
+    <div
+      className="w-full h-full p-8 pl-11 pb-6 flex flex-col justify-between relative overflow-hidden bg-white text-ink select-none"
+      style={{ boxSizing: 'border-box' }}
+    >
+      {/* Orange vertical accent bar on the left margin */}
+      <div
+        className="absolute left-0 top-0 bottom-0 w-3.5 bg-[#E65100] z-20 pointer-events-none"
+        aria-hidden="true"
+      />
+
+      {/* Top Header matching reference slide: [ ISSUE 33 ]  Staff Publications  [ Page - X ] */}
+      <div className="flex items-center justify-between pb-3 mb-2 flex-shrink-0">
+        {/* Left: Red outline box with ISSUE */}
+        <div className="border-2 border-[#D32F2F] px-4 py-1 min-w-[125px] text-center shadow-2xs">
+          <span className="text-sm font-bold font-serif text-[#D32F2F] tracking-wider uppercase">
+            ISSUE {issueNum}
           </span>
-          <h2 className={`${theme.fontHeading} text-2xl font-bold text-ink leading-tight mt-1`}>
-            {data?.title || 'Faculty Publications'}
+        </div>
+
+        {/* Center: Red Title Staff Publications */}
+        <div className="text-center flex-1 mx-4">
+          <h2 className="text-2xl font-serif font-bold text-[#D32F2F] tracking-wide">
+            Staff Publications
           </h2>
-          {data?.subtitle && <p className="text-xs text-draft font-medium mt-0.5">{data.subtitle}</p>}
+        </div>
+
+        {/* Right: Red outline box with Page - X */}
+        <div className="border-2 border-[#D32F2F] px-4 py-1 min-w-[105px] text-center shadow-2xs">
+          <span className="text-sm font-bold font-serif text-[#D32F2F] tracking-wider">
+            Page - {pageNumber || (data?.part === 2 ? 16 : 15)}
+          </span>
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col justify-around py-1 gap-2.5">
-        {publications.map((p, idx) => (
-          <div key={p.id || idx} className={`${theme.cardStyle} p-3 bg-paper/30 flex flex-col gap-1 border border-rule/70 shadow-2xs`}>
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-blue-100 text-navy border border-blue-200">
-                {p.type || 'Research Paper'}
-              </span>
-              <span className="text-xs text-draft font-mono font-medium">
-                {p.date}
-              </span>
-            </div>
-
-            <h3 className={`${theme.fontHeading} text-xs font-bold text-ink leading-snug mt-0.5`}>
-              "{p.title}"
-            </h3>
-
-            <p className="text-xs font-bold text-navy">
-              {p.facultyName}
-            </p>
-
-            <p className="text-xs text-draft italic">
-              {p.journal}
-            </p>
-
-            {p.description && (
-              <p className="text-[11.5px] text-ink leading-relaxed text-justify">
-                {p.description}
-              </p>
-            )}
-
-            {p.doi && (
-              <div className="pt-0.5 flex items-center gap-1.5">
-                <a
-                  href={p.url || `https://doi.org/${p.doi}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-[10.5px] font-mono text-blue-600 hover:underline inline-flex items-center gap-1 font-semibold"
-                >
-                  🔗 DOI: {p.doi}
-                </a>
+      {/* Main 2-Column Content Area */}
+      <div className="flex-1 grid grid-cols-2 gap-6 pt-2 pb-2 min-h-0 overflow-hidden">
+        {/* Left Column: Faculty Publications */}
+        <div className="flex flex-col space-y-4 overflow-hidden">
+          {col1.map((fg, idx) => {
+            const facultyNum = startNumber + idx;
+            return (
+              <div key={fg.facultyName || idx} className="space-y-1">
+                <h4 className="font-bold text-[12.5px] text-black font-sans leading-snug">
+                  {facultyNum}. {fg.facultyName}
+                </h4>
+                <ul className="space-y-1.5 pl-2 text-[11px] text-slate-800 leading-snug">
+                  {fg.items.map((pub, pIdx) => (
+                    <li key={pub.id || pIdx} className="flex items-start gap-1.5 text-justify">
+                      <span className="text-black font-bold select-none leading-normal">•</span>
+                      <span className="flex-1">
+                        {renderPublicationText(pub)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               </div>
-            )}
-          </div>
-        ))}
+            );
+          })}
+        </div>
+
+        {/* Right Column: Either Faculty Publications (Part 1) OR Reflection Team Card (Part 2) */}
+        <div className="flex flex-col overflow-hidden">
+          {!isFinalPage ? (
+            <div className="flex flex-col space-y-4">
+              {col2.map((fg, idx) => {
+                const facultyNum = startNumber + col1.length + idx;
+                return (
+                  <div key={fg.facultyName || idx} className="space-y-1">
+                    <h4 className="font-bold text-[12.5px] text-black font-sans leading-snug">
+                      {facultyNum}. {fg.facultyName}
+                    </h4>
+                    <ul className="space-y-1.5 pl-2 text-[11px] text-slate-800 leading-snug">
+                      {fg.items.map((pub, pIdx) => (
+                        <li key={pub.id || pIdx} className="flex items-start gap-1.5 text-justify">
+                          <span className="text-black font-bold select-none leading-normal">•</span>
+                          <span className="flex-1">
+                            {renderPublicationText(pub)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex flex-col justify-between h-full space-y-3 pt-1">
+              {/* College Address Box */}
+              <div className="bg-[#DDEBF7] border border-[#9DC3E6] rounded-xs p-3.5 text-center shadow-2xs">
+                <p className="font-bold text-[11px] uppercase tracking-wider text-[#1E2D5A] leading-snug font-sans">
+                  MODERN EDUCATION SOCIETY'S WADIA COLLEGE OF ENGINEERING, PUNE
+                </p>
+                <div className="mt-2 text-[10.5px] text-slate-700 leading-snug">
+                  <p className="font-semibold text-slate-800">Address: Wadia College Campus,</p>
+                  <p>19, Late Prin. V. K. Joag Path,</p>
+                  <p>Pune - 411001</p>
+                </div>
+                <div className="mt-2.5 inline-block bg-white border border-slate-300 rounded px-2.5 py-1 shadow-2xs">
+                  <p className="text-[9.5px] text-slate-500 font-semibold">College website:</p>
+                  <p className="text-[10.5px] font-bold text-navy font-mono">www.mescoe.mespune.org</p>
+                </div>
+              </div>
+
+              {/* The Reflection Team Photo */}
+              <div className="rounded border-2 border-slate-300 overflow-hidden shadow-sm bg-paper flex-1 min-h-[140px] max-h-[190px]">
+                <img
+                  src="/images/event-symposium.jpg"
+                  alt="The Reflection Team"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+
+              {/* The Reflection Team Names */}
+              <div className="text-center py-2 px-3 bg-white border border-slate-200 rounded-xs shadow-2xs">
+                <p className="text-[11px] font-bold text-navy font-sans">
+                  <span className="text-[#D32F2F]">The Reflection Team:</span> Dr. (Mrs.) N. F. Shaikh &nbsp;·&nbsp; Dr(Mrs) S. S. Raskar &nbsp;·&nbsp; Prof. J. A. Kalbhor
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      <div className="pt-2 border-t border-rule/60 flex items-center justify-between text-[10px] text-draft opacity-80 flex-shrink-0">
-        <span>Department of Computer Engineering</span>
-        <span>Peer-Reviewed Scholarly Publications</span>
+      {/* Bottom Inspirational Quote */}
+      <div className="text-center pt-3 border-t border-slate-200 mt-auto flex-shrink-0">
+        <p className="text-[11.5px] italic text-slate-700 font-serif">
+          {data?.quote || defaultQuote}
+        </p>
       </div>
     </div>
   );
@@ -1091,11 +1225,11 @@ export function MagazinePageSheet({ page, pageNumber, totalPages, currentMagazin
     >
       {/* Page Content with Theme */}
       <div className="flex-1 w-full h-full overflow-hidden">
-        <TemplateComponent data={page.data} theme={theme} />
+        <TemplateComponent data={page.data} theme={theme} pageNumber={pageNumber} totalPages={totalPages} currentMagazine={currentMagazine} />
       </div>
 
-      {/* Running Footer for Interior Pages */}
-      {!isCover && (
+      {/* Running Footer for Interior Pages (publications template has its own slide header/footer) */}
+      {!isCover && page.template !== 'publications' && (
         <div
           style={{
             position: 'absolute',

@@ -4,13 +4,13 @@
  */
 
 export const CLASS_YEARS = ['SE', 'TE', 'BE'];
-export const DEFAULT_DIVISIONS = ['A', 'B', 'C'];
+export const DEFAULT_DIVISIONS = ['A', 'B', 'C', 'D', 'E'];
 
 /**
- * Normalizes and extracts class year ('SE', 'TE', 'BE') and division ('A', 'B', 'C', etc.)
+ * Normalizes and extracts class year ('SE', 'TE', 'BE') and division ('A', 'B', 'C', 'D', 'E', etc.)
  * Supports multiple input formats:
  * - Explicit class: 'SE', division: 'A'
- * - Combined strings: 'SE I', 'SE-A', 'SE Comp A', 'SE Division B', 'TE III', 'BE 1'
+ * - Combined strings: 'SE I', 'SE-A', 'SE Comp A', 'SE Division B', 'TE III', 'BE 1', 'SE 5', 'TE V'
  */
 export function parseClassAndDivision(student) {
   const rawClass = (student?.class || student?.className || '').toString().trim();
@@ -36,27 +36,30 @@ export function parseClassAndDivision(student) {
     else if (cleanDiv === 'II' || cleanDiv === '2') cleanDiv = 'B';
     else if (cleanDiv === 'III' || cleanDiv === '3') cleanDiv = 'C';
     else if (cleanDiv === 'IV' || cleanDiv === '4') cleanDiv = 'D';
+    else if (cleanDiv === 'V' || cleanDiv === '5') cleanDiv = 'E';
     division = cleanDiv;
   } else {
     // Extract division from class string
-    const romanMatch = upperClass.match(/\b(IV|III|II|I)\b/);
+    const romanMatch = upperClass.match(/\b(V|IV|III|II|I)\b/);
     if (romanMatch) {
       const roman = romanMatch[1];
       if (roman === 'I') division = 'A';
       else if (roman === 'II') division = 'B';
       else if (roman === 'III') division = 'C';
       else if (roman === 'IV') division = 'D';
+      else if (roman === 'V') division = 'E';
     } else {
-      const divMatch = upperClass.match(/(?:DIV(?:ISION)?|COMP(?:UTER)?)\s*[-:]?\s*([A-Z0-9])/i) ||
-                       upperClass.match(/[-_/\s]+([A-D])\b/i) ||
-                       upperClass.match(/\b([A-D])\b/i) ||
-                       upperClass.match(/\b([1-4])\b/);
+      const divMatch = upperClass.match(/(?:DIV(?:ISION)?|COMP(?:UTER)?)\s*[-:]?\s*([A-E0-9])/i) ||
+                       upperClass.match(/[-_/\s]+([A-E])\b/i) ||
+                       upperClass.match(/\b([A-E])\b/i) ||
+                       upperClass.match(/\b([1-5])\b/);
       if (divMatch) {
         const val = divMatch[1].toUpperCase();
         if (val === '1') division = 'A';
         else if (val === '2') division = 'B';
         else if (val === '3') division = 'C';
         else if (val === '4') division = 'D';
+        else if (val === '5') division = 'E';
         else division = val;
       }
     }
@@ -177,12 +180,12 @@ export function formatClassLabel(year) {
 }
 
 export const CLASS_OPTIONS = [
-  'SE - Div A', 'SE - Div B', 'SE - Div C',
-  'TE - Div A', 'TE - Div B', 'TE - Div C',
-  'BE - Div A', 'BE - Div B', 'BE - Div C',
-  'SE I', 'SE II', 'SE III',
-  'TE I', 'TE II', 'TE III',
-  'BE I', 'BE II', 'BE III'
+  'SE - Div A', 'SE - Div B', 'SE - Div C', 'SE - Div D', 'SE - Div E',
+  'TE - Div A', 'TE - Div B', 'TE - Div C', 'TE - Div D', 'TE - Div E',
+  'BE - Div A', 'BE - Div B', 'BE - Div C', 'BE - Div D', 'BE - Div E',
+  'SE I', 'SE II', 'SE III', 'SE IV', 'SE V',
+  'TE I', 'TE II', 'TE III', 'TE IV', 'TE V',
+  'BE I', 'BE II', 'BE III', 'BE IV', 'BE V'
 ];
 
 export function normalizeToppersData(toppersInput) {

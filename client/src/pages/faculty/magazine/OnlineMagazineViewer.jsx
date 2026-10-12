@@ -54,7 +54,7 @@ export default function OnlineMagazineViewer() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const { magazines, sectionData, loadMagazine } = useMagazine();
+  const { magazines, currentMagazine, sectionData, loadMagazine } = useMagazine();
 
   const isStudent = user?.role === 'student' || location.pathname.startsWith('/student') || location.search.includes('from=student');
 
@@ -67,17 +67,29 @@ export default function OnlineMagazineViewer() {
 
   const printContainerRef = useRef(null);
 
-  const magazine = magazines.find(m => m.id === id) || magazines[0];
-
   useEffect(() => {
-    if (id && (!magazine || magazine.id !== id)) {
+    if (id && (!currentMagazine || currentMagazine.id !== id)) {
       loadMagazine(id);
     }
-  }, [id, magazine, loadMagazine]);
+  }, [id, currentMagazine, loadMagazine]);
+
+  const magazine = (currentMagazine && currentMagazine.id === id)
+    ? currentMagazine
+    : (magazines.find(m => m.id === id) || currentMagazine || magazines[0]);
+
+  const effectiveSectionData = useMemo(() => {
+    if (currentMagazine && currentMagazine.id === id && sectionData && Object.keys(sectionData).length > 0) {
+      return sectionData;
+    }
+    if (magazine && (magazine.sectionData || magazine.section_data)) {
+      return magazine.sectionData || magazine.section_data;
+    }
+    return sectionData;
+  }, [currentMagazine, id, sectionData, magazine]);
 
   const pages = useMemo(() => {
-    return generateMagazinePages(magazine, sectionData);
-  }, [magazine, sectionData]);
+    return generateMagazinePages(magazine, effectiveSectionData);
+  }, [magazine, effectiveSectionData]);
 
   const totalPages = pages.length;
   const theme = getTemplate(magazine?.template || 'modern-academic');

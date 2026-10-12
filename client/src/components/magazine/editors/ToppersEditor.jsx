@@ -337,6 +337,7 @@ export default function ToppersEditor() {
                 <option value="B">Division B</option>
                 <option value="C">Division C</option>
                 <option value="D">Division D</option>
+                <option value="E">Division E (5th Division)</option>
               </select>
             </div>
           </div>

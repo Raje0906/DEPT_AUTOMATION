@@ -383,31 +383,74 @@ export function generateMagazinePages(currentMagazine, sectionData) {
     }
   }
 
-  // 12. Publications (2 Pages with rich citation cards and DOI links)
+  // 12. Staff Publications (Styled to match official reference slide)
   const pubList = data.publications || [];
   if (pubList.length > 0) {
-    const pubChunk1 = pubList.slice(0, 5);
-    pages.push({
-      id: pageCounter++,
-      template: 'publications',
-      title: 'Publications — Peer-Reviewed Journals',
-      data: {
-        title: 'Peer-Reviewed Journal Publications',
-        subtitle: 'High-Impact Scopus and Web of Science Indexed Research',
-        publications: pubChunk1,
-      },
+    const facultyMap = new Map();
+    pubList.forEach((p) => {
+      const name = (p.facultyName || p.author || p.faculty || '').trim() || 'Faculty Member';
+      if (!facultyMap.has(name)) {
+        facultyMap.set(name, []);
+      }
+      facultyMap.get(name).push(p);
     });
 
-    if (pubList.length > 5) {
-      const pubChunk2 = pubList.slice(5, 10);
+    const facultyGroups = Array.from(facultyMap.entries()).map(([facultyName, items]) => ({
+      facultyName,
+      items,
+    }));
+
+    const issueNumber = currentMagazine?.issueNumber || data.cover?.issueNumber || '33';
+
+    if (facultyGroups.length <= 3 && pubList.length <= 4) {
       pages.push({
         id: pageCounter++,
         template: 'publications',
-        title: 'Publications — Conferences & Books',
+        title: 'Staff Publications',
         data: {
-          title: 'International Conferences & Book Chapters',
-          subtitle: 'Peer-Reviewed Conference Proceedings & Technical Monographs',
-          publications: pubChunk2,
+          title: 'Staff Publications',
+          facultyGroups,
+          part: 1,
+          totalParts: 1,
+          isFinalPage: true,
+          startNumber: 1,
+          issueNumber,
+        },
+      });
+    } else {
+      const splitIdx = Math.max(2, Math.ceil(facultyGroups.length * 0.55));
+      const groups1 = facultyGroups.slice(0, splitIdx);
+      const groups2 = facultyGroups.slice(splitIdx);
+
+      pages.push({
+        id: pageCounter++,
+        template: 'publications',
+        title: 'Staff Publications — Part 1',
+        data: {
+          title: 'Staff Publications',
+          facultyGroups: groups1,
+          part: 1,
+          totalParts: 2,
+          isFinalPage: false,
+          startNumber: 1,
+          issueNumber,
+          quote: '―A person who never made a mistake nev er tried anything new.‖ — Albert Einstein',
+        },
+      });
+
+      pages.push({
+        id: pageCounter++,
+        template: 'publications',
+        title: 'Staff Publications — Part 2',
+        data: {
+          title: 'Staff Publications',
+          facultyGroups: groups2,
+          part: 2,
+          totalParts: 2,
+          isFinalPage: true,
+          startNumber: groups1.length + 1,
+          issueNumber,
+          quote: '―Anyone who has ever made anything of importance was disciplined.‖ — Andrew Hendrixson.',
         },
       });
     }
