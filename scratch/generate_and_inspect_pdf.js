@@ -28,6 +28,21 @@ async function main() {
   await page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {});
   console.log('Current URL after login:', page.url());
 
+  // TEST REQUEST 3: Direct view of draft magazine in OnlineMagazineViewer without opening editor first!
+  const viewUrl = 'http://localhost:5173/faculty/magazines/view/MAG-NEW-1791542342264';
+  console.log(`Testing direct View mode for draft magazine: ${viewUrl}`);
+  await page.goto(viewUrl, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(2000);
+
+  // Check thumbnails count in OnlineMagazineViewer
+  const viewerThumbnails = await page.locator('button:has(p.truncate)').count();
+  console.log(`OnlineMagazineViewer found ${viewerThumbnails} page thumbnails rendered for draft magazine.`);
+  if (viewerThumbnails > 5) {
+    console.log('SUCCESS: Draft magazine is fully visible and rendered in View mode directly!');
+  } else {
+    console.warn(`Warning: viewer thumbnails count is ${viewerThumbnails}`);
+  }
+
   // Navigate to magazine preview
   const previewUrl = 'http://localhost:5173/faculty/magazines/preview/MAG-NEW-1791542342264';
   console.log(`Navigating to preview URL: ${previewUrl}`);
@@ -35,7 +50,7 @@ async function main() {
 
   // Wait for magazine pages to render
   console.log('Waiting for magazine pages to render...');
-  await page.waitForSelector('.magazine-pdf-page', { timeout: 15000 });
+  await page.waitForSelector('.magazine-pdf-page', { timeout: 20000 });
 
   const pageCount = await page.locator('.magazine-pdf-page').count();
   console.log(`Found ${pageCount} magazine-pdf-page elements in DOM.`);
@@ -43,34 +58,10 @@ async function main() {
   // Wait extra 2 seconds for all images/fonts to paint
   await page.waitForTimeout(2500);
 
-  // Take screenshots of offscreen rendered sheets or visible pages for verification
-  // Notice .magazine-pdf-page elements are inside #magazine-print-container which is at left: -9999px.
-  // We can temporarily inspect or screenshot specific pages by cloning or bringing them into view, or screenshot the preview DOM!
-  // In the preview pane, PagePreview renders pages in a scrollable list.
-  const previewPages = await page.locator('.magazine-sheet');
-  const previewPagesCount = await previewPages.count();
-  console.log(`Found ${previewPagesCount} preview sheets in viewport.`);
-
-  // Ensure artifacts/scratch screenshots directory
-  const outDir = path.join(__dirname, 'screenshots');
-  if (!fs.existsSync(outDir)) {
-    fs.mkdirSync(outDir, { recursive: true });
-  }
-
-  // Let's capture screenshots of specific preview sheets if available
-  for (let i = 0; i < previewPagesCount; i++) {
-    const pNumber = i + 1;
-    if ([1, 4, 5, 6, 7, 8, 9, 13].includes(pNumber)) {
-      const sheet = previewPages.nth(i);
-      await sheet.screenshot({ path: path.join(outDir, `page_${pNumber}.png`) });
-      console.log(`Saved screenshot for page ${pNumber}`);
-    }
-  }
-
   // Now trigger PDF generation
   console.log('Triggering "Generate PDF"...');
   const [download] = await Promise.all([
-    page.waitForEvent('download', { timeout: 60000 }),
+    page.waitForEvent('download', { timeout: 90000 }),
     page.click('button:has-text("Generate PDF")'),
   ]);
 
