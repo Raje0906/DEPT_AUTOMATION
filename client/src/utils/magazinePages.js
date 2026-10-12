@@ -158,24 +158,39 @@ export function generateMagazinePages(currentMagazine, sectionData) {
       });
     }
 
-    // Page 3: Events Photo Gallery
+    // Page 3: Events Photo Gallery (2-column balanced grid, max 4 photos per page)
     const allPhotos = eventsList.flatMap(e =>
       (e.photos || []).map(p => ({
         url: typeof p === 'string' ? p : p?.url || '',
-        caption: (typeof p === 'object' && p?.caption) ? p.caption : (e.title || 'Event Photo'),
+        caption: (typeof p === 'object' && p?.caption) ? p.caption : (e.title || 'Campus Event Moment'),
+        eventTitle: e.title || '',
+        date: e.date || '',
+        venue: e.venue || '',
       }))
     ).filter(p => !!p.url);
 
     if (allPhotos.length > 0) {
-      pages.push({
-        id: pageCounter++,
-        template: 'photoGrid',
-        title: 'Events & Campus Life Gallery',
-        data: {
-          title: 'Campus Life & Event Moments',
-          photos: allPhotos.slice(0, 6),
-        },
-      });
+      const photosPerPage = 4;
+      const totalPhotoPages = Math.ceil(allPhotos.length / photosPerPage);
+      for (let pIdx = 0; pIdx < totalPhotoPages; pIdx++) {
+        const photoSlice = allPhotos.slice(pIdx * photosPerPage, (pIdx + 1) * photosPerPage);
+        pages.push({
+          id: pageCounter++,
+          template: 'photoGrid',
+          title: totalPhotoPages > 1
+            ? `Events & Campus Life Gallery (Part ${pIdx + 1})`
+            : 'Events & Campus Life Gallery',
+          data: {
+            title: 'Campus Life & Event Moments',
+            subtitle: totalPhotoPages > 1
+              ? `Highlights & Campus Moments · Part ${pIdx + 1} of ${totalPhotoPages}`
+              : 'Highlights & Campus Moments',
+            part: pIdx + 1,
+            totalParts: totalPhotoPages,
+            photos: photoSlice,
+          },
+        });
+      }
     }
   }
 
@@ -278,6 +293,8 @@ export function generateMagazinePages(currentMagazine, sectionData) {
       template: 'coe',
       title: 'Centre of Excellence — Overview',
       data: {
+        title: coe.name || 'Centre of Excellence',
+        subtitle: 'Advanced Computing & Simulation Research Facility',
         part: 1,
         coe,
       },
@@ -289,6 +306,8 @@ export function generateMagazinePages(currentMagazine, sectionData) {
       template: 'coe',
       title: 'Centre of Excellence — Activities & Innovation',
       data: {
+        title: 'CoE Activities, Research & Student Projects',
+        subtitle: 'Applied Spatial Computing, VR Simulations & Student Capstones',
         part: 2,
         coe,
       },

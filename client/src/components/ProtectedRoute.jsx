@@ -1,8 +1,9 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { isAuthorizedMagazineCreator } from '../utils/magazinePermissions';
 
-export default function ProtectedRoute({ children, role, requireCoordinator }) {
+export default function ProtectedRoute({ children, role, requireCoordinator, requireMagazineCreator }) {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -23,6 +24,10 @@ export default function ProtectedRoute({ children, role, requireCoordinator }) {
 
   if (requireCoordinator && user.role === 'faculty' && !user.is_seminar_coordinator) {
     return <Navigate to="/faculty" replace />;
+  }
+
+  if (requireMagazineCreator && !isAuthorizedMagazineCreator(user)) {
+    return <Navigate to="/faculty/magazines" replace />;
   }
 
   return children;

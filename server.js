@@ -14,6 +14,7 @@ const projectRoutes     = require('./routes/projects');
 const seminarRoutes     = require('./routes/seminar');
 const coordinatorRoutes = require('./routes/coordinators');
 const clubRoutes        = require('./routes/clubs');
+const magazineRoutes    = require('./routes/magazines');
 
 const app = express();
 
@@ -43,6 +44,7 @@ app.use('/api/projects',     projectRoutes);
 app.use('/api/seminar',      seminarRoutes);
 app.use('/api/coordinators', coordinatorRoutes);
 app.use('/api/clubs',        clubRoutes);
+app.use('/api/magazines',    magazineRoutes);
 
 // ─── Health check ────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
