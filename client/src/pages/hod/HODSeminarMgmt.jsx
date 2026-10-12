@@ -207,12 +207,12 @@ export default function HODSeminarMgmt() {
   const draftMarksCount = marksData.filter((m) => m.marks_status === 'DRAFT').length;
 
   return (
-    <div className="p-8 lg:p-10 w-full max-w-7xl mx-auto space-y-8">
+    <div className="p-6 lg:p-8 w-full max-w-7xl mx-auto space-y-6">
       {/* ─── HEADER ─────────────────────────────────────────────────── */}
       <div className="pb-5 border-b border-rule flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-serif text-3xl font-bold text-ink">TE Seminar Governance</h1>
-          <p className="text-base text-draft mt-1 font-medium">
+          <h1 className="font-serif text-2xl sm:text-3xl font-bold text-ink">TE Seminar Governance</h1>
+          <p className="text-xs sm:text-sm text-draft mt-1 font-medium">
             HOD Oversight: Guide Assignment Approvals &amp; Faculty Marks Verification
           </p>
         </div>

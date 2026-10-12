@@ -135,6 +135,8 @@ const roleNav = {
         { to: '/faculty/project-eval',    label: 'BE Project Evaluation', icon: Icons.project },
         { to: '/faculty/magazines',       label: 'Magazine',              icon: Icons.magazines },
         { to: '/faculty/seminar',         label: 'TE Seminar Governance', icon: Icons.seminar },
+        { to: '/faculty/seminar/import-assign', label: 'Import and assign guides', icon: Icons.seminar },
+        { to: '/faculty/seminar/schedule',      label: 'Schedule presentation',    icon: Icons.results },
         { to: '/faculty/seminar/my-groups', label: 'Seminar Assigned Groups', icon: Icons.teachers },
       ],
     },
@@ -180,8 +182,9 @@ const PAGE_TITLES = {
   '/faculty/clubs': 'Manage Student Clubs',
   '/faculty/project-eval': 'BE Project Evaluation',
   '/faculty/project-coordination': 'BE Project Governance',
-  '/faculty/magazines': 'Department Magazine Publication',
   '/faculty/seminar': 'TE Seminar Coordinator Portal',
+  '/faculty/seminar/import-assign': 'Import Responses & Assign Guides',
+  '/faculty/seminar/schedule': 'Schedule Seminar Presentation',
   '/faculty/seminar/my-groups': 'Assigned Seminar Groups',
   '/faculty/class-namelist': 'University Namelist Segregator',
   '/hod': 'HOD Executive Dashboard',
@@ -224,7 +227,7 @@ export default function Layout({ children }) {
     if (!user?.is_seminar_coordinator) {
       navGroups = navGroups.map(group => ({
         ...group,
-        items: group.items.filter(item => item.to !== '/faculty/seminar')
+        items: group.items.filter(item => !item.to.startsWith('/faculty/seminar') || item.to === '/faculty/seminar/my-groups')
       }));
     }
     if (user?.is_project_coordinator) {

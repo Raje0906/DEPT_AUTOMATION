@@ -56,6 +56,8 @@ import SeminarReview        from './pages/seminar/SeminarReview'
 import SeminarGuideView     from './pages/seminar/SeminarGuideView'
 import SeminarEvaluation    from './pages/seminar/SeminarEvaluation'
 import SeminarMarksOverview from './pages/seminar/SeminarMarksOverview'
+import SeminarImportAssignWorkflow from './pages/seminar/SeminarImportAssignWorkflow'
+import SeminarSchedule      from './pages/seminar/SeminarSchedule'
 
 // Alumni
 import AlumniFeedback      from './pages/alumni/AlumniFeedback'
@@ -136,6 +138,8 @@ export default function App() {
 
           {/* Seminar Tool — Coordinator */}
           <Route path="/faculty/seminar"                    element={<CoordinatorLayout><SeminarSessions /></CoordinatorLayout>} />
+          <Route path="/faculty/seminar/import-assign"      element={<CoordinatorLayout><SeminarImportAssignWorkflow /></CoordinatorLayout>} />
+          <Route path="/faculty/seminar/schedule"           element={<CoordinatorLayout><SeminarSchedule /></CoordinatorLayout>} />
           <Route path="/faculty/seminar/:id/upload"         element={<CoordinatorLayout><SeminarUpload /></CoordinatorLayout>} />
           <Route path="/faculty/seminar/:id/assign"         element={<CoordinatorLayout><SeminarAssignment /></CoordinatorLayout>} />
           <Route path="/faculty/seminar/:id/review"         element={<CoordinatorLayout><SeminarReview /></CoordinatorLayout>} />

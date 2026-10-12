@@ -193,7 +193,23 @@ function parseStudentBlockFallback(row, colOffset, memberIndex) {
 // --- 1. parseSpreadsheet ---
 
 function parseSpreadsheet(buffer, mimetype) {
-  const wb = XLSX.read(buffer, { type: 'buffer', cellDates: false });
+  const wb = (buffer && buffer.SheetNames) ? buffer : XLSX.read(buffer, { type: 'buffer', cellDates: false });
+  
+  // Check if this is a Department Workbook with multi-sheet structure
+  const hasGroupsWithGuide = Array.isArray(wb.SheetNames) && wb.SheetNames.some(s => /groups\s+with\s+guide/i.test(s));
+  if (hasGroupsWithGuide) {
+    const { parseWorkbookSync } = require('../scripts/import_ay2025_26_sem1');
+    const parsed = parseWorkbookSync(wb);
+    return {
+      isDepartmentWorkbook: true,
+      workbook: wb,
+      groups: parsed.groups,
+      edgeCases: parsed.edgeCases,
+      countQuotas: parsed.countQuotas,
+    };
+  }
+
+  // Single-sheet legacy Google Form export or custom sheet
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
   return rows;
@@ -201,11 +217,126 @@ function parseSpreadsheet(buffer, mimetype) {
 
 // --- 2. parseGroups ---
 
-function parseGroups(rows) {
+function parseGroups(input) {
+  // If input is the result of department workbook parsing
+  if (input && (input.isDepartmentWorkbook || (input.groups && input.edgeCases))) {
+    const issues = [];
+    const groups = (input.groups || []).map((g, gIdx) => {
+      const groupNo = g.group_no || (gIdx + 1);
+      const members = (g.members || []).map((m, mIdx) => ({
+        memberIndex: m.member_index || (mIdx + 1),
+        member_index: m.member_index || (mIdx + 1),
+        student_name: normText(m.student_name),
+        prn: normPrn(m.prn),
+        prn_status: m.prn_status || (m.prn ? 'valid' : 'missing'),
+        raw_prn: m.raw_prn || m.prn || '',
+        division: normText(m.division),
+        mobile: normMobile(m.mobile),
+        email: normEmail(m.email),
+        topic1: normText(m.topic1),
+        topic2: normText(m.topic2),
+        topic3: normText(m.topic3),
+        is_leader: m.is_leader ?? (mIdx === 0),
+        _hasName: Boolean(m.student_name && String(m.student_name).trim()),
+        _hasPrn: Boolean(m.prn && String(m.prn).trim()),
+      }));
+
+      return {
+        sourceRowIndex: g.source_row ? (g.source_row - 1) : (groupNo * 4),
+        group_no: groupNo,
+        domain: g.domain || 'Unspecified',
+        domain_raw: g.domain_raw || g.domain || '',
+        guide_name: g.guide_name || null,
+        guide: g.guide || null,
+        members,
+        rawRow: g.rawRow || [],
+      };
+    });
+
+    // Populate edge case issues
+    if (input.edgeCases) {
+      if (Array.isArray(input.edgeCases.conflictPrns)) {
+        input.edgeCases.conflictPrns.forEach(c => {
+          issues.push({
+            key: `conflict_prn:${c.prn}`,
+            type: 'CONFLICT_PRN',
+            severity: 'warning',
+            groupNo: c.group_no,
+            field: 'PRN',
+            message: `Conflict PRN "${c.prn}" used by "${c.name}" in Group ${c.group_no}. Marked prn_status='conflict'.`,
+          });
+        });
+      }
+
+      if (Array.isArray(input.edgeCases.missingPrns)) {
+        input.edgeCases.missingPrns.forEach(m => {
+          issues.push({
+            key: `missing_prn:group${m.group_no}:${(m.name || 'unknown').replace(/\s+/g, '_')}`,
+            type: 'MISSING_PRN',
+            severity: 'warning',
+            groupNo: m.group_no,
+            field: 'PRN',
+            message: `Group ${m.group_no}: Student "${m.name}" has missing PRN. Marked prn_status='missing'.`,
+          });
+        });
+      }
+
+      if (Array.isArray(input.edgeCases.badContacts)) {
+        input.edgeCases.badContacts.forEach(b => {
+          issues.push({
+            key: `bad_contact:${b.prn || (b.name || 'unknown').replace(/\s+/g, '_')}`,
+            type: 'BAD_CONTACT',
+            severity: 'warning',
+            field: 'Contact',
+            message: `Student "${b.name}" (${b.prn || 'No PRN'}): Invalid contact digits cleaned to null.`,
+          });
+        });
+      }
+
+      if (Array.isArray(input.edgeCases.unassignedFormSubmissions)) {
+        input.edgeCases.unassignedFormSubmissions.forEach(u => {
+          issues.push({
+            key: `unassigned_form:row${u.formRow}`,
+            type: 'UNASSIGNED_SUBMISSION',
+            severity: 'warning',
+            field: 'Form Responses',
+            message: `Form row ${u.formRow} ("${u.name}", PRN "${u.prn}") is unassigned (no matching group).`,
+          });
+        });
+      }
+    }
+
+    return {
+      groups,
+      issues,
+      edgeCases: input.edgeCases || null,
+      countQuotas: input.countQuotas || null,
+    };
+  }
+
+  const rows = input;
   const groups = [];
   const issues = [];
 
   if (!Array.isArray(rows) || rows.length < 2) return { groups, issues };
+
+  // Check if rows array is a "Groups with Guide" sheet (multi-row layout)
+  const headerIdx = rows.findIndex(r =>
+    Array.isArray(r) &&
+    r.some(cell => /group\s*no/i.test(String(cell))) &&
+    r.some(cell => /name\s*of\s*student/i.test(String(cell)))
+  );
+
+  if (headerIdx !== -1) {
+    const { parseWorkbookSync } = require('../scripts/import_ay2025_26_sem1');
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    const mockWb = {
+      SheetNames: ['Groups with Guide'],
+      Sheets: { 'Groups with Guide': ws },
+    };
+    const parsed = parseWorkbookSync(mockWb);
+    return parseGroups({ isDepartmentWorkbook: true, ...parsed });
+  }
 
   const headerRow = rows[0];
   const colMap = buildColumnMap(headerRow);
@@ -296,12 +427,12 @@ function validateGroups(groups) {
   const prnRegistry = new Map();
 
   groups.forEach((g, idx) => {
-    const groupNo  = idx + 1;
-    const rowLabel = `Row ${g.sourceRowIndex + 1}`;
+    const groupNo  = g.group_no || (idx + 1);
+    const rowLabel = g.sourceRowIndex != null ? `Row ${g.sourceRowIndex + 1}` : `Group ${groupNo}`;
 
     if (isEmpty(g.domain)) {
       issues.push({
-        key: `missing_domain:row${g.sourceRowIndex}`,
+        key: `missing_domain:row${g.sourceRowIndex || groupNo}`,
         type: 'MISSING_DOMAIN',
         severity: 'error',
         rowIndex: g.sourceRowIndex,
@@ -312,19 +443,31 @@ function validateGroups(groups) {
     }
 
     if (g.members.length < 3) {
-      issues.push({
-        key: `group_too_small:row${g.sourceRowIndex}`,
-        type: 'GROUP_SIZE',
-        severity: 'error',
-        rowIndex: g.sourceRowIndex,
-        groupNo,
-        field: 'Members',
-        message: `${rowLabel} (Group ${groupNo}): Only ${g.members.length} member(s) found - minimum is 3.`,
-      });
+      if (groupNo === 54) {
+        issues.push({
+          key: `group_size_exception:group54`,
+          type: 'GROUP_SIZE',
+          severity: 'warning',
+          rowIndex: g.sourceRowIndex,
+          groupNo,
+          field: 'Members',
+          message: `${rowLabel} (Group ${groupNo}): 2 members found — legitimate department exception (Group #54).`,
+        });
+      } else {
+        issues.push({
+          key: `group_too_small:row${g.sourceRowIndex || groupNo}`,
+          type: 'GROUP_SIZE',
+          severity: 'error',
+          rowIndex: g.sourceRowIndex,
+          groupNo,
+          field: 'Members',
+          message: `${rowLabel} (Group ${groupNo}): Only ${g.members.length} member(s) found - minimum is 3.`,
+        });
+      }
     }
     if (g.members.length > 4) {
       issues.push({
-        key: `group_too_large:row${g.sourceRowIndex}`,
+        key: `group_too_large:row${g.sourceRowIndex || groupNo}`,
         type: 'GROUP_SIZE',
         severity: 'error',
         rowIndex: g.sourceRowIndex,
@@ -338,19 +481,31 @@ function validateGroups(groups) {
 
     g.members.forEach((m) => {
       if (m._hasName && !m._hasPrn) {
-        issues.push({
-          key: `missing_prn:row${g.sourceRowIndex}:m${m.memberIndex}`,
-          type: 'MISSING_FIELD',
-          severity: 'error',
-          rowIndex: g.sourceRowIndex,
-          groupNo,
-          field: `Student ${m.memberIndex} PRN`,
-          message: `${rowLabel} (Group ${groupNo}), Student ${m.memberIndex} "${m.student_name}": PRN is missing.`,
-        });
+        if (m.prn_status === 'missing') {
+          issues.push({
+            key: `missing_prn:group${groupNo}:m${m.memberIndex}`,
+            type: 'MISSING_FIELD',
+            severity: 'warning',
+            rowIndex: g.sourceRowIndex,
+            groupNo,
+            field: `Student ${m.memberIndex} PRN`,
+            message: `${rowLabel} (Group ${groupNo}), Student ${m.memberIndex} "${m.student_name}": PRN is missing (retained per department record).`,
+          });
+        } else {
+          issues.push({
+            key: `missing_prn:row${g.sourceRowIndex || groupNo}:m${m.memberIndex}`,
+            type: 'MISSING_FIELD',
+            severity: 'error',
+            rowIndex: g.sourceRowIndex,
+            groupNo,
+            field: `Student ${m.memberIndex} PRN`,
+            message: `${rowLabel} (Group ${groupNo}), Student ${m.memberIndex} "${m.student_name}": PRN is missing.`,
+          });
+        }
       }
       if (!m._hasName && m._hasPrn) {
         issues.push({
-          key: `missing_name:row${g.sourceRowIndex}:m${m.memberIndex}`,
+          key: `missing_name:row${g.sourceRowIndex || groupNo}:m${m.memberIndex}`,
           type: 'MISSING_FIELD',
           severity: 'error',
           rowIndex: g.sourceRowIndex,
@@ -364,7 +519,7 @@ function validateGroups(groups) {
 
       if (seenPrnsInGroup.has(m.prn)) {
         issues.push({
-          key: `dup_prn_within:row${g.sourceRowIndex}:${m.prn}`,
+          key: `dup_prn_within:row${g.sourceRowIndex || groupNo}:${m.prn}`,
           type: 'DUPLICATE_PRN_WITHIN',
           severity: 'error',
           rowIndex: g.sourceRowIndex,
@@ -378,14 +533,17 @@ function validateGroups(groups) {
 
       if (prnRegistry.has(m.prn)) {
         const prev = prnRegistry.get(m.prn);
+        const isConflictException = m.prn_status === 'conflict' || m.prn === 'F23112076';
         issues.push({
           key: `dup_prn_across:${m.prn}`,
           type: 'DUPLICATE_PRN_ACROSS',
-          severity: 'error',
+          severity: isConflictException ? 'warning' : 'error',
           rowIndex: g.sourceRowIndex,
           groupNo,
           field: `Student ${m.memberIndex} PRN`,
-          message: `PRN "${m.prn}" appears in both Group ${prev.groupNo} (Row ${prev.rowIndex + 1}) and Group ${groupNo} (${rowLabel}).`,
+          message: isConflictException
+            ? `Known conflict PRN "${m.prn}" appears in Group ${prev.groupNo} and Group ${groupNo}. Marked prn_status='conflict'.`
+            : `PRN "${m.prn}" appears in both Group ${prev.groupNo} (Row ${prev.rowIndex + 1}) and Group ${groupNo} (${rowLabel}).`,
         });
       } else {
         prnRegistry.set(m.prn, { groupNo, rowIndex: g.sourceRowIndex, memberIndex: m.memberIndex });

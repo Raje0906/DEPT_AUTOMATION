@@ -23,6 +23,18 @@ export default function CreateMagazineForm() {
   const { user } = useAuth();
   const { createMagazine } = useMagazine();
 
+  const [form, setForm] = useState({
+    title: 'Reflection',
+    issueNumber: '33',
+    academicYear: '2026–27',
+    semester: 'Semester I',
+    department: 'Computer Engineering',
+    period: 'June – December 2026',
+    description: '',
+    template: 'modern-academic',
+  });
+  const [saving, setSaving] = useState(false);
+
   useEffect(() => {
     if (user && !isAuthorizedMagazineCreator(user)) {
       toast.error('Access denied: Only Dr. (Mrs.) S. S. Raskar (SSR) is authorized to create magazines.');
@@ -43,18 +55,6 @@ export default function CreateMagazineForm() {
       </div>
     );
   }
-
-  const [form, setForm] = useState({
-    title: 'Reflection',
-    issueNumber: '33',
-    academicYear: '2026–27',
-    semester: 'Semester I',
-    department: 'Computer Engineering',
-    period: 'June – December 2026',
-    description: '',
-    template: 'modern-academic',
-  });
-  const [saving, setSaving] = useState(false);
 
   const set = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
 
