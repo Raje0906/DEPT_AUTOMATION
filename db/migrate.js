@@ -443,7 +443,22 @@ async function runMigrations() {
 
       ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS guide_name VARCHAR(200);
       ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS seminar_guide_id INTEGER REFERENCES seminar_guides(id) ON DELETE SET NULL;
+      ALTER TABLE seminar_guides ADD COLUMN IF NOT EXISTS expertise_tags TEXT[] DEFAULT '{}';
+      ALTER TABLE seminar_guides ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
       CREATE INDEX IF NOT EXISTS idx_sem_group_sem_guide ON seminar_groups(seminar_guide_id);
+
+      ALTER TABLE seminar_group_members DROP CONSTRAINT IF EXISTS seminar_group_members_member_index_check;
+      ALTER TABLE seminar_group_members ADD CONSTRAINT seminar_group_members_member_index_check CHECK (member_index >= 1 AND member_index <= 6);
+
+      CREATE TABLE IF NOT EXISTS seminar_mapping_templates (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(200) NOT NULL,
+        template_key VARCHAR(255) UNIQUE,
+        mapping JSONB NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_sem_map_tmpl_key ON seminar_mapping_templates(template_key);
     `);
 
     // ─── SEMINAR V2 ENHANCEMENTS (Student Direct Registration & Locking) ─────

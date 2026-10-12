@@ -291,15 +291,18 @@ router.get('/my-submission', verifyToken, async (req, res) => {
     const sessionId = req.query.sessionId ? parseInt(req.query.sessionId, 10) : null;
 
     // Student profile prefill
-    let studentProfile = { name: req.user.name, email: req.user.email, prn: '', division: '' };
+    let studentProfile = { name: req.user.name, email: req.user.email, prn: '', division: '', roll_no: '', mobile: '', batch: '' };
     if (req.user.role === 'student') {
       const stRes = await pool.query(
-        'SELECT roll_no, enrollment_no, division, batch FROM students WHERE user_id = $1',
+        'SELECT roll_no, enrollment_no, division, batch, mobile FROM students WHERE user_id = $1',
         [req.user.id]
       );
       if (stRes.rows.length > 0) {
+        studentProfile.roll_no = stRes.rows[0].roll_no || '';
         studentProfile.prn = stRes.rows[0].enrollment_no || stRes.rows[0].roll_no || '';
         studentProfile.division = stRes.rows[0].division || '';
+        studentProfile.batch = stRes.rows[0].batch || '';
+        studentProfile.mobile = stRes.rows[0].mobile || req.user.phone || '';
       }
       if (!studentProfile.prn && req.user.email) {
         const emMatch = req.user.email.match(/^(f\d{8})/i);
@@ -368,12 +371,39 @@ router.get('/my-submission', verifyToken, async (req, res) => {
     }
 
     if (groupRes.rows.length === 0) {
+      let conflictInfo = null;
+      if (studentProfile.prn) {
+        const cRes = await pool.query(
+          `SELECT sg.id as group_id, sg.group_no, sg.guide_name, m.student_name, m.prn,
+                  u.name as registered_by_name, r.registered_at
+           FROM seminar_group_members m
+           JOIN seminar_groups sg ON m.group_id = sg.id
+           LEFT JOIN registrations r ON (r.group_id = sg.id AND r.seminar_id = sg.session_id)
+           LEFT JOIN users u ON r.registered_by = u.id
+           WHERE sg.session_id = $1
+             AND UPPER(REPLACE(m.prn, ' ', '')) = $2
+           LIMIT 1`,
+          [session.id, normPrn(studentProfile.prn)]
+        );
+        if (cRes.rows.length > 0) {
+          conflictInfo = {
+            conflict: true,
+            otherGroupNo: cRes.rows[0].group_no,
+            otherStudentName: cRes.rows[0].student_name,
+            registeredByName: cRes.rows[0].registered_by_name || 'Coordinator / Another Student',
+            registeredAt: cRes.rows[0].registered_at,
+            prn: studentProfile.prn,
+          };
+        }
+      }
+
       return res.json({
         hasSession: true,
         session,
         hasSubmission: false,
         prefill: studentProfile,
-        canEdit: !session.is_locked && session.status !== 'PUBLISHED',
+        conflictInfo,
+        canEdit: !session.is_locked,
         standard_domains: STANDARD_DOMAINS,
       });
     }
@@ -395,26 +425,7 @@ router.get('/my-submission', verifyToken, async (req, res) => {
 
     let registration = regRes.rows[0] || null;
 
-    // If registrations row was missing for existing group, ensure registration record is populated
-    if (!registration) {
-      const regInsert = await pool.query(
-        `INSERT INTO registrations (group_id, seminar_id, registered_by, registered_at, status)
-         VALUES ($1, $2, COALESCE($3, $4), COALESCE($5, NOW()), 'REGISTERED')
-         ON CONFLICT (group_id) DO UPDATE SET status = 'REGISTERED'
-         RETURNING *`,
-        [group.id, session.id, group.leader_user_id, req.user.id, group.submitted_at || group.created_at]
-      );
-      if (regInsert.rows.length) {
-        const uRes = await pool.query('SELECT name, email FROM users WHERE id = $1', [regInsert.rows[0].registered_by]);
-        registration = {
-          ...regInsert.rows[0],
-          registered_by_name: uRes.rows[0]?.name || 'Group Leader',
-          registered_by_email: uRes.rows[0]?.email || '',
-        };
-      }
-    }
-
-    const canEdit = isLeader && (!session.is_locked || group.allow_edit) && session.status !== 'PUBLISHED';
+    const canEdit = (!session.is_locked || group.allow_edit) && (session.status !== 'PUBLISHED' || group.allow_edit);
     
     // Guide Information resolution
     let guideInfo = {
@@ -425,7 +436,7 @@ router.get('/my-submission', verifyToken, async (req, res) => {
       guide_status_text: 'Guide not assigned yet'
     };
 
-    if (group.status === 'APPROVED') {
+    if (group.guide_id || group.guide_name) {
       if (group.guide_id) {
         const gRes = await pool.query(
           `SELECT u.name as guide_name, u.email as guide_email, f.designation as guide_designation
@@ -438,7 +449,15 @@ router.get('/my-submission', verifyToken, async (req, res) => {
             guide_name: gRes.rows[0].guide_name || group.guide_name,
             guide_email: gRes.rows[0].guide_email,
             guide_designation: gRes.rows[0].guide_designation || 'Faculty Guide',
-            guide_status_text: 'Assigned & Approved'
+            guide_status_text: group.status === 'APPROVED' ? 'Assigned & Approved' : 'Guide Assigned'
+          };
+        } else {
+          guideInfo = {
+            guide_assigned: true,
+            guide_name: group.guide_name,
+            guide_email: null,
+            guide_designation: 'Faculty Guide',
+            guide_status_text: group.status === 'APPROVED' ? 'Assigned & Approved' : 'Guide Assigned'
           };
         }
       } else if (group.guide_name) {
@@ -447,7 +466,7 @@ router.get('/my-submission', verifyToken, async (req, res) => {
           guide_name: group.guide_name,
           guide_email: null,
           guide_designation: 'Faculty Guide',
-          guide_status_text: 'Assigned & Approved'
+          guide_status_text: group.status === 'APPROVED' ? 'Assigned & Approved' : 'Guide Assigned'
         };
       }
       group.guide_name = guideInfo.guide_name;
@@ -474,6 +493,46 @@ router.get('/my-submission', verifyToken, async (req, res) => {
       }
     }
 
+    // Check if the current student's PRN exists in another group (conflict case)
+    let conflictInfo = null;
+    const currentMember = membersRes.rows.find(
+      m => (studentProfile.prn && normPrn(m.prn) === normPrn(studentProfile.prn)) ||
+           (m.student_name && m.student_name.toLowerCase() === req.user.name.toLowerCase()) ||
+           (studentProfile.email && m.email && m.email.toLowerCase() === studentProfile.email.toLowerCase())
+    );
+    if (currentMember) {
+      if (!studentProfile.prn && currentMember.prn) studentProfile.prn = currentMember.prn;
+      if (!studentProfile.division && currentMember.division) studentProfile.division = currentMember.division;
+      if (!studentProfile.mobile && currentMember.mobile) studentProfile.mobile = currentMember.mobile;
+    }
+
+    const checkPrn = studentProfile.prn || currentMember?.prn;
+    if (checkPrn) {
+      const cRes = await pool.query(
+        `SELECT sg.id as group_id, sg.group_no, sg.guide_name, m.student_name, m.prn,
+                u.name as registered_by_name, r.registered_at
+         FROM seminar_group_members m
+         JOIN seminar_groups sg ON m.group_id = sg.id
+         LEFT JOIN registrations r ON (r.group_id = sg.id AND r.seminar_id = sg.session_id)
+         LEFT JOIN users u ON r.registered_by = u.id
+         WHERE sg.session_id = $1
+           AND UPPER(REPLACE(m.prn, ' ', '')) = $2
+           AND sg.id != $3
+         LIMIT 1`,
+        [session.id, normPrn(checkPrn), group.id]
+      );
+      if (cRes.rows.length > 0) {
+        conflictInfo = {
+          conflict: true,
+          otherGroupNo: cRes.rows[0].group_no,
+          otherStudentName: cRes.rows[0].student_name,
+          registeredByName: cRes.rows[0].registered_by_name || 'Coordinator / Another Student',
+          registeredAt: cRes.rows[0].registered_at,
+          prn: checkPrn,
+        };
+      }
+    }
+
     res.json({
       hasSession: true,
       session,
@@ -486,6 +545,7 @@ router.get('/my-submission', verifyToken, async (req, res) => {
       isLeader,
       canEdit,
       prefill: studentProfile,
+      conflictInfo,
       standard_domains: STANDARD_DOMAINS,
     });
   } catch (err) {
@@ -516,10 +576,6 @@ router.post('/register-group', verifyToken, requireRole('student'), async (req, 
       return res.status(404).json({ error: 'Seminar session not found' });
     }
     const session = sessRes.rows[0];
-    if (session.status === 'PUBLISHED') {
-      await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'This session is published. Registrations are closed.' });
-    }
 
     // Student profile check for logged-in user
     let userPrn = '';
@@ -570,14 +626,12 @@ router.post('/register-group', verifyToken, requireRole('student'), async (req, 
       }
     }
 
-    // Check locking
-    if (session.is_locked) {
-      if (!existingGroup || !existingGroup.allow_edit) {
-        await client.query('ROLLBACK');
-        return res.status(403).json({
-          error: 'Registration is locked by the coordinator. Further submissions and edits are closed.',
-        });
-      }
+    // Check session locking: Allow if session is unlocked or group is explicitly marked allow_edit
+    if (session.is_locked && (!existingGroup || !existingGroup.allow_edit)) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({
+        error: 'Registration is locked by the coordinator. Further submissions and edits are closed.',
+      });
     }
 
     // In-memory validation of fields, formats, group size, and duplicate PRNs within submission
@@ -641,9 +695,10 @@ router.post('/register-group', verifyToken, requireRole('student'), async (req, 
 
       await client.query(
         `UPDATE seminar_groups
-         SET domain = $1, updated_at = NOW()
+         SET domain = $1, allow_edit = FALSE, status = 'APPROVED', submitted_at = NOW(), updated_at = NOW(),
+             leader_user_id = COALESCE(leader_user_id, $3)
          WHERE id = $2`,
-        [cleanedGroup.domain, finalGroupId]
+        [cleanedGroup.domain, finalGroupId, req.user.id]
       );
 
       // Re-insert members
@@ -1047,9 +1102,17 @@ router.post('/sessions/:id/upload', verifyToken, requireCoordinator,
       let rows, parseResult, parseError = null;
       try {
         rows = parseSpreadsheet(req.file.buffer, req.file.mimetype);
-        const { groups } = parseGroups(rows);
-        const { issues } = validateGroups(groups);
-        parseResult = { groupCount: groups.length, groups, issues };
+        const { groups, issues: parseIssues, edgeCases, countQuotas } = parseGroups(rows);
+        const { issues: valIssues } = validateGroups(groups);
+        const allIssues = [...(parseIssues || []), ...(valIssues || [])];
+        parseResult = {
+          groupCount: groups.length,
+          studentCount: groups.reduce((acc, g) => acc + (g.members ? g.members.length : 0), 0),
+          groups,
+          issues: allIssues,
+          edgeCases: edgeCases || null,
+          countQuotas: countQuotas || null,
+        };
       } catch (parseErr) {
         parseError = parseErr.message;
       }
@@ -1073,12 +1136,12 @@ router.post('/sessions/:id/upload', verifyToken, requireCoordinator,
       const newStatus = parseError ? 'UPLOAD' : 'VALIDATION';
       await pool.query('UPDATE seminar_sessions SET status = $1 WHERE id = $2', [newStatus, sessionId]);
 
-
       res.json({
         uploadId: uploadRec.rows[0].id,
         hadExistingUpload: hasExisting,
         parseStatus: uploadRec.rows[0].parse_status,
         groupCount: parseResult?.groupCount ?? 0,
+        studentCount: parseResult?.studentCount ?? 0,
         issues: parseResult?.issues ?? [],
         error: parseError,
       });
@@ -1189,17 +1252,44 @@ router.post('/sessions/:id/commit', verifyToken, requireCoordinator, async (req,
     // Insert groups + members
     for (let gi = 0; gi < groups.length; gi++) {
       const g = groups[gi];
+      const groupNo = g.group_no || (gi + 1);
       const gRow = await client.query(
-        `INSERT INTO seminar_groups (session_id, group_no, domain, source_row_index)
-         VALUES ($1, $2, $3, $4) RETURNING id`,
-        [sessionId, gi + 1, g.domain || '', g.sourceRowIndex]
+        `INSERT INTO seminar_groups (
+           session_id, group_no, domain, domain_raw, guide_name, source_row_index, status, submitted_at, allow_edit
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), false) RETURNING id`,
+        [
+          sessionId,
+          groupNo,
+          g.domain || 'Unspecified',
+          g.domain_raw || g.domain || '',
+          g.guide_name || null,
+          g.sourceRowIndex != null ? g.sourceRowIndex : groupNo,
+          'PENDING_GUIDE_ASSIGNMENT',
+        ]
       );
       const groupId = gRow.rows[0].id;
-      for (const m of g.members) {
+      for (let mi = 0; mi < g.members.length; mi++) {
+        const m = g.members[mi];
         await client.query(
-          `INSERT INTO seminar_group_members (group_id, member_index, student_name, prn, division, mobile, email, topic1, topic2, topic3, is_leader)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-          [groupId, m.memberIndex, m.student_name, m.prn, m.division, m.mobile, m.email, m.topic1, m.topic2, m.topic3, m.is_leader]
+          `INSERT INTO seminar_group_members (
+             group_id, member_index, student_name, prn, prn_status, division, mobile, email, topic1, topic2, topic3, is_leader
+           )
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+          [
+            groupId,
+            m.memberIndex || m.member_index || (mi + 1),
+            m.student_name,
+            m.prn || null,
+            m.prn_status || (m.prn ? 'valid' : 'missing'),
+            m.division || null,
+            m.mobile || null,
+            m.email || null,
+            m.topic1 || null,
+            m.topic2 || null,
+            m.topic3 || null,
+            m.is_leader ?? (mi === 0),
+          ]
         );
       }
     }
@@ -1426,15 +1516,33 @@ router.patch('/sessions/:id/assignments/:groupId', verifyToken, requireCoordinat
         [req.params.groupId]
       );
     } else {
-      const guideRes = await pool.query(
+      let guideRes = await pool.query(
         `SELECT sg.*, COALESCE(sg.guide_name, u.name) as final_name
          FROM seminar_guides sg
          LEFT JOIN faculty f ON sg.faculty_id = f.id
          LEFT JOIN users u ON f.user_id = u.id
-         WHERE sg.id = $1 AND sg.session_id = $2`,
+         WHERE (sg.id = $1 OR sg.faculty_id = $1) AND sg.session_id = $2`,
         [parseInt(guide_id, 10), req.params.id]
       );
-      if (!guideRes.rows.length) return res.status(404).json({ error: 'Guide not found in session' });
+      if (!guideRes.rows.length) {
+        // Fallback: check if valid faculty_id and auto-register into seminar_guides
+        const facRes = await pool.query(
+          `SELECT f.id as faculty_id, u.name as faculty_name
+           FROM faculty f JOIN users u ON f.user_id = u.id
+           WHERE f.id = $1`,
+          [parseInt(guide_id, 10)]
+        );
+        if (facRes.rows.length) {
+          const ins = await pool.query(
+            `INSERT INTO seminar_guides (session_id, faculty_id, quota, guide_name)
+             VALUES ($1, $2, 4, $3) RETURNING id, faculty_id, quota, guide_name`,
+            [req.params.id, facRes.rows[0].faculty_id, facRes.rows[0].faculty_name]
+          );
+          guideRes = { rows: [{ ...ins.rows[0], final_name: facRes.rows[0].faculty_name }] };
+        } else {
+          return res.status(404).json({ error: 'Guide not found in session' });
+        }
+      }
       const g = guideRes.rows[0];
 
       await pool.query(
@@ -1559,7 +1667,7 @@ router.get('/my-groups', verifyToken, requireRole('faculty', 'hod'), async (req,
        FROM seminar_groups sg
        JOIN seminar_sessions ss ON sg.session_id = ss.id
        LEFT JOIN seminar_group_members m ON m.group_id = sg.id
-       WHERE sg.guide_id = $1 AND (sg.status = 'APPROVED' OR ss.status = 'PUBLISHED')
+       WHERE sg.guide_id = $1
        GROUP BY sg.id, sg.group_no, sg.domain, sg.status, ss.id, ss.name, ss.academic_year, ss.batch, ss.status
        ORDER BY ss.id DESC, sg.group_no ASC`,
       [fid]

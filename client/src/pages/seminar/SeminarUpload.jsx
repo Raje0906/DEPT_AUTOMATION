@@ -44,6 +44,9 @@ export default function SeminarUpload() {
   const [selectedGroupModal, setSelectedGroupModal] = useState(null);
   const [downloading, setDownloading] = useState(false);
   const [togglingLock, setTogglingLock] = useState(false);
+  const [latestUpload, setLatestUpload] = useState(null);
+  const [committing, setCommitting] = useState(false);
+  const [viewMode, setViewMode] = useState('compact'); // 'compact' | 'expanded'
 
   // File import fallback state
   const fileRef = useRef(null);
@@ -52,9 +55,10 @@ export default function SeminarUpload() {
 
   const loadData = useCallback(async () => {
     try {
-      const [subRes, ovRes] = await Promise.allSettled([
+      const [subRes, ovRes, parseRes] = await Promise.allSettled([
         api.get(`/seminar/sessions/${id}/submissions`),
         api.get(`/seminar/sessions/${id}/overrides`),
+        api.get(`/seminar/sessions/${id}/parse-result`),
       ]);
 
       if (subRes.status === 'fulfilled') {
@@ -67,6 +71,10 @@ export default function SeminarUpload() {
 
       if (ovRes.status === 'fulfilled') {
         setOverrides(new Set(ovRes.value.data.overrides.map(o => o.issue_key)));
+      }
+
+      if (parseRes.status === 'fulfilled' && parseRes.value.data) {
+        setLatestUpload(parseRes.value.data);
       }
     } catch (err) {
       console.error('Failed to load submissions:', err);
@@ -172,12 +180,37 @@ export default function SeminarUpload() {
       const { data } = await api.post(`/seminar/sessions/${id}/upload`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      toast.success(`Parsed ${data.groupCount} groups from spreadsheet. You can review and commit them.`);
+      setLatestUpload({
+        filename: file.name,
+        groupCount: data.groupCount,
+        studentCount: data.studentCount,
+        issues: data.issues || [],
+        parseStatus: data.parseStatus,
+      });
+      toast.success(`Parsed ${data.groupCount} groups (${data.studentCount || 0} students). Review and commit below.`);
       await loadData();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Spreadsheet parse failed');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleCommit = async () => {
+    if (!window.confirm('Committing will replace current session groups with the parsed spreadsheet data. Continue?')) {
+      return;
+    }
+    setCommitting(true);
+    try {
+      const res = await api.post(`/seminar/sessions/${id}/commit`);
+      toast.success(`Successfully committed ${res.data.groupCount} groups to session!`);
+      setLatestUpload(null);
+      setActiveTab('submissions');
+      await loadData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to commit groups');
+    } finally {
+      setCommitting(false);
     }
   };
 
@@ -189,12 +222,13 @@ export default function SeminarUpload() {
     const matchDomain = g.domain?.toLowerCase().includes(q);
     const matchLeader = g.leader_name?.toLowerCase().includes(q) || g.leader_email?.toLowerCase().includes(q);
     const matchMember = g.members?.some(m => m.student_name?.toLowerCase().includes(q) || m.prn?.toLowerCase().includes(q));
-    return matchNo || matchDomain || matchLeader || matchMember;
+    const matchTopic = g.members?.some(m =>
+      m.topic1?.toLowerCase().includes(q) ||
+      m.topic2?.toLowerCase().includes(q) ||
+      m.topic3?.toLowerCase().includes(q)
+    );
+    return matchNo || matchDomain || matchLeader || matchMember || matchTopic;
   });
-
-  const unacknowledgedErrors = validation.issues.filter(
-    i => i.severity === 'error' && !overrides.has(i.key)
-  );
 
   if (loading) return <div className="p-8 text-sm text-[var(--ink)]/50">Loading seminar session...</div>;
 
@@ -290,8 +324,52 @@ export default function SeminarUpload() {
 
       <StepBar current={0} />
 
+      {/* Overview Metrics Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-white border border-[var(--rule)] rounded-xl p-4 shadow-xs">
+          <span className="text-[11px] font-semibold text-[var(--ink)]/60 uppercase tracking-wider block">Registered Groups</span>
+          <div className="flex items-baseline gap-2 mt-1">
+            <span className="text-2xl font-bold font-mono text-[var(--navy)]">{groups.length}</span>
+            <span className="text-xs text-slate-500">groups formed</span>
+          </div>
+        </div>
+
+        <div className="bg-white border border-[var(--rule)] rounded-xl p-4 shadow-xs">
+          <span className="text-[11px] font-semibold text-[var(--ink)]/60 uppercase tracking-wider block">Total Students</span>
+          <div className="flex items-baseline gap-2 mt-1">
+            <span className="text-2xl font-bold font-mono text-emerald-700">
+              {groups.reduce((acc, g) => acc + (g.members?.length || 0), 0)}
+            </span>
+            <span className="text-xs text-slate-500">enrolled in teams</span>
+          </div>
+        </div>
+
+        <div className="bg-white border border-[var(--rule)] rounded-xl p-4 shadow-xs">
+          <span className="text-[11px] font-semibold text-[var(--ink)]/60 uppercase tracking-wider block">Registration Status</span>
+          <div className="flex items-center gap-2 mt-1.5">
+            <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${
+              session?.is_locked
+                ? 'bg-amber-100 text-amber-900 border-amber-300'
+                : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+            }`}>
+              {session?.is_locked ? '🔒 Locked' : '🟢 Open for Students'}
+            </span>
+          </div>
+        </div>
+
+        <div className="bg-white border border-[var(--rule)] rounded-xl p-4 shadow-xs">
+          <span className="text-[11px] font-semibold text-[var(--ink)]/60 uppercase tracking-wider block">Guide Assignments</span>
+          <div className="flex items-baseline gap-2 mt-1">
+            <span className="text-2xl font-bold font-mono text-[var(--navy)]">
+              {groups.filter(g => g.guide_id).length}
+            </span>
+            <span className="text-xs text-slate-500">of {groups.length} assigned</span>
+          </div>
+        </div>
+      </div>
+
       {/* Tabs Navigation */}
-      <div className="flex items-center justify-between border-b border-[var(--rule)] pb-1">
+      <div className="flex items-center justify-between border-b border-[var(--rule)] pb-1 flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <button
             id="tab-submissions"
@@ -318,16 +396,36 @@ export default function SeminarUpload() {
           </button>
         </div>
 
-        {/* Quick Search */}
+        {/* Quick Search & View Toggle */}
         {activeTab === 'submissions' && (
-          <div className="w-64">
-            <input
-              type="text"
-              placeholder="Search group, PRN, student..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="input-field text-xs py-1.5 px-3"
-            />
+          <div className="flex items-center gap-2">
+            <div className="w-60">
+              <input
+                type="text"
+                placeholder="Search group, PRN, student, topic..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="input-field text-xs py-1.5 px-3"
+              />
+            </div>
+            <div className="flex items-center rounded-md border border-[var(--rule)] bg-white p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setViewMode('compact')}
+                className={`px-2 py-1 rounded font-medium transition-colors ${viewMode === 'compact' ? 'bg-slate-200 text-[var(--navy)] font-bold' : 'text-slate-600 hover:text-black'}`}
+                title="Compact preview"
+              >
+                Compact
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('expanded')}
+                className={`px-2 py-1 rounded font-medium transition-colors ${viewMode === 'expanded' ? 'bg-slate-200 text-[var(--navy)] font-bold' : 'text-slate-600 hover:text-black'}`}
+                title="Expanded topics"
+              >
+                Detailed Topics
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -354,6 +452,7 @@ export default function SeminarUpload() {
                     <th className="p-3">Domain</th>
                     <th className="p-3">Leader</th>
                     <th className="p-3">Team Members ({groups.length} total)</th>
+                    <th className="p-3 min-w-[260px]">Student Seminar Topics</th>
                     <th className="p-3">Submitted At</th>
                     <th className="p-3 text-center">Edit Permission</th>
                     <th className="p-3 text-right">Actions</th>
@@ -378,7 +477,7 @@ export default function SeminarUpload() {
                       </td>
 
                       <td className="p-3">
-                        <div className="flex flex-wrap gap-1 max-w-md">
+                        <div className="flex flex-wrap gap-1 max-w-xs">
                           {g.members?.map((m) => (
                             <span
                               key={m.id || m.member_index}
@@ -393,6 +492,77 @@ export default function SeminarUpload() {
                             </span>
                           ))}
                         </div>
+                      </td>
+
+                      <td className="p-3 max-w-sm align-top">
+                        {viewMode === 'compact' ? (
+                          <div className="space-y-1.5">
+                            {/* Primary Choice Topic Preview */}
+                            {(g.members?.find(m => m.is_leader) || g.members?.[0])?.topic1 ? (
+                              <div className="p-1.5 bg-amber-50/60 border border-amber-200/70 rounded text-[11px]">
+                                <div className="text-[10px] text-amber-900 font-bold flex items-center gap-1">
+                                  <span>⭐ Primary Topic ({(g.members?.find(m => m.is_leader) || g.members?.[0])?.student_name}):</span>
+                                </div>
+                                <div
+                                  className="text-slate-800 truncate mt-0.5 font-medium"
+                                  title={(g.members?.find(m => m.is_leader) || g.members?.[0])?.topic1}
+                                >
+                                  {(g.members?.find(m => m.is_leader) || g.members?.[0])?.topic1}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-slate-400 italic text-[11px]">No primary topic recorded</div>
+                            )}
+
+                            {/* View All Topics Button */}
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedGroupModal(g)}
+                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--navy)] bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded transition-colors"
+                              >
+                                <span>📖 View All Topics ({g.members?.length || 0} Students)</span>
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          /* Detailed View: Render individual cards inline */
+                          <div className="space-y-1.5">
+                            {g.members?.map((m) => {
+                              const hasTopics = m.topic1 || m.topic2 || m.topic3;
+                              if (!hasTopics) return null;
+                              return (
+                                <div
+                                  key={m.id || m.member_index}
+                                  className="p-1.5 bg-slate-50 border border-slate-200/80 rounded text-[11px] space-y-0.5 shadow-2xs"
+                                >
+                                  <div className="flex items-center justify-between gap-1 text-[10px]">
+                                    <span className="font-bold text-[var(--navy)] truncate">{m.student_name}</span>
+                                    <span className="font-mono text-slate-400 shrink-0">{m.prn}</span>
+                                  </div>
+                                  {m.topic1 && (
+                                    <div className="text-[10px] text-slate-700 truncate" title={m.topic1}>
+                                      <span className="font-bold text-amber-800">1:</span> {m.topic1}
+                                    </div>
+                                  )}
+                                  {m.topic2 && (
+                                    <div className="text-[10px] text-slate-600 truncate" title={m.topic2}>
+                                      <span className="font-semibold text-slate-500">2:</span> {m.topic2}
+                                    </div>
+                                  )}
+                                  {m.topic3 && (
+                                    <div className="text-[10px] text-slate-600 truncate" title={m.topic3}>
+                                      <span className="font-semibold text-slate-500">3:</span> {m.topic3}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                            {!g.members?.some(m => m.topic1 || m.topic2 || m.topic3) && (
+                              <span className="text-[10px] text-slate-400 italic">No topics submitted</span>
+                            )}
+                          </div>
+                        )}
                       </td>
 
                       <td className="p-3 font-mono text-[11px] text-[var(--ink)]/60 whitespace-nowrap">
@@ -558,20 +728,88 @@ export default function SeminarUpload() {
 
       {/* ─── TAB 3: SPREADSHEET IMPORT (FALLBACK) ──────────────────────────── */}
       {activeTab === 'import' && (
-        <div className="bg-white border border-[var(--rule)] rounded-xl p-6 space-y-4 shadow-xs">
+        <div className="bg-white border border-[var(--rule)] rounded-xl p-6 space-y-6 shadow-xs">
           <div>
-            <h2 className="text-base font-bold text-[var(--navy)]">Legacy Spreadsheet Import</h2>
+            <h2 className="text-base font-bold text-[var(--navy)]">Department Spreadsheet Import</h2>
             <p className="text-xs text-[var(--ink)]/60 mt-0.5">
-              If students submitted via an external spreadsheet or historical file, you may upload it here. Direct web submissions remain the primary intake method.
+              Upload the departmental master spreadsheet (multi-sheet workbook with "Groups with Guide", "Form Responses 1", and "count") or legacy Google Form exports.
             </p>
           </div>
+
+          {/* If an upload has been parsed, show preview & commit card */}
+          {latestUpload && (
+            <div className="p-5 bg-slate-50 border border-[var(--navy)]/20 rounded-xl space-y-4">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono font-bold bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded">
+                      {latestUpload.parseStatus === 'ERROR' ? 'PARSE ERROR' : 'READY TO COMMIT'}
+                    </span>
+                    <h3 className="text-sm font-bold text-[var(--navy)]">{latestUpload.filename || 'Spreadsheet Upload'}</h3>
+                  </div>
+                  <p className="text-xs text-[var(--ink)]/60 mt-1">
+                    Parsed <span className="font-bold text-[var(--navy)]">{latestUpload.groupCount || 0} groups</span>
+                    {latestUpload.studentCount ? <> (<span className="font-bold text-[var(--navy)]">{latestUpload.studentCount}</span> students)</> : null}.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    id="btn-reupload"
+                    onClick={() => fileRef.current?.click()}
+                    className="px-3 py-1.5 text-xs font-semibold rounded-md border border-[var(--rule)] bg-white text-[var(--ink)] hover:bg-slate-100 transition-colors"
+                  >
+                    Upload Another File
+                  </button>
+                  <button
+                    type="button"
+                    id="btn-commit-import"
+                    onClick={handleCommit}
+                    disabled={committing || latestUpload.parseStatus === 'ERROR'}
+                    className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-md shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    {committing ? 'Committing...' : `Commit ${latestUpload.groupCount || 0} Groups to Session`}
+                  </button>
+                </div>
+              </div>
+
+              {/* Warnings / Issues Preview */}
+              {latestUpload.issues && latestUpload.issues.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-[var(--rule)] space-y-2">
+                  <h4 className="text-xs font-semibold text-[var(--ink)]/80 flex items-center gap-1">
+                    <span>Validation &amp; Reconciliation Notes ({latestUpload.issues.length})</span>
+                  </h4>
+                  <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+                    {latestUpload.issues.map((iss, i) => (
+                      <div
+                        key={iss.key || i}
+                        className={`text-xs p-2 rounded border flex items-start justify-between gap-2 ${
+                          iss.severity === 'error'
+                            ? 'bg-rose-50 border-rose-200 text-rose-900'
+                            : 'bg-amber-50 border-amber-200 text-amber-900'
+                        }`}
+                      >
+                        <div>
+                          <span className="font-semibold text-[10px] uppercase tracking-wide mr-1.5 font-mono px-1.5 py-0.5 rounded bg-white/70">
+                            {iss.type}
+                          </span>
+                          <span>{iss.message}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div
             onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
             onDragLeave={() => setDragging(false)}
             onDrop={(e) => { e.preventDefault(); setDragging(false); handleFile(e.dataTransfer.files[0]); }}
             onClick={() => fileRef.current?.click()}
-            className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-colors ${
+            className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
               dragging ? 'border-[var(--navy)] bg-blue-50/40' : 'border-[var(--rule)] hover:border-[var(--navy)]/50'
             }`}
           >
@@ -588,9 +826,9 @@ export default function SeminarUpload() {
               </svg>
             </div>
             <p className="text-sm font-semibold text-[var(--navy)]">
-              {uploading ? 'Processing spreadsheet...' : 'Drop .xlsx or .csv file here'}
+              {uploading ? 'Processing spreadsheet...' : 'Drop .xlsx or .csv file here to import'}
             </p>
-            <p className="text-xs text-[var(--ink)]/50 mt-1">Accepts Google Form exports or Excel sheets up to 10MB</p>
+            <p className="text-xs text-[var(--ink)]/50 mt-1">Accepts Department Excel files (.xlsx) or Google Form responses up to 10MB</p>
           </div>
         </div>
       )}
