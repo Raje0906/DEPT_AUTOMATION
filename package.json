@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js",
+    "dev": "node --watch --watch-path=server.js --watch-path=routes --watch-path=services --watch-path=middleware --watch-path=db server.js",
     "build": "npm --prefix client run build",
     "client": "npm --prefix client run dev",
     "migrate": "node db/run-migrate.js",

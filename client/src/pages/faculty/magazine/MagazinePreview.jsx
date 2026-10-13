@@ -170,16 +170,16 @@ export default function MagazinePreview() {
                   <button
                     onClick={() => {
                       approveMagazine(id);
-                      toast.success('Magazine approved!');
+                      toast.success('Newsletter approved!');
                     }}
                     className="btn-primary text-xs py-1.5 px-3 bg-emerald-700 hover:bg-emerald-800 border-emerald-800"
                   >
-                    ✓ Approve Magazine
+                    ✓ Approve Newsletter
                   </button>
                   <button
                     onClick={() => {
                       publishMagazine(id);
-                      toast.success('Magazine published live!');
+                      toast.success('Newsletter published live!');
                     }}
                     className="btn-primary text-xs py-1.5 px-3 bg-navy hover:bg-[#162142]"
                   >
@@ -202,7 +202,7 @@ export default function MagazinePreview() {
                   <button
                     onClick={() => {
                       publishMagazine(id);
-                      toast.success('Magazine published live!');
+                      toast.success('Newsletter published live!');
                     }}
                     className="btn-primary text-xs py-1.5 px-3 bg-navy hover:bg-[#162142]"
                   >

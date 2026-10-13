@@ -134,7 +134,7 @@ const roleNav = {
       items: [
         { to: '/faculty/clubs',           label: 'Manage Clubs',          icon: Icons.clubs },
         { to: '/faculty/project-eval',    label: 'BE Project Evaluation', icon: Icons.project },
-        { to: '/faculty/magazines',       label: 'Magazine',              icon: Icons.magazines },
+        { to: '/faculty/magazines',       label: 'Newsletter',            icon: Icons.magazines },
         { to: '/faculty/seminar',         label: 'TE Seminar Governance', icon: Icons.seminar },
       ],
     },
@@ -144,7 +144,7 @@ const roleNav = {
       group: 'Overview & Insights',
       items: [
         { to: '/hod',                 label: 'Executive Dashboard',     icon: Icons.dashboard },
-        { to: '/hod/analytics',       label: 'Academic Analytics',      icon: Icons.analytics },
+        { to: '/hod/analytics',       label: 'Department Analytics',    icon: Icons.analytics },
       ],
     },
     {
@@ -219,7 +219,7 @@ const PAGE_TITLES = {
   '/hod/magazine-approvals': 'Department Newsletter Approval',
   '/hod/publish': 'Publish Academic Results',
   '/hod/rollover': 'Academic Term Rollover',
-  '/hod/analytics': 'Department Academic Analytics',
+  '/hod/analytics': 'Department Analytics',
   '/hod/audit': 'System Audit Log & Trail',
   '/alumni/feedback': 'Alumni Graduate Feedback',
   '/alumni/distinguished': 'Distinguished Alumni Directory',
