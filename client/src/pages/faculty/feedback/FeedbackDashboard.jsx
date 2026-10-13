@@ -133,9 +133,9 @@ export default function FeedbackDashboard() {
           {isStrictCreator && (
             <button
               onClick={() => setIsCreateOpen(true)}
-              className="btn-primary flex items-center gap-2 shadow-sm"
+              className="px-3 py-2 text-xs font-semibold text-white bg-navy rounded hover:bg-[#162142] flex items-center gap-1.5 shadow-sm transition-colors"
             >
-              <PlusIcon className="w-4 h-4" />
+              <PlusIcon className="w-3.5 h-3.5" />
               <span>Create Feedback Form</span>
             </button>
           )}
