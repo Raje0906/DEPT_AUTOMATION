@@ -18,7 +18,7 @@ const SAMPLE_MAGAZINES = [
     period: 'June – December 2025',
     description: 'The annual departmental magazine capturing student achievements, academic milestones, and departmental events of the first half of academic year 2025–26.',
     status: 'Published',
-    template: 'modern-academic',
+    template: 'reflection-classic',
     publishedDate: '2026-01-15',
     coverColor: '#1E2D5A',
     totalPages: 20,
@@ -97,7 +97,6 @@ const SAMPLE_MAGAZINES = [
   },
 ];
 
-// ── Default section data for a new magazine ───────────────────────────────────
 // ── Default section data for a new magazine ───────────────────────────────────
 export const CLASS_OPTIONS = [
   'SE - Div A', 'SE - Div B', 'SE - Div C', 'SE - Div D', 'SE - Div E',

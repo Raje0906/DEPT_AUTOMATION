@@ -37,7 +37,7 @@ export default function MagazineEditor() {
   const handleSubmit = () => {
     submitForApproval();
     setShowSubmitConfirm(false);
-    toast.success('Magazine submitted for approval. The HOD will review and approve it.');
+    toast.success('Newsletter submitted for approval. The HOD will review and approve it.');
   };
 
   const statusBadge = {
@@ -63,7 +63,7 @@ export default function MagazineEditor() {
         <span className="text-draft">|</span>
         <div className="flex-1 min-w-0">
           <span className="text-sm font-semibold text-ink truncate">
-            {currentMagazine?.title || 'New Magazine'}{' '}
+            {currentMagazine?.title || 'New Newsletter'}{' '}
             {currentMagazine?.issueNumber && <span className="text-draft font-normal">Issue {currentMagazine.issueNumber}</span>}
           </span>
         </div>
@@ -73,7 +73,7 @@ export default function MagazineEditor() {
         <button
           onClick={() => setShowTemplateModal(true)}
           className="flex items-center gap-1.5 text-xs border border-navy/25 bg-blue-50/70 text-navy font-semibold rounded-sm px-2.5 py-1.5 hover:bg-blue-100/70 transition-colors"
-          title="Change magazine visual theme"
+          title="Change newsletter visual theme"
         >
           <svg className="w-3.5 h-3.5 text-navy" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9.53 16.122a3 3 0 00-5.78 1.128 2.25 2.25 0 01-2.4 2.245 4.5 4.5 0 008.4-2.245c0-.399-.078-.78-.22-1.128zm0 0a15.998 15.998 0 003.388-1.62m-5.043-.025a15.994 15.994 0 011.622-3.395m3.42 3.42a15.995 15.995 0 004.764-4.648l3.876-5.814a1.151 1.151 0 00-1.597-1.597L14.146 6.32a15.996 15.996 0 00-4.649 4.763m3.42 3.42a6.776 6.776 0 00-3.42-3.42" />
