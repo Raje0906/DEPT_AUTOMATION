@@ -94,6 +94,31 @@ async function seed() {
 
     // ─── SUBJECTS ─────────────────────────────────────────────────────────────
     const subjectsData = [
+      // Semester 3 (2024 Pattern, Level 5.0)
+      { name: 'Data Structures', code: 'PCC-201-COM', semester: 3, credits: 3, max_cie: 30, max_practical: 0, max_end_sem: 70, has_practical: false, type: 'theory' },
+      { name: 'Object Oriented programming and Computer Graphics', code: 'PCC-202-COM', semester: 3, credits: 3, max_cie: 30, max_practical: 0, max_end_sem: 70, has_practical: false, type: 'theory' },
+      { name: 'Operating Systems', code: 'PCC-203-COM', semester: 3, credits: 3, max_cie: 30, max_practical: 0, max_end_sem: 70, has_practical: false, type: 'theory' },
+      { name: 'Data Structures Laboratory', code: 'PCC-204-COM', semester: 3, credits: 2, max_cie: 0, max_practical: 25, max_end_sem: 0, has_practical: true, type: 'practical' },
+      { name: 'Object Oriented Programming and Computer Graphics Laboratory', code: 'PCC-205-COM', semester: 3, credits: 1, max_cie: 0, max_practical: 25, max_end_sem: 0, has_practical: true, type: 'practical' },
+      { name: 'Open Elective - I', code: 'OE-211-COM', semester: 3, credits: 2, max_cie: 15, max_practical: 0, max_end_sem: 35, has_practical: false, type: 'theory' },
+      { name: 'Digital Electronics and Logic Design', code: 'MDM-221-COM', semester: 3, credits: 2, max_cie: 30, max_practical: 0, max_end_sem: 70, has_practical: false, type: 'theory' },
+      { name: 'Entrepreneurship Development', code: 'EEM-231-COM', semester: 3, credits: 2, max_cie: 0, max_practical: 25, max_end_sem: 0, has_practical: true, type: 'practical' },
+      { name: 'Universal Human Values and Professional Ethics', code: 'VEC-232-COM', semester: 3, credits: 2, max_cie: 15, max_practical: 0, max_end_sem: 35, has_practical: false, type: 'theory' },
+      { name: 'Community Engagement Project', code: 'CEP-241-COM', semester: 3, credits: 2, max_cie: 0, max_practical: 25, max_end_sem: 0, has_practical: true, type: 'practical' },
+
+      // Semester 4 (2024 Pattern, Level 5.0)
+      { name: 'Database Management systems', code: 'PCC-251-COM', semester: 4, credits: 3, max_cie: 30, max_practical: 0, max_end_sem: 70, has_practical: false, type: 'theory' },
+      { name: 'Discrete Mathematics', code: 'PCC-252-COM', semester: 4, credits: 3, max_cie: 30, max_practical: 0, max_end_sem: 70, has_practical: false, type: 'theory' },
+      { name: 'Computer Organization & Microprocessor', code: 'PCC-253-COM', semester: 4, credits: 2, max_cie: 30, max_practical: 0, max_end_sem: 70, has_practical: false, type: 'theory' },
+      { name: 'Database Management Laboratory', code: 'PCC-254-COM', semester: 4, credits: 1, max_cie: 0, max_practical: 25, max_end_sem: 0, has_practical: true, type: 'practical' },
+      { name: 'Microprocessor Laboratory', code: 'PCC-255-COM', semester: 4, credits: 1, max_cie: 0, max_practical: 25, max_end_sem: 0, has_practical: true, type: 'practical' },
+      { name: 'Open Elective - II', code: 'OE-261-COM', semester: 4, credits: 2, max_cie: 15, max_practical: 0, max_end_sem: 35, has_practical: false, type: 'theory' },
+      { name: 'Internet of Things', code: 'MDM-271-COM', semester: 4, credits: 2, max_cie: 30, max_practical: 0, max_end_sem: 70, has_practical: false, type: 'theory' },
+      { name: 'Web Development', code: 'VSE-281-COM', semester: 4, credits: 2, max_cie: 0, max_practical: 25, max_end_sem: 0, has_practical: true, type: 'practical' },
+      { name: 'Modern Indian Language (Marathi)', code: 'AEC-282-COM', semester: 4, credits: 2, max_cie: 0, max_practical: 50, max_end_sem: 0, has_practical: true, type: 'practical' },
+      { name: 'Engineering Product Design', code: 'EEM-283-COM', semester: 4, credits: 2, max_cie: 0, max_practical: 25, max_end_sem: 0, has_practical: true, type: 'practical' },
+      { name: 'Environmental Studies', code: 'VEC-284-COM', semester: 4, credits: 2, max_cie: 15, max_practical: 0, max_end_sem: 35, has_practical: false, type: 'theory' },
+
       // Semester 5
       { name: 'Data Structures & Algorithms', code: 'CE501', semester: 5, credits: 4, max_cie: 30, max_practical: 25, max_end_sem: 70, has_practical: true,  type: 'theory_practical' },
       { name: 'Operating Systems',            code: 'CE502', semester: 5, credits: 4, max_cie: 30, max_practical: 0,  max_end_sem: 70, has_practical: false, type: 'theory' },

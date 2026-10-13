@@ -27,7 +27,7 @@ async function runMigrations() {
       CREATE TABLE IF NOT EXISTS students (
         id                SERIAL PRIMARY KEY,
         user_id           INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        roll_no           VARCHAR(20)  UNIQUE NOT NULL,
+        roll_no           VARCHAR(20)  NOT NULL,
         enrollment_no     VARCHAR(30)  UNIQUE NOT NULL,
         batch             VARCHAR(20)  NOT NULL,
         current_semester  INTEGER      NOT NULL CHECK (current_semester BETWEEN 1 AND 8),
@@ -938,6 +938,23 @@ async function runMigrations() {
 
       CREATE INDEX IF NOT EXISTS idx_magazines_status ON magazines(status);
       CREATE INDEX IF NOT EXISTS idx_magazines_academic_year ON magazines(academic_year);
+
+      -- 2024 Pattern Subjects Columns Support
+      ALTER TABLE subjects ALTER COLUMN code TYPE VARCHAR(50);
+      ALTER TABLE subjects
+        ADD COLUMN IF NOT EXISTS course_type VARCHAR(100),
+        ADD COLUMN IF NOT EXISTS th_hours NUMERIC(3,1) DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS tut_hours NUMERIC(3,1) DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS pr_hours NUMERIC(3,1) DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS max_tw INTEGER DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS max_pr INTEGER DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS max_oral INTEGER DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS max_total INTEGER DEFAULT 100,
+        ADD COLUMN IF NOT EXISTS pattern VARCHAR(20) DEFAULT '2024';
+
+      -- Allow same roll numbers across different classes/divisions, but enforce uniqueness within the same class
+      ALTER TABLE students DROP CONSTRAINT IF EXISTS students_roll_no_key;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_students_roll_division ON students (LOWER(TRIM(roll_no)), LOWER(TRIM(division)));
     `);
 
     await client.query('COMMIT');
