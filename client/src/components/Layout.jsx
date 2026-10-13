@@ -297,18 +297,15 @@ export default function Layout({ children }) {
     }
 
     if (isAuthorizedFeedbackCoordinator(user)) {
-      navGroups = navGroups.map(group => {
-        if (group.group === 'Department Administration') {
-          return {
-            ...group,
-            items: [
-              ...group.items,
-              { to: '/faculty/feedback', label: 'TE Mid-Sem Feedback', icon: Icons.results }
-            ]
-          };
+      navGroups = [
+        ...navGroups,
+        {
+          group: 'Feedback Coordinator Desk',
+          items: [
+            { to: '/faculty/feedback', label: 'TE Mid-Sem Feedback', icon: Icons.results }
+          ]
         }
-        return group;
-      });
+      ];
     }
   }
   if (user?.role === 'hod' && pendingMagazinesCount > 0) {
