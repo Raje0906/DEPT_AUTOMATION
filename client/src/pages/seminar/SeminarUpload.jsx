@@ -46,7 +46,6 @@ export default function SeminarUpload() {
   const [togglingLock, setTogglingLock] = useState(false);
   const [latestUpload, setLatestUpload] = useState(null);
   const [committing, setCommitting] = useState(false);
-  const [viewMode, setViewMode] = useState('compact'); // 'compact' | 'expanded'
 
   // File import fallback state
   const fileRef = useRef(null);
@@ -396,10 +395,10 @@ export default function SeminarUpload() {
           </button>
         </div>
 
-        {/* Quick Search & View Toggle */}
+        {/* Quick Search */}
         {activeTab === 'submissions' && (
           <div className="flex items-center gap-2">
-            <div className="w-60">
+            <div className="w-72">
               <input
                 type="text"
                 placeholder="Search group, PRN, student, topic..."
@@ -407,24 +406,6 @@ export default function SeminarUpload() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="input-field text-xs py-1.5 px-3"
               />
-            </div>
-            <div className="flex items-center rounded-md border border-[var(--rule)] bg-white p-0.5 text-xs">
-              <button
-                type="button"
-                onClick={() => setViewMode('compact')}
-                className={`px-2 py-1 rounded font-medium transition-colors ${viewMode === 'compact' ? 'bg-slate-200 text-[var(--navy)] font-bold' : 'text-slate-600 hover:text-black'}`}
-                title="Compact preview"
-              >
-                Compact
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('expanded')}
-                className={`px-2 py-1 rounded font-medium transition-colors ${viewMode === 'expanded' ? 'bg-slate-200 text-[var(--navy)] font-bold' : 'text-slate-600 hover:text-black'}`}
-                title="Expanded topics"
-              >
-                Detailed Topics
-              </button>
             </div>
           </div>
         )}
@@ -447,132 +428,100 @@ export default function SeminarUpload() {
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-left">
                 <thead>
-                  <tr className="bg-[#EEF0F7] border-b border-[var(--rule)] font-semibold text-[var(--navy)]">
-                    <th className="p-3 w-16 text-center">Group</th>
-                    <th className="p-3">Domain</th>
-                    <th className="p-3">Leader</th>
-                    <th className="p-3">Team Members ({groups.length} total)</th>
-                    <th className="p-3 min-w-[260px]">Student Seminar Topics</th>
-                    <th className="p-3">Submitted At</th>
-                    <th className="p-3 text-center">Edit Permission</th>
-                    <th className="p-3 text-right">Actions</th>
+                  <tr className="bg-[#EEF0F7] border-b border-[var(--rule)] font-semibold text-[var(--navy)] text-[11px]">
+                    <th className="py-2.5 px-3 w-14 text-center">Group</th>
+                    <th className="py-2.5 px-3 w-32">Domain</th>
+                    <th className="py-2.5 px-3 w-44">Leader</th>
+                    <th className="py-2.5 px-3">Team Members ({groups.length} total)</th>
+                    <th className="py-2.5 px-3 w-32 text-center">Submitted At</th>
+                    <th className="py-2.5 px-3 w-28 text-center">Edit Permission</th>
+                    <th className="py-2.5 px-3 w-28 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--rule)]">
                   {filteredGroups.map((g) => (
                     <tr key={g.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-3 text-center font-mono font-bold text-[var(--navy)] whitespace-nowrap">
+                      <td className="py-2 px-3 text-center font-mono font-bold text-[var(--navy)] whitespace-nowrap align-top">
                         #{g.group_no}
                       </td>
 
-                      <td className="p-3 font-semibold text-[var(--ink)] whitespace-nowrap">
-                        {g.domain}
+                      <td className="py-2 px-3 font-semibold text-[var(--ink)] align-top">
+                        <div className="truncate max-w-[120px]" title={g.domain}>{g.domain}</div>
                       </td>
 
-                      <td className="p-3 whitespace-nowrap">
-                        <div className="font-medium text-[var(--ink)]">{g.leader_name || '—'}</div>
-                        <div className="text-[10px] text-[var(--ink)]/60 font-mono truncate max-w-[150px]">
+                      <td className="py-2 px-3 align-top">
+                        <div className="font-medium text-[var(--ink)] truncate max-w-[160px]" title={g.leader_name || '—'}>
+                          {g.leader_name || '—'}
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-mono truncate max-w-[160px]" title={g.leader_email}>
                           {g.leader_email}
                         </div>
                       </td>
 
-                      <td className="p-3">
-                        <div className="flex flex-wrap gap-1 max-w-xs">
-                          {g.members?.map((m) => (
-                            <span
-                              key={m.id || m.member_index}
-                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono border ${
-                                m.is_leader
-                                  ? 'bg-amber-50 text-amber-900 border-amber-300 font-bold'
-                                  : 'bg-gray-50 text-gray-700 border-gray-200'
-                              }`}
-                            >
-                              <span>{m.student_name}</span>
-                              <span className="text-[var(--ink)]/40">({m.prn})</span>
-                            </span>
-                          ))}
+                      <td className="py-2 px-3 align-top">
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setSelectedGroupModal(g)}
+                          className="p-2 rounded-lg border border-slate-200 hover:border-blue-400 bg-slate-50/70 hover:bg-blue-50/50 transition-all cursor-pointer group shadow-2xs max-w-md"
+                          title="Click to view topic & student details"
+                        >
+                          <div className="space-y-1">
+                            {g.members?.map((m) => (
+                              <div
+                                key={m.id || m.member_index}
+                                className={`flex items-center justify-between gap-2 px-2 py-1 rounded text-[11px] border transition-colors ${
+                                  m.is_leader
+                                    ? 'bg-amber-50/90 text-amber-950 border-amber-300 font-semibold'
+                                    : 'bg-white text-slate-800 border-slate-200 group-hover:border-slate-300'
+                                }`}
+                              >
+                                <span className="truncate max-w-[170px]" title={m.student_name}>
+                                  {m.student_name}
+                                </span>
+                                <span className="font-mono text-[10px] text-slate-500 shrink-0">
+                                  ({m.prn})
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="mt-1.5 pt-1 border-t border-slate-200/60 flex items-center justify-between text-[10px] text-slate-400 group-hover:text-blue-600 transition-colors">
+                            <span>{g.members?.length || 0} students</span>
+                            <span className="font-semibold text-blue-600 group-hover:underline">Click for Topic Details ↗</span>
+                          </div>
                         </div>
                       </td>
 
-                      <td className="p-3 max-w-sm align-top">
-                        {viewMode === 'compact' ? (
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setSelectedGroupModal(g)}
-                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--navy)] bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2.5 py-1 rounded transition-colors"
-                            >
-                              <span>View All Topics ({g.members?.length || 0} Students)</span>
-                            </button>
-                          </div>
-                        ) : (
-                          /* Detailed View: Render individual cards inline */
-                          <div className="space-y-1.5">
-                            {g.members?.map((m) => {
-                              const hasTopics = m.topic1 || m.topic2 || m.topic3;
-                              if (!hasTopics) return null;
-                              return (
-                                <div
-                                  key={m.id || m.member_index}
-                                  className="p-1.5 bg-slate-50 border border-slate-200/80 rounded text-[11px] space-y-0.5 shadow-2xs"
-                                >
-                                  <div className="flex items-center justify-between gap-1 text-[10px]">
-                                    <span className="font-bold text-[var(--navy)] truncate">{m.student_name}</span>
-                                    <span className="font-mono text-slate-400 shrink-0">{m.prn}</span>
-                                  </div>
-                                  {m.topic1 && (
-                                    <div className="text-[10px] text-slate-700 truncate" title={m.topic1}>
-                                      <span className="font-bold text-amber-800">1:</span> {m.topic1}
-                                    </div>
-                                  )}
-                                  {m.topic2 && (
-                                    <div className="text-[10px] text-slate-600 truncate" title={m.topic2}>
-                                      <span className="font-semibold text-slate-500">2:</span> {m.topic2}
-                                    </div>
-                                  )}
-                                  {m.topic3 && (
-                                    <div className="text-[10px] text-slate-600 truncate" title={m.topic3}>
-                                      <span className="font-semibold text-slate-500">3:</span> {m.topic3}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                            {!g.members?.some(m => m.topic1 || m.topic2 || m.topic3) && (
-                              <span className="text-[10px] text-slate-400 italic">No topics submitted</span>
-                            )}
-                          </div>
-                        )}
+                      <td className="py-2 px-3 font-mono text-[10px] text-slate-500 whitespace-nowrap text-center align-top">
+                        <div>{new Date(g.submitted_at || g.created_at).toLocaleDateString()}</div>
+                        <div className="text-slate-400 text-[9px] mt-0.5">
+                          {new Date(g.submitted_at || g.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
                       </td>
 
-                      <td className="p-3 font-mono text-[11px] text-[var(--ink)]/60 whitespace-nowrap">
-                        {new Date(g.submitted_at || g.created_at).toLocaleDateString()}{' '}
-                        {new Date(g.submitted_at || g.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </td>
-
-                      <td className="p-3 text-center whitespace-nowrap">
+                      <td className="py-2 px-3 text-center whitespace-nowrap align-top">
                         {session?.is_locked ? (
                           g.allow_edit ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                              Unlocked (Exception)
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                              Unlocked
                             </span>
                           ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 border border-gray-200">
                               Locked
                             </span>
                           )
                         ) : (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200">
                             Open
                           </span>
                         )}
                       </td>
 
-                      <td className="p-3 text-right whitespace-nowrap space-x-2">
+                      <td className="py-2 px-3 text-right whitespace-nowrap align-top space-x-1">
                         <button
                           type="button"
                           onClick={() => setSelectedGroupModal(g)}
-                          className="px-2 py-1 text-[11px] font-medium border border-[var(--rule)] rounded hover:bg-slate-100 text-[var(--navy)]"
+                          className="px-2 py-0.5 text-[11px] font-medium border border-[var(--rule)] rounded hover:bg-slate-100 text-[var(--navy)]"
                         >
                           Details
                         </button>
@@ -581,20 +530,21 @@ export default function SeminarUpload() {
                           <button
                             type="button"
                             onClick={() => handleToggleGroupUnlock(g)}
-                            className={`px-2 py-1 text-[11px] font-medium border rounded transition-colors ${
+                            className={`px-1.5 py-0.5 text-[10px] font-medium border rounded transition-colors ${
                               g.allow_edit
                                 ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
                                 : 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
                             }`}
                           >
-                            {g.allow_edit ? 'Revoke Edit' : 'Allow Edit'}
+                            {g.allow_edit ? 'Revoke' : 'Allow'}
                           </button>
                         )}
 
                         <button
                           type="button"
                           onClick={() => handleDeleteGroup(g)}
-                          className="px-2 py-1 text-[11px] font-medium text-red-600 hover:bg-red-50 border border-red-200 rounded"
+                          className="px-1.5 py-0.5 text-[11px] font-medium text-red-600 hover:bg-red-50 border border-red-200 rounded"
+                          title="Delete group"
                         >
                           ✕
                         </button>

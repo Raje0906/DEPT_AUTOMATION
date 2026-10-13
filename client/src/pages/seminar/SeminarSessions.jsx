@@ -66,6 +66,20 @@ export default function SeminarSessions() {
     }
   };
 
+  const handleUnpublishSession = async (s) => {
+    if (!window.confirm(`Depublish "${s.name}" to draft? Groups and student responses will be preserved.`)) return;
+    setPublishingId(s.id);
+    try {
+      await api.post(`/seminar/sessions/${s.id}/publish`, { publish: false });
+      toast.success(`Session "${s.name}" reverted to draft. Responses are kept.`);
+      await load();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Failed to depublish session');
+    } finally {
+      setPublishingId(null);
+    }
+  };
+
   useEffect(() => { load(); }, [load]);
 
   const handleCreate = async (e) => {
@@ -267,7 +281,7 @@ export default function SeminarSessions() {
                   <button
                     type="button"
                     id={`btn-schedule-session-${s.id}`}
-                    onClick={() => navigate('/faculty/seminar/schedule')}
+                    onClick={() => navigate('/faculty/seminar/schedule', { state: { sessionId: s.id } })}
                     className="h-8 px-3 inline-flex items-center text-xs font-semibold border border-[#D4D0C8] text-[#1E2D5A] rounded-md bg-white hover:bg-slate-50 transition-colors shadow-2xs"
                   >
                     Schedule presentation
@@ -287,6 +301,27 @@ export default function SeminarSessions() {
                 >
                   {s.status === 'PUBLISHED' ? 'Review & Export' : 'Continue →'}
                 </button>
+                {s.status === 'PUBLISHED' ? (
+                  <button
+                    type="button"
+                    onClick={() => handleUnpublishSession(s)}
+                    disabled={publishingId === s.id}
+                    className="h-8 px-2.5 inline-flex items-center text-xs font-medium border border-amber-300 text-amber-900 bg-amber-50 hover:bg-amber-100 rounded-md transition-colors shadow-2xs"
+                    title="Depublish session back to draft (keeps all group responses)"
+                  >
+                    Unpublish
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handlePublishSession(s)}
+                    disabled={publishingId === s.id}
+                    className="h-8 px-2.5 inline-flex items-center text-xs font-medium border border-emerald-300 text-emerald-900 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors shadow-2xs"
+                    title="Publish session to make schedules active"
+                  >
+                    Publish session
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => handleDelete(s)}

@@ -530,12 +530,6 @@ export default function SeminarImportAssignWorkflow() {
           <span>/</span>
           <span className="text-[var(--ink)]/80 font-medium">Import &amp; Assign Guides</span>
         </div>
-        <Link
-          to="/faculty/seminar/schedule"
-          className="text-xs font-semibold text-[var(--navy)] hover:underline"
-        >
-          Next: Schedule presentation &rarr;
-        </Link>
       </div>
 
       {/* Header & Session Selector */}

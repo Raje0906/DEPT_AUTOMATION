@@ -56,25 +56,23 @@ export default function SeminarSchedule() {
       const allSessions = data.sessions || [];
       setSessions(allSessions);
 
-      // Find published session first
+      const targetId = location.state?.sessionId ? String(location.state.sessionId) : null;
+      const targetSession = targetId ? allSessions.find(s => String(s.id) === targetId) : null;
       const published = allSessions.find(s => s.status === 'PUBLISHED');
-      if (published) {
-        setSelectedSessionId(String(published.id));
-      } else if (allSessions.length > 0) {
-        // If all are draft, redirect immediately as per requirement
-        toast.error('Schedule presentation is only accessible after the session is published.');
-        navigate('/faculty/seminar', { replace: true });
-        return;
-      } else {
-        toast.error('No seminar sessions available.');
+      const chosen = targetSession || published;
+
+      if (!chosen || chosen.status !== 'PUBLISHED') {
+        toast.error('Schedule presentation is only accessible for published sessions.');
         navigate('/faculty/seminar', { replace: true });
         return;
       }
+
+      setSelectedSessionId(String(chosen.id));
     } catch (err) {
       toast.error('Failed to load seminar sessions');
       navigate('/faculty/seminar', { replace: true });
     }
-  }, [navigate]);
+  }, [navigate, location.state]);
 
   useEffect(() => {
     loadSessions();
@@ -514,9 +512,9 @@ export default function SeminarSchedule() {
             onChange={(e) => setSelectedSessionId(e.target.value)}
             className="border border-[#D4D0C8] rounded px-3 py-1.5 text-xs bg-white font-medium focus:outline-none focus:ring-1 focus:ring-[#1E2D5A]"
           >
-            {sessions.map((s) => (
+            {sessions.filter(s => s.status === 'PUBLISHED').map((s) => (
               <option key={s.id} value={s.id}>
-                {s.name} ({s.academic_year}) {s.status === 'PUBLISHED' ? '[Published]' : '[Draft]'}
+                {s.name} ({s.academic_year})
               </option>
             ))}
           </select>
