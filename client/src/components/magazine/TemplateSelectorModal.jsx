@@ -134,6 +134,55 @@ function TemplateMiniPreview({ templateId }) {
     );
   }
 
+  if (templateId === 'reflection-classic') {
+    return (
+      <div className="w-full h-36 bg-white border-2 border-red-300 p-2 flex flex-col justify-between overflow-hidden relative shadow-xs">
+        {/* Left Orange Stripe */}
+        <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-[#FF6600]" />
+
+        {/* Top navy bar */}
+        <div className="bg-[#102646] text-[#F2E3C6] text-[4.5px] font-serif font-bold px-2 py-0.5 ml-1 flex items-center justify-between">
+          <span>MES’s Wadia College OF Engineering</span>
+          <span>Pune</span>
+        </div>
+
+        {/* Blue Reflection Banner */}
+        <div className="bg-[#275796] text-white text-[7.5px] font-serif font-bold text-center py-0.5 ml-1 shadow-2xs tracking-wider">
+          REFLECTION
+        </div>
+
+        {/* Content split: Sidebar + Main */}
+        <div className="flex gap-1 items-start ml-1 my-0.5 flex-1 min-h-0 overflow-hidden">
+          {/* Left cream sidebar */}
+          <div className="w-10 bg-[#BDCEE8] p-1 flex flex-col justify-between h-full border border-blue-200">
+            <div className="bg-white rounded-full text-[3.5px] font-bold text-red-600 text-center py-0.5">ISSUE 32</div>
+            <div className="bg-[#FFEE58] text-[3.5px] font-bold text-black text-center mt-0.5">Inside this issue</div>
+            <div className="text-[3px] text-slate-800 space-y-0.5 mt-0.5 font-bold">
+              <div>Toppers 2,3,4</div>
+              <div>Events 5,6</div>
+            </div>
+          </div>
+          {/* Right main area */}
+          <div className="flex-1 space-y-0.5">
+            <div className="text-[4px] font-serif font-bold text-[#D32F2F]">Message From HOD</div>
+            <div className="h-0.5 w-full bg-slate-200 rounded-2xs" />
+            <div className="h-0.5 w-5/6 bg-slate-200 rounded-2xs" />
+            <div className="text-[4px] font-serif font-bold text-[#D32F2F] mt-0.5">Message From Editor</div>
+            <div className="h-0.5 w-4/5 bg-slate-200 rounded-2xs" />
+            <div className="h-4 bg-slate-200 rounded-2xs mt-0.5 flex items-center justify-center text-[3.5px] text-slate-500 font-sans">
+              [Campus Building]
+            </div>
+          </div>
+        </div>
+
+        {/* Footer Quote */}
+        <div className="ml-1 text-center text-[4px] italic text-slate-700 font-serif border-t border-slate-100 pt-0.5 truncate">
+          “Knowledge grows when it is shared with others”
+        </div>
+      </div>
+    );
+  }
+
   // institutional-premium
   return (
     <div className="w-full h-36 bg-[#FCFDFD] border-2 border-[#1B365D]/30 p-2.5 flex flex-col justify-between overflow-hidden shadow-xs">

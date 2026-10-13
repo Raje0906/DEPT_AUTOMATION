@@ -125,6 +125,29 @@ export const MAGAZINE_TEMPLATES = [
     quoteStyle: 'border-y border-[#D4AF37]/50 py-2.5 px-3 text-center italic text-[#1B365D] font-serif bg-amber-50/20',
     pageFrame: 'border-[#1B365D]/20',
   },
+  {
+    id: 'reflection-classic',
+    name: 'Reflection Classic (Wadia Issue 32 Format)',
+    tag: 'Official Issue 32 Format',
+    styleName: 'Wadia COE Official Print Edition',
+    description: 'Exact replication of the Wadia College of Engineering Reflection Magazine (Issue 32 print format): blue header banner with crest, cream cover sidebar with table of contents, red [ISSUE XX] [Page - XX] header boxes, orange left margin stripe, and authentic footer quotes.',
+    accentColor: '#D32F2F',
+    secondaryColor: '#FF6600',
+    backgroundColor: '#FFFFFF',
+    fontHeading: 'font-serif font-bold text-[#D32F2F]',
+    fontBody: 'font-sans',
+    cardStyle: 'border border-slate-300 bg-white shadow-2xs rounded-xs',
+    headerDivider: 'border-b-2 border-[#D32F2F]',
+    badgeStyle: 'bg-red-50 text-[#D32F2F] border border-red-200 font-bold',
+    topperRankStyle: {
+      1: 'bg-red-50 text-red-700 border-red-300 font-bold',
+      2: 'bg-slate-100 text-slate-800 border-slate-300 font-bold',
+      3: 'bg-orange-50 text-orange-800 border-orange-200 font-bold',
+      other: 'bg-slate-50 text-slate-700 border-slate-200 font-medium',
+    },
+    quoteStyle: 'text-center italic text-slate-700 font-serif text-xs py-2',
+    pageFrame: 'border-slate-200',
+  },
 ];
 
 /**
