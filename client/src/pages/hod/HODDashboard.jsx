@@ -188,17 +188,17 @@ export default function HODDashboard() {
             <div className="p-3 bg-indigo-50 border border-indigo-200 rounded text-xs text-indigo-950 flex items-center justify-between gap-3 shadow-2xs">
               <div className="flex items-center gap-2">
                 <span className="font-bold uppercase tracking-wider text-[11px] text-indigo-800 bg-indigo-200/70 px-1.5 py-0.5 rounded">
-                  Magazine Review
+                  Newsletter Review
                 </span>
                 <span>
-                  <strong>{pendingMagazines.length}</strong> department magazine issue{pendingMagazines.length > 1 ? 's' : ''} awaiting HOD publication sign-off.
+                  <strong>{pendingMagazines.length}</strong> department newsletter issue{pendingMagazines.length > 1 ? 's' : ''} awaiting HOD publication sign-off.
                 </span>
               </div>
               <Link
                 to="/hod/magazine-approvals"
                 className="text-xs font-bold text-[#800000] hover:underline flex-shrink-0"
               >
-                Review Magazine →
+                Review Newsletter →
               </Link>
             </div>
           )}

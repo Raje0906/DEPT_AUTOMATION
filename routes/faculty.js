@@ -359,8 +359,8 @@ router.get('/dashboard', async (req, res) => {
       `SELECT fsm.id AS map_id, s.id, s.name, s.code, s.semester, s.credits,
               s.max_cie, s.max_practical, s.max_end_sem, s.has_practical, s.subject_type,
               fsm.academic_year, fsm.division,
-              COUNT(sem.id) AS marks_entered,
-              (SELECT COUNT(*) FROM students st WHERE st.division = fsm.division AND st.current_semester = fsm.semester) AS enrolled_count,
+              COUNT(DISTINCT sem.student_id) AS marks_entered,
+              (SELECT COUNT(*) FROM students st WHERE (st.division = fsm.division OR st.division = REPLACE(fsm.division, ' Comp ', ' ') OR REPLACE(st.division, ' Comp ', ' ') = fsm.division) AND st.current_semester = fsm.semester) AS enrolled_count,
               CASE
                 WHEN COUNT(sem.id) = 0 THEN 'not_started'
                 WHEN COUNT(sem.id) FILTER (WHERE sem.status = 'published') > 0 THEN 'published'
@@ -370,7 +370,8 @@ router.get('/dashboard', async (req, res) => {
               END AS submission_status
        FROM faculty_subject_map fsm
        JOIN subjects s ON s.id = fsm.subject_id
-       LEFT JOIN student_exam_marks sem ON sem.subject_id = s.id AND sem.semester = fsm.semester AND sem.academic_year = fsm.academic_year
+       LEFT JOIN students st ON (st.division = fsm.division OR st.division = REPLACE(fsm.division, ' Comp ', ' ') OR REPLACE(st.division, ' Comp ', ' ') = fsm.division) AND st.current_semester = fsm.semester
+       LEFT JOIN student_exam_marks sem ON sem.subject_id = s.id AND sem.student_id = st.id AND sem.semester = fsm.semester AND sem.academic_year = fsm.academic_year
        WHERE fsm.faculty_id = $1 AND fsm.academic_year = $2
        GROUP BY fsm.id, s.id, fsm.academic_year, fsm.division
        ORDER BY s.semester, s.code`,
@@ -454,7 +455,7 @@ router.get('/subjects', async (req, res) => {
       `SELECT fsm.id AS map_id, s.id, s.name, s.code, s.semester, s.credits,
               s.max_cie, s.max_practical, s.max_end_sem, s.has_practical, s.subject_type,
               fsm.academic_year, fsm.division,
-              COUNT(sem.id) AS marks_entered,
+              COUNT(DISTINCT sem.student_id) AS marks_entered,
               (SELECT COUNT(*) FROM students st WHERE (st.division = fsm.division OR st.division = REPLACE(fsm.division, ' Comp ', ' ') OR REPLACE(st.division, ' Comp ', ' ') = fsm.division) AND st.current_semester = fsm.semester) AS enrolled_count,
               CASE
                 WHEN COUNT(sem.id) = 0 THEN 'not_started'
@@ -465,7 +466,8 @@ router.get('/subjects', async (req, res) => {
               END AS submission_status
        FROM faculty_subject_map fsm
        JOIN subjects s ON s.id = fsm.subject_id
-       LEFT JOIN student_exam_marks sem ON sem.subject_id = s.id AND sem.semester = fsm.semester AND sem.academic_year = fsm.academic_year
+       LEFT JOIN students st ON (st.division = fsm.division OR st.division = REPLACE(fsm.division, ' Comp ', ' ') OR REPLACE(st.division, ' Comp ', ' ') = fsm.division) AND st.current_semester = fsm.semester
+       LEFT JOIN student_exam_marks sem ON sem.subject_id = s.id AND sem.student_id = st.id AND sem.semester = fsm.semester AND sem.academic_year = fsm.academic_year
        WHERE fsm.faculty_id = $1 AND fsm.academic_year = $2
        GROUP BY fsm.id, s.id, fsm.academic_year, fsm.division
        ORDER BY s.semester, s.code`,
