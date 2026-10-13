@@ -468,7 +468,7 @@ async function runMigrations() {
       ALTER TABLE seminar_sessions ADD COLUMN IF NOT EXISTS locked_by INTEGER REFERENCES users(id);
       ALTER TABLE seminar_sessions DROP CONSTRAINT IF EXISTS seminar_sessions_status_check;
       ALTER TABLE seminar_sessions ADD CONSTRAINT seminar_sessions_status_check
-        CHECK (status IN ('SETUP','UPLOAD','VALIDATION','ASSIGNMENT','PUBLISHED','REGISTRATION_OPEN','LOCKED'));
+        CHECK (status IN ('SETUP','UPLOAD','VALIDATION','ASSIGNMENT','PUBLISHED','REGISTRATION_OPEN','LOCKED','DRAFT'));
 
       ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS leader_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
       ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS leader_prn VARCHAR(60);
@@ -938,6 +938,31 @@ async function runMigrations() {
 
       CREATE INDEX IF NOT EXISTS idx_magazines_status ON magazines(status);
       CREATE INDEX IF NOT EXISTS idx_magazines_academic_year ON magazines(academic_year);
+
+      -- ─── PRESENTATION SCHEDULES ──────────────────────────────────────────────
+      CREATE TABLE IF NOT EXISTS presentation_schedules (
+        id              SERIAL PRIMARY KEY,
+        session_id      INTEGER NOT NULL REFERENCES seminar_sessions(id) ON DELETE CASCADE,
+        presentation_no INTEGER NOT NULL,
+        title           VARCHAR(255) NOT NULL DEFAULT 'Seminar Presentation Schedule',
+        updated_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        updated_at      TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE (session_id, presentation_no)
+      );
+
+      CREATE TABLE IF NOT EXISTS presentation_schedule_rows (
+        id          SERIAL PRIMARY KEY,
+        schedule_id INTEGER NOT NULL REFERENCES presentation_schedules(id) ON DELETE CASCADE,
+        guide_id    INTEGER NOT NULL,
+        room_no     VARCHAR(100),
+        date        DATE,
+        time_text   VARCHAR(100),
+        UNIQUE (schedule_id, guide_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_psched_sess ON presentation_schedules(session_id);
+      CREATE INDEX IF NOT EXISTS idx_psched_rows_sched ON presentation_schedule_rows(schedule_id);
+      CREATE INDEX IF NOT EXISTS idx_psched_rows_guide ON presentation_schedule_rows(guide_id);
     `);
 
     await client.query('COMMIT');
