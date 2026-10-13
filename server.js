@@ -18,6 +18,7 @@ const seminarWorkflowRoutes = require('./routes/seminarWorkflow');
 const coordinatorRoutes = require('./routes/coordinators');
 const clubRoutes        = require('./routes/clubs');
 const magazineRoutes    = require('./routes/magazines');
+const feedbackRoutes    = require('./routes/feedback');
 const notificationRoutes = require('./routes/notifications');
 const whatsappService   = require('./services/whatsappService');
 
@@ -59,6 +60,7 @@ app.use('/api/seminar',      seminarRoutes);
 app.use('/api/coordinators', coordinatorRoutes);
 app.use('/api/clubs',        clubRoutes);
 app.use('/api/magazines',    magazineRoutes);
+app.use('/api/feedback',     feedbackRoutes);
 app.use('/api/notifications', notificationRoutes);
 
 // ─── Health check ────────────────────────────────────────────────────────────

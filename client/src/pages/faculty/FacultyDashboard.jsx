@@ -2,8 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api/axios';
 import { StatusBadge } from '../../components/ResultTable';
+import { useAuth } from '../../contexts/AuthContext';
+import { isAuthorizedFeedbackCoordinator } from '../../utils/feedbackPermissions';
 
 export default function FacultyDashboard() {
+  const { user }                      = useAuth();
   const [data, setData]               = useState(null);
   const [loading, setLoading]         = useState(true);
   const [academicYear, setAcademicYear] = useState('');
@@ -135,6 +138,25 @@ export default function FacultyDashboard() {
           </div>
         )}
 
+        {isAuthorizedFeedbackCoordinator(user) && (
+          <div className="notification-strip py-3.5 px-5 text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-blue-50/90 border-blue-200 shadow-2xs">
+            <div className="flex items-center">
+              <span className="text-xs font-bold text-navy uppercase tracking-wider mr-2.5 bg-blue-100 px-2 py-0.5 rounded border border-blue-200">
+                Feedback Coordinator
+              </span>
+              <span className="font-medium text-blue-950">
+                You are the designated Coordinator for TE Mid-Sem Feedback. Manage forms, monitor submissions, and review reports.
+              </span>
+            </div>
+            <Link
+              to="/faculty/feedback"
+              className="text-xs font-bold text-navy hover:underline flex-shrink-0"
+            >
+              Open Feedback Dashboard →
+            </Link>
+          </div>
+        )}
+
       </div>
 
       {/* Key Metric KPI Cards */}
@@ -249,6 +271,30 @@ export default function FacultyDashboard() {
               Access departmental research periodicals, technical magazines, and publications.
             </p>
           </Link>
+
+          {isAuthorizedFeedbackCoordinator(user) && (
+            <Link
+              to="/faculty/feedback"
+              className="panel p-5 hover:border-navy hover:shadow-md transition-all group block border-blue-200 bg-blue-50/40"
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <span className="w-8 h-8 rounded bg-navy text-white flex items-center justify-center font-bold text-sm shadow-xs">
+                  📋
+                </span>
+                <div>
+                  <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-blue-100 text-navy block w-max">
+                    Coordinator Desk
+                  </span>
+                  <h3 className="font-semibold text-ink text-base group-hover:text-navy transition-colors">
+                    TE Mid-Sem Feedback
+                  </h3>
+                </div>
+              </div>
+              <p className="text-xs text-draft leading-relaxed">
+                Create, configure, publish, and view live analytics for student course evaluations.
+              </p>
+            </Link>
+          )}
         </div>
       </div>
 
