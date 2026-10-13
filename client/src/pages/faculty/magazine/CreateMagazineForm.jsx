@@ -37,7 +37,7 @@ export default function CreateMagazineForm() {
 
   useEffect(() => {
     if (user && !isAuthorizedMagazineCreator(user)) {
-      toast.error('Access denied: Only Dr. (Mrs.) S. S. Raskar (SSR) is authorized to create magazines.');
+      toast.error('Access denied: Only Dr. (Mrs.) S. S. Raskar (SSR) is authorized to create newsletters.');
       navigate('/faculty/magazines', { replace: true });
     }
   }, [user, navigate]);
@@ -47,10 +47,10 @@ export default function CreateMagazineForm() {
       <div className="p-8 max-w-xl mx-auto text-center mt-12 bg-white border border-red-200 rounded-sm shadow-sm">
         <h2 className="text-xl font-bold text-red-600 mb-2">Access Forbidden (403)</h2>
         <p className="text-sm text-draft mb-4">
-          Magazine creation is restricted to <strong>Dr. (Mrs.) S. S. Raskar (SSR)</strong>.
+          Newsletter creation is restricted to <strong>Dr. (Mrs.) S. S. Raskar (SSR)</strong>.
         </p>
         <button onClick={() => navigate('/faculty/magazines')} className="btn-secondary">
-          Return to Magazines
+          Return to Newsletters
         </button>
       </div>
     );
@@ -59,7 +59,7 @@ export default function CreateMagazineForm() {
   const set = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
 
   const validate = () => {
-    if (!form.title.trim())       { toast.error('Magazine title is required'); return false; }
+    if (!form.title.trim())       { toast.error('Newsletter title is required'); return false; }
     if (!form.issueNumber.trim()) { toast.error('Issue number is required');   return false; }
     if (!form.academicYear)       { toast.error('Academic year is required');  return false; }
     return true;
@@ -68,7 +68,7 @@ export default function CreateMagazineForm() {
   const handleSaveDraft = () => {
     if (!validate()) return;
     const id = createMagazine({ ...form, status: 'Draft' });
-    toast.success('Magazine saved as draft.');
+    toast.success('Newsletter saved as draft.');
     navigate('/faculty/magazines');
   };
 
@@ -88,16 +88,16 @@ export default function CreateMagazineForm() {
     <div className="p-8 lg:p-10 w-full max-w-4xl mx-auto">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-2 text-xs text-draft mb-6">
-        <button onClick={() => navigate('/faculty/magazines')} className="hover:text-navy font-medium transition-colors">Magazines</button>
+        <button onClick={() => navigate('/faculty/magazines')} className="hover:text-navy font-medium transition-colors">Newsletters</button>
         <span>/</span>
-        <span className="text-ink font-semibold">Create New Magazine</span>
+        <span className="text-ink font-semibold">Create New Newsletter</span>
       </nav>
 
       {/* Header */}
       <div className="mb-8 pb-5 border-b border-rule">
-        <h1 className="font-serif text-3xl font-bold text-ink">Create New Magazine</h1>
+        <h1 className="font-serif text-3xl font-bold text-ink">Create New Newsletter</h1>
         <p className="text-sm text-draft mt-1.5">
-          Enter the basic information about the magazine. You can edit these details later in the editor.
+          Enter the basic information about the newsletter. You can edit these details later in the editor.
         </p>
       </div>
 
@@ -106,7 +106,7 @@ export default function CreateMagazineForm() {
         {/* Title & Issue */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
           <div className="sm:col-span-2">
-            <label className="input-label">Magazine Title</label>
+            <label className="input-label">Newsletter Title</label>
             <input
               id="mag-title"
               className="input-field"
@@ -161,7 +161,7 @@ export default function CreateMagazineForm() {
             onChange={e => set('period', e.target.value)}
             placeholder="e.g. June – December 2026"
           />
-          <p className="text-[10px] text-draft mt-1">The time period this magazine covers.</p>
+          <p className="text-[10px] text-draft mt-1">The time period this newsletter covers.</p>
         </div>
 
         <div>
@@ -178,12 +178,12 @@ export default function CreateMagazineForm() {
 
         <div className="h-px bg-rule" />
 
-        {/* Feature 1 — Choose Magazine Design */}
+        {/* Feature 1 — Choose Newsletter Design */}
         <div className="space-y-3 pt-1">
           <div>
-            <h2 className="font-serif text-2xl font-bold text-ink">Choose Magazine Design</h2>
+            <h2 className="font-serif text-2xl font-bold text-ink">Choose Newsletter Design</h2>
             <p className="text-xs text-draft mt-1">
-              Select a design theme for your magazine. You can change it later.
+              Select a design theme for your newsletter. You can change it later.
             </p>
           </div>
 
@@ -205,7 +205,7 @@ export default function CreateMagazineForm() {
             <p className="text-base font-serif font-bold leading-none">#{form.issueNumber || '?'}</p>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-base font-bold text-ink">{form.title || 'Untitled Magazine'}</p>
+            <p className="text-base font-bold text-ink">{form.title || 'Untitled Newsletter'}</p>
             <p className="text-xs text-draft">Issue {form.issueNumber || '?'} · {form.academicYear} · {form.semester}</p>
             <p className="text-xs text-draft">{form.department}</p>
             <div className="flex items-center gap-2 mt-1">

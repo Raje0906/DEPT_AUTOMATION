@@ -74,7 +74,7 @@ export default function MagazineCard({ magazine, onEdit }) {
             onClick={() => navigate(`/faculty/magazines/view/${magazine.id}`)}
             className="btn-secondary text-xs px-3 py-1.5"
           >
-            View Magazine
+            View Newsletter
           </button>
           {(magazine.status === 'Draft' || magazine.status === 'Under Review') && (
             <button

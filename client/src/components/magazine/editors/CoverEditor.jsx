@@ -59,13 +59,13 @@ export default function CoverEditor() {
       <div>
         <h2 className="font-serif text-xl font-bold text-ink">Cover</h2>
         <p className="text-xs text-draft mt-1">
-          Enter magazine cover details and upload branding assets. The system will generate a professional academic cover layout.
+          Enter newsletter cover details and upload branding assets. The system will generate a professional academic cover layout.
         </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label className="input-label">Magazine Title</label>
+          <label className="input-label">Newsletter Title</label>
           <input
             className="input-field"
             value={data.title || ''}
