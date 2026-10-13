@@ -246,7 +246,7 @@ export default function ToppersEditor() {
             </span>
           </div>
           <p className="text-xs text-draft mt-1">
-            Add topper records per class (SE, TE, BE) and division. Students are automatically sorted by rank (or CGPA) in the magazine preview and PDF.
+            Add topper records per class (SE, TE, BE) and division. Students are automatically sorted by rank (or CGPA) in the newsletter preview and PDF.
           </p>
         </div>
 
@@ -337,6 +337,7 @@ export default function ToppersEditor() {
                 <option value="B">Division B</option>
                 <option value="C">Division C</option>
                 <option value="D">Division D</option>
+                <option value="E">Division E (5th Division)</option>
               </select>
             </div>
           </div>

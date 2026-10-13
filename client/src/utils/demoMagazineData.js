@@ -14,7 +14,7 @@ export const DEMO_MAGAZINE_METADATA = {
   period: 'June – December 2026',
   description: 'The 33rd edition of Reflection capturing departmental excellence, faculty research, student innovations, and academic milestones for the Department of Computer Engineering.',
   status: 'Published',
-  template: 'modern-academic',
+  template: 'reflection-classic',
   publishedDate: '2026-12-20',
   coverColor: '#1E2D5A',
   totalPages: 22,

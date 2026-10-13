@@ -28,12 +28,12 @@ export default function HODMagazineApprovals() {
 
   const handleApprove = (mag) => {
     approveMagazine(mag.id);
-    toast.success(`Magazine "${mag.title}" (Issue ${mag.issueNumber || ''}) has been approved.`);
+    toast.success(`Newsletter "${mag.title}" (Issue ${mag.issueNumber || ''}) has been approved.`);
   };
 
   const handlePublish = (mag) => {
     publishMagazine(mag.id);
-    toast.success(`Magazine "${mag.title}" (Issue ${mag.issueNumber || ''}) is now published.`);
+    toast.success(`Newsletter "${mag.title}" (Issue ${mag.issueNumber || ''}) is now published.`);
   };
 
   const handleSendBack = () => {
@@ -43,7 +43,7 @@ export default function HODMagazineApprovals() {
     }
     setSubmittingAction(true);
     requestChangesMagazine(rejectModalMag.id, rejectReason.trim());
-    toast.success(`Magazine sent back to draft with revision remarks.`);
+    toast.success(`Newsletter sent back to draft with revision remarks.`);
     setSubmittingAction(false);
     setRejectModalMag(null);
     setRejectReason('');
@@ -72,7 +72,7 @@ export default function HODMagazineApprovals() {
       <div className="pb-5 border-b border-rule flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
           <p className="text-[10px] font-bold text-draft uppercase tracking-widest mb-1">Department Governance</p>
-          <h1 className="font-serif text-3xl font-bold text-ink">Department Magazine Approvals</h1>
+          <h1 className="font-serif text-3xl font-bold text-ink">Department Newsletter Approvals</h1>
           <p className="text-sm text-draft mt-1 font-medium">
             Review submissions from faculty, inspect draft content, approve, or request revisions.
           </p>
@@ -123,8 +123,8 @@ export default function HODMagazineApprovals() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
-            <p className="text-sm font-semibold text-ink">No magazines currently awaiting review</p>
-            <p className="text-xs text-draft mt-1">When faculty submits a magazine for review, it will appear here for your approval.</p>
+            <p className="text-sm font-semibold text-ink">No newsletters currently awaiting review</p>
+            <p className="text-xs text-draft mt-1">When faculty submits a newsletter for review, it will appear here for your approval.</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -173,7 +173,7 @@ export default function HODMagazineApprovals() {
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                         </svg>
-                        Approve Magazine
+                        Approve Newsletter
                       </button>
 
                       <button
@@ -227,10 +227,10 @@ export default function HODMagazineApprovals() {
         )}
       </div>
 
-      {/* ── All Department Magazines Table ───────────────────────────────── */}
+      {/* ── All Department Newsletters Table ───────────────────────────────── */}
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <h2 className="font-serif text-xl font-bold text-ink">All Department Magazines</h2>
+          <h2 className="font-serif text-xl font-bold text-ink">All Department Newsletters</h2>
           {/* Filter Pills */}
           <div className="flex gap-1.5 flex-wrap">
             {['All', 'Under Review', 'Approved', 'Published', 'Draft'].map(tab => (
@@ -266,7 +266,7 @@ export default function HODMagazineApprovals() {
                 {filteredMagazines.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="text-center py-8 text-sm text-draft">
-                      No magazines found for filter "{activeTab}".
+                      No newsletters found for filter "{activeTab}".
                     </td>
                   </tr>
                 ) : (
@@ -345,7 +345,7 @@ export default function HODMagazineApprovals() {
             <div>
               <h3 className="font-serif text-xl font-bold text-ink">Request Revision</h3>
               <p className="text-xs text-draft mt-1">
-                Send magazine <strong>{rejectModalMag.title} (Issue {rejectModalMag.issueNumber})</strong> back to faculty with remarks.
+                Send newsletter <strong>{rejectModalMag.title} (Issue {rejectModalMag.issueNumber})</strong> back to faculty with remarks.
               </p>
             </div>
 

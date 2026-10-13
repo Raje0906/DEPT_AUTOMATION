@@ -130,22 +130,33 @@ export function generateMagazinePages(currentMagazine, sectionData) {
   // 5. Department Events (Multi-page display + photo gallery)
   const eventsList = data.events || [];
   if (eventsList.length > 0) {
-    // Page 1: Events 0 and 1
-    const evChunk1 = eventsList.slice(0, 2);
-    pages.push({
-      id: pageCounter++,
-      template: 'events',
-      title: 'Department Events — Highlights',
-      data: {
-        title: 'Department Technical & Academic Events',
-        subtitle: 'Fostering Innovation, Collaboration & Student Leadership',
-        events: evChunk1,
-      },
-    });
+    if (eventsList.length <= 3) {
+      pages.push({
+        id: pageCounter++,
+        template: 'events',
+        title: 'Department Events — Highlights',
+        data: {
+          title: 'Department Technical & Academic Events',
+          subtitle: 'Fostering Innovation, Collaboration & Student Leadership',
+          events: eventsList,
+        },
+      });
+    } else {
+      const splitIdx = Math.ceil(eventsList.length / 2);
+      const evChunk1 = eventsList.slice(0, splitIdx);
+      const evChunk2 = eventsList.slice(splitIdx);
 
-    // Page 2: Events 2, 3, 4
-    if (eventsList.length > 2) {
-      const evChunk2 = eventsList.slice(2, 5);
+      pages.push({
+        id: pageCounter++,
+        template: 'events',
+        title: 'Department Events — Highlights',
+        data: {
+          title: 'Department Technical & Academic Events',
+          subtitle: 'Fostering Innovation, Collaboration & Student Leadership',
+          events: evChunk1,
+        },
+      });
+
       pages.push({
         id: pageCounter++,
         template: 'events',
@@ -158,7 +169,7 @@ export function generateMagazinePages(currentMagazine, sectionData) {
       });
     }
 
-    // Page 3: Events Photo Gallery (2-column balanced grid, max 4 photos per page)
+    // Events Photo Gallery (2-column balanced grid, max 4 photos per page)
     const allPhotos = eventsList.flatMap(e =>
       (e.photos || []).map(p => ({
         url: typeof p === 'string' ? p : p?.url || '',
@@ -194,23 +205,36 @@ export function generateMagazinePages(currentMagazine, sectionData) {
     }
   }
 
-  // 6. Student Workshops (Multi-page display)
+  // 6. Student Workshops (Multi-page display with balanced pagination)
   const workshopsList = data.workshops || [];
   if (workshopsList.length > 0) {
-    const wsChunk1 = workshopsList.slice(0, 2);
-    pages.push({
-      id: pageCounter++,
-      template: 'workshops',
-      title: 'Student Workshops — Advanced Computing',
-      data: {
-        title: 'Hands-on Technical Workshops',
-        subtitle: 'Skill Enhancement & Emerging Technology Bootcamps',
-        workshops: wsChunk1,
-      },
-    });
+    if (workshopsList.length <= 3) {
+      pages.push({
+        id: pageCounter++,
+        template: 'workshops',
+        title: 'Student Workshops',
+        data: {
+          title: 'Hands-on Technical Workshops',
+          subtitle: 'Skill Enhancement & Emerging Technology Bootcamps',
+          workshops: workshopsList,
+        },
+      });
+    } else {
+      const splitIdx = Math.ceil(workshopsList.length / 2);
+      const wsChunk1 = workshopsList.slice(0, splitIdx);
+      const wsChunk2 = workshopsList.slice(splitIdx);
 
-    if (workshopsList.length > 2) {
-      const wsChunk2 = workshopsList.slice(2, 4);
+      pages.push({
+        id: pageCounter++,
+        template: 'workshops',
+        title: 'Student Workshops — Advanced Computing',
+        data: {
+          title: 'Hands-on Technical Workshops',
+          subtitle: 'Skill Enhancement & Emerging Technology Bootcamps',
+          workshops: wsChunk1,
+        },
+      });
+
       pages.push({
         id: pageCounter++,
         template: 'workshops',
@@ -224,23 +248,36 @@ export function generateMagazinePages(currentMagazine, sectionData) {
     }
   }
 
-  // 7. Guest Lectures (Multi-page display)
+  // 7. Guest Lectures (Multi-page display with balanced pagination)
   const lecturesList = data.lectures || [];
   if (lecturesList.length > 0) {
-    const lecChunk1 = lecturesList.slice(0, 2);
-    pages.push({
-      id: pageCounter++,
-      template: 'lectures',
-      title: 'Guest Lectures — Industry Insights',
-      data: {
-        title: 'Distinguished Guest Lectures',
-        subtitle: 'Insights from Global Technology Leaders & Researchers',
-        lectures: lecChunk1,
-      },
-    });
+    if (lecturesList.length <= 3) {
+      pages.push({
+        id: pageCounter++,
+        template: 'lectures',
+        title: 'Guest Lectures',
+        data: {
+          title: 'Distinguished Guest Lectures',
+          subtitle: 'Insights from Global Technology Leaders & Researchers',
+          lectures: lecturesList,
+        },
+      });
+    } else {
+      const splitIdx = Math.ceil(lecturesList.length / 2);
+      const lecChunk1 = lecturesList.slice(0, splitIdx);
+      const lecChunk2 = lecturesList.slice(splitIdx);
 
-    if (lecturesList.length > 2) {
-      const lecChunk2 = lecturesList.slice(2, 4);
+      pages.push({
+        id: pageCounter++,
+        template: 'lectures',
+        title: 'Guest Lectures — Industry Insights',
+        data: {
+          title: 'Distinguished Guest Lectures',
+          subtitle: 'Insights from Global Technology Leaders & Researchers',
+          lectures: lecChunk1,
+        },
+      });
+
       pages.push({
         id: pageCounter++,
         template: 'lectures',
@@ -254,23 +291,34 @@ export function generateMagazinePages(currentMagazine, sectionData) {
     }
   }
 
-  // 8. Student Achievements (Multi-page display)
+  // 8. Student Achievements (Multi-page display with clean pagination)
   const achievementsList = data.achievements || [];
   if (achievementsList.length > 0) {
-    const achChunk1 = achievementsList.slice(0, 5);
-    pages.push({
-      id: pageCounter++,
-      template: 'achievements',
-      title: 'Student Achievements — National Triumphs',
-      data: {
-        title: 'Student Honors & Hackathon Victories',
-        subtitle: 'Recognizing Distinction at National & International Arenas',
-        achievements: achChunk1,
-      },
-    });
-
-    if (achievementsList.length > 5) {
-      const achChunk2 = achievementsList.slice(5, 10);
+    if (achievementsList.length <= 6) {
+      pages.push({
+        id: pageCounter++,
+        template: 'achievements',
+        title: 'Student Achievements',
+        data: {
+          title: 'Student Honors & Hackathon Victories',
+          subtitle: 'Recognizing Distinction at National & International Arenas',
+          achievements: achievementsList,
+        },
+      });
+    } else {
+      const splitIdx = Math.min(6, Math.ceil(achievementsList.length / 2));
+      const achChunk1 = achievementsList.slice(0, splitIdx);
+      const achChunk2 = achievementsList.slice(splitIdx, splitIdx + 6);
+      pages.push({
+        id: pageCounter++,
+        template: 'achievements',
+        title: 'Student Achievements — National Triumphs',
+        data: {
+          title: 'Student Honors & Hackathon Victories',
+          subtitle: 'Recognizing Distinction at National & International Arenas',
+          achievements: achChunk1,
+        },
+      });
       pages.push({
         id: pageCounter++,
         template: 'achievements',
@@ -314,23 +362,34 @@ export function generateMagazinePages(currentMagazine, sectionData) {
     });
   }
 
-  // 10. Staff Achievements (Multi-page display)
+  // 10. Staff Achievements (Balanced display without underfilled pages)
   const staffList = data.staffAchievements || [];
   if (staffList.length > 0) {
-    const staffChunk1 = staffList.slice(0, 4);
-    pages.push({
-      id: pageCounter++,
-      template: 'staff',
-      title: 'Faculty Achievements — Research & Patents',
-      data: {
-        title: 'Faculty Excellence & Academic Distinction',
-        subtitle: 'Recognizing Patents, Doctoral Concurrences & Professional Honors',
-        staff: staffChunk1,
-      },
-    });
-
-    if (staffList.length > 4) {
-      const staffChunk2 = staffList.slice(4, 8);
+    if (staffList.length <= 5) {
+      pages.push({
+        id: pageCounter++,
+        template: 'staff',
+        title: 'Faculty Achievements',
+        data: {
+          title: 'Faculty Excellence & Academic Distinction',
+          subtitle: 'Recognizing Patents, Doctoral Concurrences & Professional Honors',
+          staff: staffList,
+        },
+      });
+    } else {
+      const splitIdx = Math.min(5, Math.ceil(staffList.length / 2));
+      const staffChunk1 = staffList.slice(0, splitIdx);
+      const staffChunk2 = staffList.slice(splitIdx, splitIdx + 5);
+      pages.push({
+        id: pageCounter++,
+        template: 'staff',
+        title: 'Faculty Achievements — Research & Patents',
+        data: {
+          title: 'Faculty Excellence & Academic Distinction',
+          subtitle: 'Recognizing Patents, Doctoral Concurrences & Professional Honors',
+          staff: staffChunk1,
+        },
+      });
       pages.push({
         id: pageCounter++,
         template: 'staff',
@@ -344,7 +403,7 @@ export function generateMagazinePages(currentMagazine, sectionData) {
     }
   }
 
-  // 11. FDP / STTP (2 Table Pages for clean, unclipped A4 rendering)
+  // 11. FDP / STTP (Full page tables without half-empty void)
   const fdpList = data.fdpSttp || [];
   if (fdpList.length > 0) {
     const mapRow = (r, idx) => [
@@ -356,20 +415,31 @@ export function generateMagazinePages(currentMagazine, sectionData) {
       r.mode || 'Online',
     ];
 
-    const fdpRows1 = fdpList.slice(0, 5).map((r, i) => mapRow(r, i));
-    pages.push({
-      id: pageCounter++,
-      template: 'table',
-      title: 'FDP / STTP Records — Part I',
-      data: {
-        title: 'Faculty Development Programmes & STTPs (Part I)',
-        columns: ['Sr.', 'Faculty Name', 'Programme Title', 'Organizing Body', 'Period / Duration', 'Mode'],
-        rows: fdpRows1,
-      },
-    });
-
-    if (fdpList.length > 5) {
-      const fdpRows2 = fdpList.slice(5, 10).map((r, i) => mapRow(r, i + 5));
+    if (fdpList.length <= 8) {
+      pages.push({
+        id: pageCounter++,
+        template: 'table',
+        title: 'FDP / STTP Records',
+        data: {
+          title: 'Faculty Development Programmes & STTPs',
+          columns: ['Sr.', 'Faculty Name', 'Programme Title', 'Organizing Body', 'Period / Duration', 'Mode'],
+          rows: fdpList.map((r, i) => mapRow(r, i)),
+        },
+      });
+    } else {
+      const splitIdx = Math.min(8, Math.ceil(fdpList.length / 2));
+      const fdpRows1 = fdpList.slice(0, splitIdx).map((r, i) => mapRow(r, i));
+      const fdpRows2 = fdpList.slice(splitIdx, splitIdx + 8).map((r, i) => mapRow(r, i + splitIdx));
+      pages.push({
+        id: pageCounter++,
+        template: 'table',
+        title: 'FDP / STTP Records — Part I',
+        data: {
+          title: 'Faculty Development Programmes & STTPs (Part I)',
+          columns: ['Sr.', 'Faculty Name', 'Programme Title', 'Organizing Body', 'Period / Duration', 'Mode'],
+          rows: fdpRows1,
+        },
+      });
       pages.push({
         id: pageCounter++,
         template: 'table',
@@ -383,31 +453,87 @@ export function generateMagazinePages(currentMagazine, sectionData) {
     }
   }
 
-  // 12. Publications (2 Pages with rich citation cards and DOI links)
+  // 12. Staff Publications (Styled with institutional Table & Reflection Team Box)
   const pubList = data.publications || [];
   if (pubList.length > 0) {
-    const pubChunk1 = pubList.slice(0, 5);
-    pages.push({
-      id: pageCounter++,
-      template: 'publications',
-      title: 'Publications — Peer-Reviewed Journals',
-      data: {
-        title: 'Peer-Reviewed Journal Publications',
-        subtitle: 'High-Impact Scopus and Web of Science Indexed Research',
-        publications: pubChunk1,
-      },
+    const facultyMap = new Map();
+    pubList.forEach((p) => {
+      const name = (p.facultyName || p.author || p.faculty || '').trim() || 'Faculty Member';
+      if (!facultyMap.has(name)) {
+        facultyMap.set(name, []);
+      }
+      facultyMap.get(name).push(p);
     });
 
-    if (pubList.length > 5) {
-      const pubChunk2 = pubList.slice(5, 10);
+    const facultyGroups = Array.from(facultyMap.entries()).map(([facultyName, items]) => ({
+      facultyName,
+      items,
+    }));
+
+    const issueNumber = currentMagazine?.issueNumber || data.cover?.issueNumber || '33';
+
+    // Up to 8 publications comfortably fit on a single page with the Reflection Team Box
+    if (pubList.length <= 8) {
       pages.push({
         id: pageCounter++,
         template: 'publications',
-        title: 'Publications — Conferences & Books',
+        title: 'Staff Publications',
         data: {
-          title: 'International Conferences & Book Chapters',
-          subtitle: 'Peer-Reviewed Conference Proceedings & Technical Monographs',
-          publications: pubChunk2,
+          title: 'Staff Publications',
+          publications: pubList,
+          facultyGroups,
+          part: 1,
+          totalParts: 1,
+          isFinalPage: true,
+          startSr: 1,
+          startNumber: 1,
+          issueNumber,
+        },
+      });
+    } else {
+      // For more than 8 publications, split across 2 pages cleanly:
+      // Page 1 has NO reflection team box, so it comfortably takes 8 to 9 publications.
+      // Page 2 takes the remaining publications AND the reflection team box.
+      const splitIdx = Math.min(9, Math.ceil(pubList.length * 0.55));
+      const pubs1 = pubList.slice(0, splitIdx);
+      const pubs2 = pubList.slice(splitIdx);
+
+      const groups1 = facultyGroups.slice(0, Math.ceil(facultyGroups.length * 0.55));
+      const groups2 = facultyGroups.slice(Math.ceil(facultyGroups.length * 0.55));
+
+      pages.push({
+        id: pageCounter++,
+        template: 'publications',
+        title: 'Staff Publications — Part 1',
+        data: {
+          title: 'Staff Publications',
+          publications: pubs1,
+          facultyGroups: groups1,
+          part: 1,
+          totalParts: 2,
+          isFinalPage: false,
+          startSr: 1,
+          startNumber: 1,
+          issueNumber,
+          quote: '―A person who never made a mistake nev er tried anything new.‖ — Albert Einstein',
+        },
+      });
+
+      pages.push({
+        id: pageCounter++,
+        template: 'publications',
+        title: 'Staff Publications — Part 2',
+        data: {
+          title: 'Staff Publications',
+          publications: pubs2,
+          facultyGroups: groups2,
+          part: 2,
+          totalParts: 2,
+          isFinalPage: true,
+          startSr: pubs1.length + 1,
+          startNumber: groups1.length + 1,
+          issueNumber,
+          quote: '―Anyone who has ever made anything of importance was disciplined.‖ — Andrew Hendrixson.',
         },
       });
     }

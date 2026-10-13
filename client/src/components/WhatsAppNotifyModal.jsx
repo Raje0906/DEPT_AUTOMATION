@@ -10,6 +10,8 @@ export default function WhatsAppNotifyModal({ isOpen, onClose }) {
   const [type, setType] = useState('custom'); // 'custom', 'defaulter', 'result'
   
   // Custom message state
+  const [customTitle, setCustomTitle] = useState('DEPARTMENT ALERT');
+  const [customAuthor, setCustomAuthor] = useState('Dr.(Mrs.) N. F. Shaikh');
   const [customMsg, setCustomMsg] = useState('Reminder from Department: Please report to the seminar hall for your project review tomorrow.');
   
   // Defaulter state
@@ -74,7 +76,7 @@ export default function WhatsAppNotifyModal({ isOpen, onClose }) {
       let res;
       if (selectedRecipient === 'ALL') {
         // Broadcast
-        let title = 'Department Alert';
+        let title = customTitle || 'Department Alert';
         let body = customMsg;
         if (type === 'defaulter') {
           title = 'Attendance Defaulter Warning (<75%)';
@@ -87,14 +89,17 @@ export default function WhatsAppNotifyModal({ isOpen, onClose }) {
         res = await api.post('/notifications/whatsapp/broadcast', {
           title,
           message: body,
+          author: customAuthor || 'Dr.(Mrs.) N. F. Shaikh',
         });
-        toast.success(`Broadcast dispatched to ${res.data.count || 4} whitelisted students!`);
+        toast.success(`Broadcast dispatched to all whitelisted recipients!`);
       } else {
-        // Specific whitelisted student
+        // Specific whitelisted recipient
         if (type === 'custom') {
           res = await api.post('/notifications/whatsapp/send-test', {
             enrollment_no: selectedRecipient,
+            title: customTitle || 'Department Alert',
             message: customMsg,
+            author: customAuthor || 'Dr.(Mrs.) N. F. Shaikh',
           });
         } else if (type === 'defaulter') {
           res = await api.post('/notifications/whatsapp/send-defaulter', {
@@ -237,7 +242,7 @@ export default function WhatsAppNotifyModal({ isOpen, onClose }) {
               className="w-full text-xs font-medium border border-gray-300 rounded-lg p-2.5 bg-white focus:outline-emerald-600 cursor-pointer"
             >
               <option value="ALL">
-                📢 Broadcast to All 4 Whitelisted Students
+                📢 Broadcast to All Whitelisted Students
               </option>
               {students.map((st) => (
                 <option key={st.enrollment_no} value={st.enrollment_no}>
@@ -250,11 +255,12 @@ export default function WhatsAppNotifyModal({ isOpen, onClose }) {
                   <option value="F23112035">F23112035 — PAL NIHAR NIKHIL (9404241539)</option>
                   <option value="F23112061">F23112061 — HOLE ANSHU NITIN (8446016602)</option>
                   <option value="F23112151">F23112151 — SOHAM ATUL SHELKE (9970024042)</option>
+                  <option value="FACULTY_CYV">CYV — Ms. C. Y. Vakte (Faculty, 8830673864)</option>
                 </>
               )}
             </select>
             <p className="text-[11px] text-slate-500 mt-1">
-              🔒 Whitelist active: All other students are strictly protected and will not receive any test messages.
+              🔒 Whitelist active: Messages are strictly restricted to verified test recipients and faculty CYV.
             </p>
           </div>
 
@@ -302,17 +308,63 @@ export default function WhatsAppNotifyModal({ isOpen, onClose }) {
 
           {/* Form Fields Based on Type */}
           {type === 'custom' && (
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                Message Content:
-              </label>
-              <textarea
-                rows={3}
-                value={customMsg}
-                onChange={(e) => setCustomMsg(e.target.value)}
-                className="w-full text-xs border border-gray-300 rounded-lg p-2.5 focus:outline-emerald-600"
-                placeholder="Type your message here..."
-              />
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                    Notice Title:
+                  </label>
+                  <input
+                    type="text"
+                    value={customTitle}
+                    onChange={(e) => setCustomTitle(e.target.value)}
+                    className="w-full text-xs border border-gray-300 rounded p-2 bg-white"
+                    placeholder="e.g. DEPARTMENT ALERT"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                    Signatory / Author:
+                  </label>
+                  <input
+                    type="text"
+                    value={customAuthor}
+                    onChange={(e) => setCustomAuthor(e.target.value)}
+                    className="w-full text-xs border border-gray-300 rounded p-2 bg-white"
+                    placeholder="e.g. Dr.(Mrs.) N. F. Shaikh"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Message Content:
+                </label>
+                <textarea
+                  rows={3}
+                  value={customMsg}
+                  onChange={(e) => setCustomMsg(e.target.value)}
+                  className="w-full text-xs border border-gray-300 rounded-lg p-2.5 focus:outline-emerald-600"
+                  placeholder="Type your message here..."
+                />
+              </div>
+
+              {/* WhatsApp Live Preview Bubble */}
+              <div className="p-3 bg-[#EFEAE2] rounded-lg border border-emerald-300/60 shadow-2xs">
+                <p className="text-[10px] font-bold text-emerald-950 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  <span>💬</span> WhatsApp Message Format Preview:
+                </p>
+                <div className="bg-white p-3 rounded-lg shadow-xs text-xs font-sans text-slate-800 space-y-2 border-l-4 border-emerald-600">
+                  <p className="font-bold text-slate-900">
+                    📢 *DEPARTMENT NOTICE: {(customTitle || 'DEPARTMENT ALERT').toUpperCase()}*
+                  </p>
+                  <p className="whitespace-pre-wrap leading-relaxed text-slate-800">
+                    {customMsg}
+                  </p>
+                  <p className="font-bold text-slate-900 pt-1">
+                    — *{customAuthor || 'Dr.(Mrs.) N. F. Shaikh'}*
+                  </p>
+                </div>
+              </div>
             </div>
           )}
 

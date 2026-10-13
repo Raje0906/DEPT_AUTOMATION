@@ -713,8 +713,21 @@ export default function TeacherManagement() {
       {activeTab === 'directory' && filteredTeachers.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredTeachers.map((teacher) => {
-            const assignments = teacher.assignments || [];
-            const classTeacherOf = teacher.classTeacherOf || [];
+            const assignments = (teacher.assignments || []).filter(
+              (a) => selectedAcademicYear === 'all' || a.academic_year === selectedAcademicYear
+            );
+            const rawClassTeachers = (teacher.classTeacherOf || []).filter(
+              (ct) => selectedAcademicYear === 'all' || ct.academic_year === selectedAcademicYear
+            );
+            // Deduplicate by class_name so identical class badges are never displayed twice
+            const classTeacherOf = [];
+            const seenClasses = new Set();
+            for (const ct of rawClassTeachers) {
+              if (!seenClasses.has(ct.class_name)) {
+                seenClasses.add(ct.class_name);
+                classTeacherOf.push(ct);
+              }
+            }
 
             return (
               <div
@@ -799,17 +812,20 @@ export default function TeacherManagement() {
                   <div className="flex items-center gap-1.5">
                     <button
                       onClick={() => handleOpenEditFaculty(teacher)}
-                      className="px-2 py-1 text-xs font-medium text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-gray-300 rounded transition-colors"
+                      className="px-2.5 py-1 text-xs font-medium text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-gray-300 rounded transition-colors"
                       title="Edit faculty details"
                     >
                       Edit
                     </button>
                     <button
                       onClick={() => setDeleteConfirmFaculty(teacher)}
-                      className="px-2 py-1 text-xs font-medium text-red-600 hover:text-red-800 bg-white hover:bg-red-50 border border-red-200 rounded transition-colors"
-                      title="Delete faculty member"
+                      className="px-2.5 py-1 text-xs font-medium text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded transition-colors flex items-center gap-1"
+                      title="Remove faculty member"
                     >
-                      Delete
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      <span>Remove</span>
                     </button>
                   </div>
                 </div>
@@ -1289,6 +1305,25 @@ export default function TeacherManagement() {
                           >
                             + Assign
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditFaculty(teacher)}
+                            className="px-2 py-1 text-xs font-medium text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-gray-300 rounded transition-colors"
+                            title="Edit faculty details"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteConfirmFaculty(teacher)}
+                            className="px-2 py-1 text-xs font-medium text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded transition-colors flex items-center gap-1"
+                            title="Remove faculty member"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            <span>Remove</span>
+                          </button>
                           {assignments.length > 0 && (
                             <button
                               type="button"
@@ -1313,6 +1348,9 @@ export default function TeacherManagement() {
                               >
                                 <span>Class Teacher:</span>
                                 <span className="font-bold underline decoration-amber-400">{ct.class_name}</span>
+                                {selectedAcademicYear === 'all' && (
+                                  <span className="text-[10px] text-amber-800 font-medium">({ct.academic_year})</span>
+                                )}
                                 <button
                                   type="button"
                                   onClick={() => handleRemoveClassTeacher(ct.class_teacher_id, ct.class_name)}
@@ -1392,6 +1430,7 @@ export default function TeacherManagement() {
           setFacultyToEdit(null);
         }}
         onSave={handleSaveFaculty}
+        onDelete={(teacher) => setDeleteConfirmFaculty(teacher)}
         facultyToEdit={facultyToEdit}
       />
 
@@ -1402,9 +1441,9 @@ export default function TeacherManagement() {
             <div className="w-10 h-10 rounded bg-red-100 text-red-700 flex items-center justify-center mx-auto mb-3 text-base font-bold font-mono">
               !
             </div>
-            <h3 className="font-serif text-base font-bold text-gray-900 mb-1">Delete Faculty Record</h3>
+            <h3 className="font-serif text-base font-bold text-gray-900 mb-1">Remove Faculty Member</h3>
             <p className="text-xs text-gray-600 mb-6">
-              Are you sure you want to delete <strong className="text-gray-900">{deleteConfirmFaculty.name}</strong> ({deleteConfirmFaculty.employee_id})? This will permanently remove their profile and all associated teaching allocations from department records.
+              Are you sure you want to remove <strong className="text-gray-900">{deleteConfirmFaculty.name}</strong> ({deleteConfirmFaculty.employee_id})? This will permanently remove their profile, login account, and all associated teaching allocations from department records.
             </p>
 
             <div className="flex items-center justify-center gap-2.5">
@@ -1419,7 +1458,7 @@ export default function TeacherManagement() {
                 disabled={deleting}
                 className="px-4 py-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded shadow-2xs transition-colors"
               >
-                {deleting ? 'Deleting…' : 'Confirm Delete'}
+                {deleting ? 'Removing…' : 'Confirm Remove'}
               </button>
             </div>
           </div>

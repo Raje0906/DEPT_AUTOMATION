@@ -316,11 +316,24 @@ async function getFaculty(userId) {
   return res.rows[0] || null;
 }
 
+// Helper: get cached exam types
+let cachedExamTypes = null;
+let cachedExamTypesTime = 0;
+async function getExamTypesCached() {
+  if (cachedExamTypes && Date.now() - cachedExamTypesTime < 3600000) {
+    return cachedExamTypes;
+  }
+  const result = await pool.query(`SELECT * FROM exam_types ORDER BY display_order`);
+  cachedExamTypes = result.rows;
+  cachedExamTypesTime = Date.now();
+  return cachedExamTypes;
+}
+
 // ─── GET /api/faculty/exam-types ──────────────────────────────────────────────
 router.get('/exam-types', async (req, res) => {
   try {
-    const result = await pool.query(`SELECT * FROM exam_types ORDER BY display_order`);
-    res.json({ examTypes: result.rows });
+    const examTypes = await getExamTypesCached();
+    res.json({ examTypes });
   } catch (err) {
     console.error('[Faculty] Exam types error:', err.message);
     res.status(500).json({ error: 'Internal server error' });
@@ -487,33 +500,44 @@ router.get('/marks/:subjectId', async (req, res) => {
     }
     let examTypeId = req.query.exam_type_id ? parseInt(req.query.exam_type_id, 10) : null;
 
-    // Strict Server-side RBAC: Faculty MUST be assigned to this subject, division, semester, academic_year
-    const assignmentCheck = await pool.query(
-      `SELECT id, division FROM faculty_subject_map
-       WHERE faculty_id = $1 AND subject_id = $2 AND semester = $4 AND academic_year = $5
-         AND (division = $3 OR division = REPLACE($3, ' Comp ', ' ') OR REPLACE(division, ' Comp ', ' ') = $3)`,
-      [faculty.id, subjectId, division, semester, academicYear]
-    );
+    const normDiv = division.trim();
+    const shortDiv = normDiv.replace(' Comp ', ' ');
+    const longDiv = normDiv.includes(' Comp ') ? normDiv : normDiv.replace(' ', ' Comp ');
+    const allowedDivs = Array.from(new Set([normDiv, shortDiv, longDiv]));
+
+    // Parallelize RBAC check, subject metadata, exam types, and division list
+    const [assignmentCheck, subjectResult, examTypes, availableDivisionsRes] = await Promise.all([
+      pool.query(
+        `SELECT id FROM faculty_subject_map
+         WHERE faculty_id = $1 AND subject_id = $2 AND semester = $4 AND academic_year = $5
+           AND division = ANY($3)`,
+        [faculty.id, subjectId, allowedDivs, semester, academicYear]
+      ),
+      pool.query(`SELECT * FROM subjects WHERE id = $1`, [subjectId]),
+      getExamTypesCached(),
+      pool.query(
+        `SELECT DISTINCT division FROM faculty_subject_map
+         WHERE faculty_id = $1 AND subject_id = $2 AND semester = $3 AND academic_year = $4
+         ORDER BY division`,
+        [faculty.id, subjectId, semester, academicYear]
+      )
+    ]);
+
     if (assignmentCheck.rows.length === 0) {
       return res.status(403).json({
         error: `Access Denied: You are not assigned to teach this subject for division "${division}" in semester ${semester} (${academicYear}).`
       });
     }
 
-    const subjectResult = await pool.query(`SELECT * FROM subjects WHERE id = $1`, [subjectId]);
     if (subjectResult.rows.length === 0) return res.status(404).json({ error: 'Subject not found' });
     const subject = subjectResult.rows[0];
-
-    // Fetch all available exam types
-    const examTypesRes = await pool.query(`SELECT * FROM exam_types ORDER BY display_order`);
-    const examTypes = examTypesRes.rows;
 
     if (!examTypeId) {
       examTypeId = examTypes[0]?.id;
     }
     const currentExamType = examTypes.find(e => e.id === examTypeId) || examTypes[0];
 
-    // Fetch enrolled students with marks for the selected exam_type
+    // Fetch enrolled students with marks for the selected exam_type using composite index
     const studentsResult = await pool.query(
       `SELECT s.id AS student_id, s.roll_no, s.enrollment_no, u.name,
               sem.id AS mark_id, sem.marks_obtained, sem.is_absent, sem.status, sem.last_modified_at,
@@ -529,17 +553,9 @@ router.get('/marks/:subjectId', async (req, res) => {
          AND tw.subject_id = $1 
          AND tw.semester = $3 
          AND tw.academic_year = $4
-       WHERE (s.division = $5 OR s.division = REPLACE($5, ' Comp ', ' ') OR REPLACE(s.division, ' Comp ', ' ') = $5) AND s.current_semester = $3
+       WHERE s.division = ANY($5) AND s.current_semester = $3
        ORDER BY CAST(NULLIF(regexp_replace(s.roll_no, '[^0-9]', '', 'g'), '') AS INTEGER), s.roll_no`,
-      [subjectId, examTypeId, semester, academicYear, division]
-    );
-
-    // Fetch all divisions/classes this faculty teaches for this subject & semester
-    const availableDivisionsRes = await pool.query(
-      `SELECT DISTINCT division FROM faculty_subject_map
-       WHERE faculty_id = $1 AND subject_id = $2 AND semester = $3 AND academic_year = $4
-       ORDER BY division`,
-      [faculty.id, subjectId, semester, academicYear]
+      [subjectId, examTypeId, semester, academicYear, allowedDivs]
     );
 
     res.json({

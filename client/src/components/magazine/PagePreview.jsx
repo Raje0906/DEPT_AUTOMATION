@@ -1,11 +1,250 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { useMagazine, normalizeToppersData } from '../../contexts/MagazineContext';
-import { groupToppersByClassAndDivision, formatClassLabel, sortToppers } from '../../utils/toppersUtils';
+import { useMagazine } from '../../contexts/MagazineContext';
 import { getTemplate } from '../../utils/magazineTemplates';
+import { generateMagazinePages } from '../../utils/magazinePages';
+export { generateMagazinePages };
 
 // ── Template Components ──────────────────────────────────────────────────────
 
+export const CLASSIC_PAGE_QUOTES = [
+  '“Knowledge grows when it is shared with others”', // p1 Cover
+  '—People with goals succeed because they know where they\'re going.', // p2
+  'Education is not the learning of facts, but the training of the mind to think. – Albert Einstein', // p3
+  'Live as if you were to die tomorrow. Learn as if you were to live forever. — Mahatma Gandhi', // p4
+  'The roots of education are bitter, but the fruit is sweet. — Aristotle', // p5
+  'A person who never made a mistake nev er tried anything new. – Albert Einstein', // p6
+  'Develop a passion for learning. If you do, you will never cease to grow. — Anthony J. D\'Angelo', // p7
+  'An investment in knowledge pays the best interest. — Benjamin Franklin', // p8
+  'Success is the sum of small efforts, repeated day in and day out. — Robert Collier', // p9
+  'The expert in anything was once a beginner. — Helen Hayes', // p10
+  'Education breeds confidence. Confidence breeds hope. Hope breeds peace. — Confucius', // p11
+  'It is never too late to be what you might have been. — George Eliot', // p12
+  'It is never too late to be what you might have been. — George Eliot', // p13
+  'It is never too late to be what you might have been. — George Eliot', // p14
+  '―Anyone who has ever made anything of importance was disciplined.‖ — Andrew Hendrixson.', // p15
+  '“Knowledge grows when it is shared with others”', // p16
+];
+
+export function getClassicSectionTitle(page) {
+  if (!page) return 'Department Update';
+  switch (page.template) {
+    case 'toppers':
+      return 'CLASS TOPPERS';
+    case 'table':
+      return 'Staff Workshop / FDP/ STTP';
+    case 'publications':
+      return 'Staff Publications';
+    case 'staff':
+      return 'Staff Achievements';
+    case 'events':
+      return 'Departmental Events';
+    case 'workshops':
+      return 'Student Workshops';
+    case 'lectures':
+      return 'Guest Lectures';
+    case 'achievements':
+      return 'Students Achievements';
+    case 'coe':
+      return 'Center of Excellence';
+    case 'photoGrid':
+      return 'Campus Glimpses';
+    default: {
+      const t = (page.data?.title || page.data?.section || '').toLowerCase();
+      if (t.includes('head') || t.includes('hod')) return "Head of Department's Message";
+      if (t.includes('principal')) return "Principal's Message";
+      if (t.includes('topper')) return 'CLASS TOPPERS';
+      if (t.includes('fdp') || t.includes('sttp') || t.includes('faculty development')) return 'Staff Workshop / FDP/ STTP';
+      if (t.includes('publication')) return 'Staff Publications';
+      if (t.includes('workshop')) return 'Student Workshops';
+      if (t.includes('lecture')) return 'Guest Lectures';
+      if (t.includes('achievement')) return 'Students Achievements';
+      if (t.includes('coe') || t.includes('center of excellence')) return 'Center of Excellence';
+      return page.data?.section || page.data?.title || 'Department Update';
+    }
+  }
+}
+
+function ClassicCoverPage({ data, theme }) {
+  const defaultHodMessage =
+    data?.hodMessage ||
+    `It gives me great pleasure to present the Reflection Issue of the Department of Computer Engineering newsletter for Academic Year 2025–26, Semester I. This issue encapsulates the collective academic, research, and co-curricular efforts of our students and faculty during a dynamic and productive semester.
+Throughout the semester, the department demonstrated a strong commitment to academic excellence, outcome-based education, and experiential learning. Students actively participated in project-based learning, technical events, internships, research activities, and professional development initiatives. Faculty members consistently contributed through innovative teaching practices, scholarly work, and academic mentoring, thereby strengthening the overall learning ecosystem of the department. The achievements and activities documented in this newsletter stand as a testament to the perseverance, adaptability, and collaborative spirit of our department. I sincerely appreciate the dedication shown by our students, faculty, and staff in maintaining high academic standards while embracing emerging technologies and industry-relevant skills.
+I congratulate the editorial team for thoughtfully compiling this reflection of our journey and thank all stakeholders for their continued support.`;
+
+  const defaultEditorMessage =
+    data?.editorMessage ||
+    `We are presenting you with the thirty first issue of our newsletter "Reflection". Our intention is to put out two issues per year, one at the end of May and the other at the end of December. The success of this newsletter depends on your response. I would appreciate your feedback.`;
+
+  return (
+    <div
+      className="w-full h-full flex flex-col bg-white text-black relative overflow-hidden select-none"
+      style={{ boxSizing: 'border-box' }}
+    >
+      {/* Top Navy Blue Institutional Bar */}
+      <div className="bg-[#102646] text-[#F2E3C6] px-5 py-2.5 flex items-center justify-between shadow-xs z-10 flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <img
+            src={data?.collegeLogo || '/images/mes-wadia-crest.jpg'}
+            alt="College Crest"
+            className="w-12 h-14 object-contain rounded-xs bg-white/95 p-0.5 shadow-2xs"
+            onError={(e) => { e.target.src = '/images/mes-wadia-crest.jpg'; }}
+          />
+          <h1 className="text-[20px] font-serif font-bold text-[#F2E3C6] tracking-wide">
+            {data?.collegeName || 'MES’s Wadia College OF Engineering Pune'}
+          </h1>
+        </div>
+      </div>
+
+      {/* Main Big REFLECTION Blue Banner */}
+      <div className="px-6 pt-3 flex-shrink-0">
+        <div
+          className="rounded-xs shadow-xs overflow-hidden"
+          style={{ background: 'linear-gradient(to bottom, #2B5F9E 0%, #204C82 100%)' }}
+        >
+          <h2 className="text-[44px] font-serif font-bold text-white text-center tracking-[0.18em] py-1 uppercase drop-shadow-xs">
+            {data?.title || 'REFLECTION'}
+          </h2>
+          <div className="h-1.5 w-full bg-gradient-to-r from-blue-300 via-blue-100 to-blue-300 opacity-60" />
+        </div>
+      </div>
+
+      {/* Two Column Layout: Left Lavender/Blue Sidebar + Right Main Content */}
+      <div className="flex-1 flex px-6 pt-2 pb-1 gap-4 min-h-0 overflow-hidden">
+        {/* Left Column (Sidebar) */}
+        <div className="w-[30%] flex flex-col justify-between bg-[#BDCEE8] relative pl-4 pr-3 py-2.5 border border-[#9BB2D6] rounded-xs shadow-2xs overflow-hidden">
+          {/* Orange Accent Bar on Far Left */}
+          <div className="absolute left-0 top-0 bottom-0 w-2.5 bg-[#FF6600] z-20 pointer-events-none" />
+
+          {/* Period Pill */}
+          <div className="bg-white rounded-full px-3 py-0.5 text-center shadow-xs border border-red-300 mx-auto w-full max-w-[150px]">
+            <span className="text-[11px] font-bold text-[#D32F2F] tracking-wide uppercase font-sans">
+              {data?.period || 'JUNE– DEC 2025'}
+            </span>
+          </div>
+
+          {/* Issue Box */}
+          <div className="bg-white rounded-xs px-3 py-1 text-center shadow-xs border border-red-300 mx-auto mt-1 w-full max-w-[130px]">
+            <span className="text-[12px] font-serif font-bold text-[#D32F2F] tracking-wider uppercase">
+              ISSUE {data?.issueNumber || '32'}
+            </span>
+          </div>
+
+          {/* Confucius Quote Card Image */}
+          <div className="my-1.5 rounded-xs overflow-hidden border border-pink-200/80 shadow-2xs bg-[#FBE6E3] mx-auto w-full max-w-[160px]">
+            <img
+              src="/images/confucius-quote-card.jpg"
+              alt="Education breeds confidence"
+              className="w-full h-auto object-contain"
+            />
+          </div>
+
+          {/* Inside this issue (Table of Contents) */}
+          <div className="mt-auto w-full">
+            <div className="bg-[#FFEE58] border border-amber-400 px-2 py-0.5 text-center font-bold text-black text-[11px] uppercase tracking-wide">
+              Inside this issue:
+            </div>
+            <div className="bg-white/85 p-2 text-[10px] font-bold text-slate-900 space-y-1.5 border border-slate-300/60 leading-normal">
+              <div className="flex justify-between items-center">
+                <span>Class Toppers</span>
+                <span className="font-mono text-[10px]">2, 3, 4</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span>Dept. Events Days</span>
+                <span className="font-mono text-[10px]">5, 6</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span>Student Workshops</span>
+                <span className="font-mono text-[10px]">7, 8</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span>Guest Lectures</span>
+                <span className="font-mono text-[10px]">9</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span>Students Achievements</span>
+                <span className="font-mono text-[10px]">9, 10</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span>Center of Excellence</span>
+                <span className="font-mono text-[10px]">10</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span>Staff Achievements</span>
+                <span className="font-mono text-[10px]">11</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span>Staff Workshops/FDP</span>
+                <span className="font-mono text-[10px]">12, 13, 14</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span>Staff Publications</span>
+                <span className="font-mono text-[10px]">15, 16</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column (Main Messages + Building Photo) */}
+        <div className="w-[70%] flex flex-col justify-between bg-white pl-2 pr-1 py-1 overflow-hidden">
+          {/* Subheading */}
+          <div>
+            <p className="text-[13px] font-serif font-bold text-[#D32F2F] leading-tight mb-1">
+              A newsletter of {data?.department ? `Department of ${data.department}` : 'Department of Computer Engineering'}
+            </p>
+
+            {/* HOD Message */}
+            <div className="mb-2">
+              <h3 className="text-[14.5px] font-serif font-bold text-[#D32F2F] leading-tight">
+                Message From Head Of TheDepartment
+              </h3>
+              <p className="text-[9.5px] text-justify text-black leading-snug mt-1 font-sans">
+                {defaultHodMessage}
+              </p>
+              <p className="text-right text-[10.5px] font-serif font-bold text-black mt-0.5">
+                {data?.hodName || 'Dr. (Mrs.) N. F. Shaikh'}
+              </p>
+            </div>
+
+            {/* Editor Message */}
+            <div className="mb-1.5">
+              <h3 className="text-[14.5px] font-serif font-bold text-[#D32F2F] leading-tight">
+                Message From the Editor
+              </h3>
+              <p className="text-[9.5px] text-justify text-black leading-snug mt-1 font-sans">
+                {defaultEditorMessage}
+              </p>
+              <div className="text-right text-[10.5px] font-serif font-bold text-black mt-0.5 leading-tight">
+                <p>{data?.editorName || 'Dr( Mrs) S. S. Raskar'}</p>
+                <p>{data?.coEditorName || 'Prof. J. A. Kalbhor'}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Campus Building Photo */}
+          <div className="rounded-xs overflow-hidden border border-slate-300 shadow-2xs mt-auto">
+            <img
+              src="/images/mes-wadia-building-sign.jpg"
+              alt="MES Wadia College Building"
+              className="w-full h-36 object-cover"
+              onError={(e) => { e.target.src = '/images/mes-wadia-campus.jpg'; }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom Center Quote */}
+      <div className="text-center py-2 text-[11px] font-serif italic text-black border-t border-slate-200 mt-auto flex-shrink-0">
+        “Knowledge grows when it is shared with others”
+      </div>
+    </div>
+  );
+}
+
 function CoverPage({ data, theme = getTemplate('modern-academic') }) {
+  if (theme.id === 'reflection-classic') {
+    return <ClassicCoverPage data={data} theme={theme} />;
+  }
+
   const overlay = data?.coverOverlay || data?.overlay || {
     type: 'none',
     color: '#000000',
@@ -267,9 +506,63 @@ function PhotoGridPage({ data, theme = getTemplate('modern-academic') }) {
   );
 }
 
-function TablePage({ data, theme = getTemplate('modern-academic') }) {
+function TablePage({ data, theme = getTemplate('modern-academic'), isClassicFrame }) {
   const rows = data?.rows || [];
   const cols = data?.columns || ['Sr.', 'Faculty Name', 'Activity', 'Organization', 'Mode'];
+  const isClassic = theme.id === 'reflection-classic' || isClassicFrame;
+
+  if (isClassic) {
+    const rowPad = rows.length <= 5 ? 'py-3.5' : rows.length <= 8 ? 'py-2.5' : 'py-1.5';
+    return (
+      <div className="w-full h-full flex flex-col justify-start px-3 py-1 overflow-hidden select-none">
+        <div className="overflow-hidden border-2 border-black shadow-2xs">
+          <table className="w-full text-xs border border-black border-collapse">
+            <thead>
+              <tr className="bg-white">
+                <th className="border border-black px-2 py-2 text-center font-serif italic font-bold text-black text-[11px] w-12">
+                  Sr. No.
+                </th>
+                <th className="border border-black px-3 py-2 text-center font-serif italic font-bold text-black text-[11px] w-36">
+                  Name of Faculty
+                </th>
+                <th className="border border-black px-4 py-2 text-center font-serif italic font-bold text-black text-[11px]">
+                  Activity name
+                </th>
+                <th className="border border-black px-2 py-2 text-center font-serif italic font-bold text-black text-[11px] w-28">
+                  Conduction
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {(rows.length ? rows : Array(6).fill(null)).map((row, i) => {
+                const srVal = Array.isArray(row) ? row[0] : (row?.srNo || i + 1);
+                const facultyVal = Array.isArray(row) ? row[1] : (row?.facultyName || row?.name || 'Faculty Member');
+                const activityVal = Array.isArray(row) ? row[2] : (row?.activityName || row?.activity || row?.title || 'One Week FDP / Training Program on Advanced Technologies');
+                const conductionVal = Array.isArray(row) ? row[3] : (row?.conduction || row?.date || row?.duration || 'Academic Year');
+
+                return (
+                  <tr key={i} className="bg-white">
+                    <td className={`border border-black px-2 ${rowPad} text-center text-[11px] font-sans text-black align-middle`}>
+                      {srVal}.
+                    </td>
+                    <td className={`border border-black px-3 ${rowPad} text-left text-[11.5px] font-serif font-bold text-black align-middle`}>
+                      {facultyVal}
+                    </td>
+                    <td className={`border border-black px-3 ${rowPad} text-left text-[11px] leading-snug text-black align-middle font-sans`}>
+                      {activityVal}
+                    </td>
+                    <td className={`border border-black px-2 ${rowPad} text-center text-[11px] font-serif text-black align-middle`}>
+                      {conductionVal}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
 
   const renderCell = (colName, val) => {
     if (colName === 'Mode') {
@@ -336,8 +629,45 @@ function TablePage({ data, theme = getTemplate('modern-academic') }) {
   );
 }
 
-function EventsPage({ data, theme = getTemplate('modern-academic') }) {
+function EventsPage({ data, theme = getTemplate('modern-academic'), isClassicFrame }) {
   const events = data?.events || [];
+  const isClassic = theme.id === 'reflection-classic' || isClassicFrame;
+
+  if (isClassic) {
+    return (
+      <div className="w-full h-full p-2 flex flex-col gap-4 overflow-hidden select-none font-sans">
+        {events.map((ev, idx) => {
+          const photoUrl = typeof ev.photos?.[0] === 'string' ? ev.photos[0] : ev.photos?.[0]?.url;
+          return (
+            <div
+              key={ev.id || idx}
+              className="flex-1 min-h-0 p-4 bg-white border border-slate-300 flex flex-col justify-between rounded-xs shadow-2xs"
+            >
+              <div className="flex items-start justify-between gap-2 flex-wrap pb-2 border-b border-slate-200 flex-shrink-0">
+                <h3 className="font-serif font-bold text-base text-[#D32F2F] leading-snug">
+                  {ev.title}
+                </h3>
+                <div className="flex items-center gap-2 text-xs text-slate-700">
+                  {ev.date && <span className="font-semibold">{ev.date}</span>}
+                  {ev.venue && <span>📍 {ev.venue}</span>}
+                </div>
+              </div>
+              <div className="flex gap-4 items-center flex-1 min-h-0 py-2">
+                {photoUrl && (
+                  <div className="w-64 h-full max-h-56 flex-shrink-0 overflow-hidden border border-slate-300 rounded-xs shadow-2xs bg-slate-50">
+                    <img src={photoUrl} alt={ev.title} className="w-full h-full object-cover" />
+                  </div>
+                )}
+                <p className="flex-1 text-[13px] text-black leading-relaxed text-justify overflow-hidden">
+                  {ev.description}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
   return (
     <div className={`w-full h-full p-8 pb-12 flex flex-col justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
       <div className={`pb-2.5 ${theme.headerDivider} flex items-end justify-between flex-shrink-0`}>
@@ -408,8 +738,45 @@ function EventsPage({ data, theme = getTemplate('modern-academic') }) {
   );
 }
 
-function WorkshopsPage({ data, theme = getTemplate('modern-academic') }) {
+function WorkshopsPage({ data, theme = getTemplate('modern-academic'), isClassicFrame }) {
   const workshops = data?.workshops || [];
+  const isClassic = theme.id === 'reflection-classic' || isClassicFrame;
+
+  if (isClassic) {
+    return (
+      <div className="w-full h-full p-2 flex flex-col gap-4 overflow-hidden select-none font-sans">
+        {workshops.map((w, idx) => {
+          const photoUrl = typeof w.photos?.[0] === 'string' ? w.photos[0] : w.photos?.[0]?.url;
+          return (
+            <div
+              key={w.id || idx}
+              className="flex-1 min-h-0 p-4 bg-white border border-slate-300 flex flex-col justify-between rounded-xs shadow-2xs"
+            >
+              <div className="flex items-start justify-between gap-2 flex-wrap pb-2 border-b border-slate-200 flex-shrink-0">
+                <h3 className="font-serif font-bold text-base text-[#D32F2F] leading-snug">
+                  {w.title}
+                </h3>
+                <div className="flex items-center gap-2 text-xs text-slate-700">
+                  {w.date && <span className="font-semibold">{w.date}</span>}
+                  {w.speaker && <span>Speaker: {w.speaker}</span>}
+                </div>
+              </div>
+              <div className="flex gap-4 items-center flex-1 min-h-0 py-2">
+                {photoUrl && (
+                  <div className="w-64 h-full max-h-56 flex-shrink-0 overflow-hidden border border-slate-300 rounded-xs shadow-2xs bg-slate-50">
+                    <img src={photoUrl} alt={w.title} className="w-full h-full object-cover" />
+                  </div>
+                )}
+                <p className="flex-1 text-[13px] text-black leading-relaxed text-justify overflow-hidden">
+                  {w.description}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
   return (
     <div className={`w-full h-full p-8 pb-12 flex flex-col justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
       <div className={`pb-2.5 ${theme.headerDivider} flex items-end justify-between flex-shrink-0`}>
@@ -474,8 +841,45 @@ function WorkshopsPage({ data, theme = getTemplate('modern-academic') }) {
   );
 }
 
-function LecturesPage({ data, theme = getTemplate('modern-academic') }) {
+function LecturesPage({ data, theme = getTemplate('modern-academic'), isClassicFrame }) {
   const lectures = data?.lectures || [];
+  const isClassic = theme.id === 'reflection-classic' || isClassicFrame;
+
+  if (isClassic) {
+    return (
+      <div className="w-full h-full p-2 flex flex-col gap-4 overflow-hidden select-none font-sans">
+        {lectures.map((lec, idx) => {
+          const photoUrl = typeof lec.photos?.[0] === 'string' ? lec.photos[0] : lec.photos?.[0]?.url;
+          return (
+            <div
+              key={lec.id || idx}
+              className="flex-1 min-h-0 p-4 bg-white border border-slate-300 flex flex-col justify-between rounded-xs shadow-2xs"
+            >
+              <div className="flex items-start justify-between gap-2 flex-wrap pb-2 border-b border-slate-200 flex-shrink-0">
+                <h3 className="font-serif font-bold text-base text-[#D32F2F] leading-snug">
+                  {lec.topic || lec.title}
+                </h3>
+                <div className="flex items-center gap-2 text-xs text-slate-700">
+                  {lec.date && <span className="font-semibold">{lec.date}</span>}
+                  {lec.speaker && <span>Speaker: {lec.speaker}</span>}
+                </div>
+              </div>
+              <div className="flex gap-4 items-center flex-1 min-h-0 py-2">
+                {photoUrl && (
+                  <div className="w-64 h-full max-h-56 flex-shrink-0 overflow-hidden border border-slate-300 rounded-xs shadow-2xs bg-slate-50">
+                    <img src={photoUrl} alt={lec.speaker || ''} className="w-full h-full object-cover" />
+                  </div>
+                )}
+                <p className="flex-1 text-[13px] text-black leading-relaxed text-justify overflow-hidden">
+                  {lec.description}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
   return (
     <div className={`w-full h-full p-8 pb-12 flex flex-col justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
       <div className={`pb-2.5 ${theme.headerDivider} flex items-end justify-between flex-shrink-0`}>
@@ -540,8 +944,50 @@ function LecturesPage({ data, theme = getTemplate('modern-academic') }) {
   );
 }
 
-function AchievementsPage({ data, theme = getTemplate('modern-academic') }) {
+function AchievementsPage({ data, theme = getTemplate('modern-academic'), isClassicFrame }) {
   const achievements = data?.achievements || [];
+  const isClassic = theme.id === 'reflection-classic' || isClassicFrame;
+
+  if (isClassic) {
+    return (
+      <div className="w-full h-full p-2 flex flex-col gap-3 overflow-hidden select-none font-sans">
+        {achievements.map((a, idx) => {
+          const photoUrl = a.photo;
+          return (
+            <div key={a.id || idx} className="flex-1 min-h-0 p-3.5 bg-white border border-slate-300 flex items-center gap-4 rounded-xs shadow-2xs">
+              {photoUrl ? (
+                <div className="w-16 h-16 rounded-full overflow-hidden flex-shrink-0 border border-slate-400 bg-white shadow-2xs">
+                  <img src={photoUrl} alt={a.name} className="w-full h-full object-cover" />
+                </div>
+              ) : (
+                <div className="w-14 h-14 rounded-full bg-red-50 text-red-600 flex items-center justify-center text-xl flex-shrink-0 font-bold">
+                  ★
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="text-[13.5px] font-bold text-black truncate font-serif">
+                    {a.name} <span className="text-xs text-slate-600 font-sans">({a.class})</span>
+                  </span>
+                  {a.prize && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-50 text-[#D32F2F] border border-red-200">
+                      {a.prize}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs font-bold text-slate-800 mt-0.5">
+                  {a.achievement}
+                </p>
+                <p className="text-[11.5px] text-slate-800 leading-relaxed text-justify mt-0.5">
+                  {a.description}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
   return (
     <div className={`w-full h-full p-8 pb-12 flex flex-col justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
       <div className={`pb-2.5 ${theme.headerDivider} flex items-end justify-between flex-shrink-0`}>
@@ -609,9 +1055,40 @@ function AchievementsPage({ data, theme = getTemplate('modern-academic') }) {
   );
 }
 
-function CoEFeaturePage({ data, theme = getTemplate('modern-academic') }) {
+function CoEFeaturePage({ data, theme = getTemplate('modern-academic'), isClassicFrame }) {
   const coe = data?.coe || {};
   const isPart1 = data?.part === 1;
+  const isClassic = theme.id === 'reflection-classic' || isClassicFrame;
+
+  if (isClassic) {
+    return (
+      <div className="w-full h-full p-2 flex flex-col justify-around gap-3 overflow-hidden select-none font-sans">
+        <div className="p-3 bg-white border border-slate-300 rounded-xs space-y-2 shadow-2xs">
+          <div className="flex items-baseline justify-between">
+            <h3 className="font-serif font-bold text-lg text-[#D32F2F]">
+              {coe.name || 'Centre of Excellence'}
+            </h3>
+            {coe.partner && (
+              <span className="text-xs font-semibold text-slate-700">Partner: {coe.partner}</span>
+            )}
+          </div>
+          {coe.tagline && (
+            <p className="text-xs italic text-slate-600 font-serif border-l-2 border-[#D32F2F] pl-2">
+              "{coe.tagline}"
+            </p>
+          )}
+          {coe.photos?.[0]?.url && (
+            <div className="w-full h-44 rounded-xs overflow-hidden border border-slate-300 shadow-2xs">
+              <img src={coe.photos[0].url} alt="CoE Lab" className="w-full h-full object-cover" />
+            </div>
+          )}
+          <p className="text-[12.5px] text-black leading-relaxed text-justify">
+            {coe.description || 'Facility dedicated to high-level research and collaborative engineering.'}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (isPart1) {
     return (
@@ -747,8 +1224,67 @@ function CoEFeaturePage({ data, theme = getTemplate('modern-academic') }) {
   );
 }
 
-function StaffAchievementsPage({ data, theme = getTemplate('modern-academic') }) {
+function StaffAchievementsPage({ data, theme = getTemplate('modern-academic'), isClassicFrame }) {
   const staff = data?.staff || [];
+  const isClassic = theme.id === 'reflection-classic' || isClassicFrame;
+
+  if (isClassic) {
+    return (
+      <div className="w-full h-full flex px-3 py-1 overflow-hidden select-none gap-4">
+        {/* Left Lavender Trophy Banner matching Page 11/15 of PDF */}
+        <div className="w-20 bg-[#BDCEE8] border border-[#FF6600] rounded-xs flex flex-col items-center justify-between p-1 flex-shrink-0 shadow-2xs overflow-hidden">
+          <img
+            src="/images/staff-trophy-banner.png"
+            alt="Faculty Achievements Trophy"
+            className="w-full h-full object-contain"
+          />
+        </div>
+
+        {/* Right Achievements List with authentic PDF structuring */}
+        <div className="flex-1 flex flex-col justify-around py-1 gap-2.5 overflow-hidden font-sans">
+          {staff.map((s, idx) => {
+            const achList = Array.isArray(s.achievements)
+              ? s.achievements
+              : s.achievements
+              ? [s.achievements]
+              : [];
+            return (
+              <div key={s.id || idx} className="space-y-0.5">
+                <h4 className="font-serif font-bold text-[12.5px] text-black leading-snug">
+                  {s.facultyName}{s.designation ? ` -` : ' -'}
+                </h4>
+                <div className="pl-3 text-[11px] text-slate-900 leading-snug space-y-1">
+                  {achList.map((ach, aIdx) => {
+                    const title = typeof ach === 'string' ? ach : ach?.title;
+                    const org = typeof ach === 'object' ? ach?.organization : null;
+                    const desc = typeof ach === 'object' ? ach?.description : null;
+                    const date = typeof ach === 'object' ? ach?.date : null;
+
+                    return (
+                      <p key={aIdx} className="text-justify leading-snug">
+                        <span className="font-bold">{aIdx + 1}. </span>
+                        {title ? `${title}. ` : ''}
+                        {org ? `${org}. ` : ''}
+                        {desc ? `${desc} ` : ''}
+                        {date ? `(${date})` : ''}
+                      </p>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Optional bottom photo matching ceremony photo on Page 11 of Issue 32 PDF */}
+          {data?.photo && (
+            <div className="mt-2 rounded border border-slate-300 overflow-hidden shadow-2xs h-32 flex-shrink-0">
+              <img src={data.photo} alt="Faculty Recognition Ceremony" className="w-full h-full object-cover" />
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className={`w-full h-full p-8 pb-12 flex flex-col justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
       <div className={`pb-2.5 ${theme.headerDivider} flex items-end justify-between flex-shrink-0`}>
@@ -820,72 +1356,329 @@ function StaffAchievementsPage({ data, theme = getTemplate('modern-academic') })
   );
 }
 
-function PublicationsPage({ data, theme = getTemplate('modern-academic') }) {
-  const publications = data?.publications || [];
+function renderPublicationText(pub) {
+  const isPatent = pub.type === 'Patent' || (pub.title && pub.title.toLowerCase().includes('patent'));
+  if (isPatent) {
+    return (
+      <span>
+        Published Patent on <span className="font-semibold">"{pub.title}"</span>
+        {pub.date ? ` on ${pub.date}` : ''}
+        {pub.patentNo ? `. Indian Patent No. ${pub.patentNo}` : ''}
+        {pub.description ? `. ${pub.description}` : ''}
+      </span>
+    );
+  }
+
+  const prefix = pub.title?.toLowerCase().startsWith('published') ? '' : 'Published a paper titled, ';
+  const indexingTag = pub.indexing ? ` [${pub.indexing}]` : pub.type && pub.type !== 'Journal Article' && pub.type !== 'Research Paper' ? ` [${pub.type}]` : pub.journal?.toLowerCase().includes('ieee') ? ' [Scopus Indexed]' : '';
+
   return (
-    <div className={`w-full h-full p-8 pb-12 flex flex-col justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
-      <div className={`pb-2.5 ${theme.headerDivider} flex items-end justify-between flex-shrink-0`}>
-        <div>
-          <span className={`text-xs font-bold uppercase tracking-wider px-2.5 py-1 min-h-[24px] inline-flex items-center rounded-sm ${theme.badgeStyle}`}>
-            Research Publications
-          </span>
-          <h2 className={`${theme.fontHeading} text-2xl font-bold text-ink leading-tight mt-1`}>
-            {data?.title || 'Faculty Publications'}
-          </h2>
-          {data?.subtitle && <p className="text-xs text-draft font-medium mt-0.5">{data.subtitle}</p>}
+    <span>
+      {prefix}
+      <span className="font-semibold">"{pub.title}"</span>
+      {pub.journal ? `, in ${pub.journal}` : ''}
+      {pub.date ? `, ${pub.date}` : ''}
+      {indexingTag}
+      {pub.doi ? ` DOI: ${pub.doi}` : ''}
+      {pub.description && !pub.journal?.includes(pub.description) ? `. ${pub.description}` : ''}
+    </span>
+  );
+}
+
+function PublicationsPage({ data, theme = getTemplate('modern-academic'), pageNumber, currentMagazine, isClassicFrame }) {
+  const rawList = data?.publications || [];
+  const rawGroups = data?.facultyGroups;
+  const isClassic = theme.id === 'reflection-classic' || isClassicFrame;
+
+  // Group by faculty if not already grouped
+  const facultyGroups = useMemo(() => {
+    if (Array.isArray(rawGroups) && rawGroups.length > 0) {
+      return rawGroups;
+    }
+    const map = new Map();
+    rawList.forEach((p) => {
+      const name = (p.facultyName || p.author || p.faculty || '').trim() || 'Faculty Member';
+      if (!map.has(name)) {
+        map.set(name, []);
+      }
+      map.get(name).push(p);
+    });
+    return Array.from(map.entries()).map(([facultyName, items]) => ({
+      facultyName,
+      items,
+    }));
+  }, [rawGroups, rawList]);
+
+  // Flat list of publications for table rendering
+  const flatPubs = useMemo(() => {
+    if (Array.isArray(data?.publications) && data.publications.length > 0) {
+      return data.publications;
+    }
+    if (Array.isArray(rawGroups) && rawGroups.length > 0) {
+      return rawGroups.flatMap(g => (g.items || []).map(it => ({
+        ...it,
+        facultyName: it.facultyName || g.facultyName,
+      })));
+    }
+    return rawList;
+  }, [data?.publications, rawGroups, rawList]);
+
+  const startSr = data?.startSr || data?.startNumber || 1;
+  const isFinalPage = data?.isFinalPage !== undefined ? data.isFinalPage : (data?.part === 2 || facultyGroups.length <= 4);
+  const issueNum = data?.issueNumber || currentMagazine?.issueNumber || '33';
+  const startNumber = data?.startNumber || (data?.part === 2 ? 4 : 1);
+
+  // Classic Table View matching the FDP/STTP Table Style and Issue 32 Institutional Standard
+  if (isClassic) {
+    const pubCount = flatPubs.length;
+    const rowPad = pubCount <= 5 ? 'py-3.5' : pubCount <= 7 ? 'py-2.5' : 'py-1.5';
+    return (
+      <div className="w-full h-full flex flex-col justify-between px-2 py-1 overflow-hidden select-none font-sans">
+        <div className="overflow-hidden border-2 border-black shadow-2xs">
+          <table className="w-full text-xs border border-black border-collapse">
+            <thead>
+              <tr className="bg-white">
+                <th className="border border-black px-2 py-2 text-center font-serif italic font-bold text-black text-[11px] w-12">
+                  Sr. No.
+                </th>
+                <th className="border border-black px-3 py-2 text-center font-serif italic font-bold text-black text-[11px] w-36">
+                  Name of Faculty
+                </th>
+                <th className="border border-black px-3 py-2 text-center font-serif italic font-bold text-black text-[11px]">
+                  Title of Paper / Patent / Work
+                </th>
+                <th className="border border-black px-3 py-2 text-center font-serif italic font-bold text-black text-[11px] w-48">
+                  Journal / Conference / Publisher
+                </th>
+                <th className="border border-black px-2 py-2 text-center font-serif italic font-bold text-black text-[11px] w-28">
+                  Conduction / Date
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {flatPubs.map((pub, idx) => {
+                const isPatent = pub.type === 'Patent' || (pub.title && pub.title.toLowerCase().includes('patent'));
+                return (
+                  <tr key={pub.id || idx} className="bg-white">
+                    <td className={`border border-black px-2 ${rowPad} text-center text-[11px] font-sans text-black align-middle font-medium`}>
+                      {startSr + idx}.
+                    </td>
+                    <td className={`border border-black px-3 ${rowPad} text-left text-[11.5px] font-serif font-bold text-black align-middle`}>
+                      {pub.facultyName || 'Faculty Member'}
+                    </td>
+                    <td className={`border border-black px-3 ${rowPad} text-left text-[11px] leading-snug text-black align-middle font-sans`}>
+                      <span className="font-semibold">"{pub.title}"</span>
+                      {pub.patentNo && <span className="block text-[10px] text-slate-700 font-mono mt-0.5">Patent No: {pub.patentNo}</span>}
+                      {pub.doi && <span className="block text-[10px] text-blue-700 font-mono mt-0.5">DOI: {pub.doi}</span>}
+                      {pub.description && !pub.journal?.includes(pub.description) && (
+                        <span className="block text-[10px] text-slate-600 mt-0.5 italic">{pub.description}</span>
+                      )}
+                    </td>
+                    <td className={`border border-black px-3 ${rowPad} text-left text-[11px] leading-snug font-serif text-black align-middle`}>
+                      {pub.journal || pub.conference || pub.publisher || (isPatent ? 'Patent Office of India' : 'Department Research Publication')}
+                      {pub.type && <span className="block text-[10px] font-sans italic text-slate-600">[{pub.type}]</span>}
+                    </td>
+                    <td className={`border border-black px-2 ${rowPad} text-center text-[11px] font-serif text-black align-middle`}>
+                      <div>{pub.date || 'Academic Year'}</div>
+                      {pub.indexing && (
+                        <span className="inline-block mt-0.5 text-[9.5px] font-sans font-bold text-slate-700 bg-slate-100 px-1 py-0.2 rounded border border-slate-300">
+                          {pub.indexing}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* On Final Page: College Address Box + The Reflection Team */}
+        {isFinalPage && (
+          <div className="mt-auto grid grid-cols-2 gap-4 items-center pt-2.5 border-t border-slate-300 flex-shrink-0">
+            <div className="bg-[#DDEBF7] border border-[#9DC3E6] rounded-xs p-3 text-center shadow-2xs">
+              <p className="font-bold text-[10.5px] uppercase tracking-wider text-[#1E2D5A] leading-snug font-sans">
+                MODERN EDUCATION SOCIETY'S WADIA COLLEGE OF ENGINEERING, PUNE
+              </p>
+              <div className="mt-1 text-[10px] text-slate-700 leading-snug">
+                <p className="font-semibold text-slate-800">Address: Wadia College Campus,</p>
+                <p>19, Late Prin. V. K. Joag Path, Pune - 411001</p>
+              </div>
+              <div className="mt-1.5 inline-block bg-white border border-slate-300 rounded px-2 py-0.5 shadow-2xs">
+                <p className="text-[9.5px] font-bold text-navy font-mono">College website: www.mescoe.mespune.org</p>
+              </div>
+            </div>
+
+            <div className="flex flex-col items-center justify-center">
+              <div className="h-24 w-full rounded border border-slate-300 overflow-hidden shadow-2xs mb-1.5 bg-paper">
+                <img
+                  src="/images/event-symposium.jpg"
+                  alt="The Reflection Team"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="text-center py-1 px-2 bg-white border border-slate-200 rounded-xs shadow-2xs w-full">
+                <p className="text-[10px] font-bold text-navy font-sans truncate">
+                  <span className="text-[#D32F2F]">The Reflection Team:</span> Dr. (Mrs.) N. F. Shaikh · Dr(Mrs) S. S. Raskar · Prof. J. A. Kalbhor
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Distribution into columns
+  const [col1, col2] = useMemo(() => {
+    if (isFinalPage) {
+      // On final page: Left column has faculty publications, Right column has College Info + Team Photo
+      return [facultyGroups, []];
+    }
+    const mid = Math.ceil(facultyGroups.length / 2);
+    return [facultyGroups.slice(0, mid), facultyGroups.slice(mid)];
+  }, [facultyGroups, isFinalPage]);
+
+  const defaultQuote = isFinalPage
+    ? '―Anyone who has ever made anything of importance was disciplined.‖ — Andrew Hendrixson.'
+    : '―A person who never made a mistake nev er tried anything new.‖ — Albert Einstein';
+
+  return (
+    <div
+      className={`w-full h-full ${isClassicFrame ? 'p-2' : 'p-8 pl-11 pb-6'} flex flex-col justify-between relative overflow-hidden bg-white text-ink select-none`}
+      style={{ boxSizing: 'border-box' }}
+    >
+      {/* Orange vertical accent bar on the left margin (only if not in classic frame) */}
+      {!isClassicFrame && (
+        <div
+          className="absolute left-0 top-0 bottom-0 w-3.5 bg-[#E65100] z-20 pointer-events-none"
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Top Header matching reference slide: [ ISSUE 33 ] Staff Publications [ Page - X ] (only if not in classic frame) */}
+      {!isClassicFrame && (
+        <div className="flex items-center justify-between pb-3 mb-2 flex-shrink-0">
+          {/* Left: Red outline box with ISSUE */}
+          <div className="border-2 border-[#D32F2F] px-4 py-1 min-w-[125px] text-center shadow-2xs">
+            <span className="text-sm font-bold font-serif text-[#D32F2F] tracking-wider uppercase">
+              ISSUE {issueNum}
+            </span>
+          </div>
+
+          {/* Center: Red Title Staff Publications */}
+          <div className="text-center flex-1 mx-4">
+            <h2 className="text-2xl font-serif font-bold text-[#D32F2F] tracking-wide">
+              Staff Publications
+            </h2>
+          </div>
+
+          {/* Right: Red outline box with Page - X */}
+          <div className="border-2 border-[#D32F2F] px-4 py-1 min-w-[105px] text-center shadow-2xs">
+            <span className="text-sm font-bold font-serif text-[#D32F2F] tracking-wider">
+              Page - {pageNumber || (data?.part === 2 ? 16 : 15)}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Main 2-Column Content Area */}
+      <div className="flex-1 grid grid-cols-2 gap-6 pt-2 pb-2 min-h-0 overflow-hidden">
+        {/* Left Column: Faculty Publications */}
+        <div className="flex flex-col space-y-4 overflow-hidden">
+          {col1.map((fg, idx) => {
+            const facultyNum = startNumber + idx;
+            return (
+              <div key={fg.facultyName || idx} className="space-y-1">
+                <h4 className="font-bold text-[12.5px] text-black font-sans leading-snug">
+                  {facultyNum}. {fg.facultyName}
+                </h4>
+                <ul className="space-y-1.5 pl-2 text-[11px] text-slate-800 leading-snug">
+                  {fg.items.map((pub, pIdx) => (
+                    <li key={pub.id || pIdx} className="flex items-start gap-1.5 text-justify">
+                      <span className="text-black font-bold select-none leading-normal">•</span>
+                      <span className="flex-1">
+                        {renderPublicationText(pub)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Right Column: Either Faculty Publications (Part 1) OR Reflection Team Card (Part 2) */}
+        <div className="flex flex-col overflow-hidden">
+          {!isFinalPage ? (
+            <div className="flex flex-col space-y-4">
+              {col2.map((fg, idx) => {
+                const facultyNum = startNumber + col1.length + idx;
+                return (
+                  <div key={fg.facultyName || idx} className="space-y-1">
+                    <h4 className="font-bold text-[12.5px] text-black font-sans leading-snug">
+                      {facultyNum}. {fg.facultyName}
+                    </h4>
+                    <ul className="space-y-1.5 pl-2 text-[11px] text-slate-800 leading-snug">
+                      {fg.items.map((pub, pIdx) => (
+                        <li key={pub.id || pIdx} className="flex items-start gap-1.5 text-justify">
+                          <span className="text-black font-bold select-none leading-normal">•</span>
+                          <span className="flex-1">
+                            {renderPublicationText(pub)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex flex-col justify-between h-full space-y-3 pt-1">
+              {/* College Address Box */}
+              <div className="bg-[#DDEBF7] border border-[#9DC3E6] rounded-xs p-3.5 text-center shadow-2xs">
+                <p className="font-bold text-[11px] uppercase tracking-wider text-[#1E2D5A] leading-snug font-sans">
+                  MODERN EDUCATION SOCIETY'S WADIA COLLEGE OF ENGINEERING, PUNE
+                </p>
+                <div className="mt-2 text-[10.5px] text-slate-700 leading-snug">
+                  <p className="font-semibold text-slate-800">Address: Wadia College Campus,</p>
+                  <p>19, Late Prin. V. K. Joag Path,</p>
+                  <p>Pune - 411001</p>
+                </div>
+                <div className="mt-2.5 inline-block bg-white border border-slate-300 rounded px-2.5 py-1 shadow-2xs">
+                  <p className="text-[9.5px] text-slate-500 font-semibold">College website:</p>
+                  <p className="text-[10.5px] font-bold text-navy font-mono">www.mescoe.mespune.org</p>
+                </div>
+              </div>
+
+              {/* The Reflection Team Photo */}
+              <div className="rounded border-2 border-slate-300 overflow-hidden shadow-sm bg-paper flex-1 min-h-[140px] max-h-[190px]">
+                <img
+                  src="/images/event-symposium.jpg"
+                  alt="The Reflection Team"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+
+              {/* The Reflection Team Names */}
+              <div className="text-center py-2 px-3 bg-white border border-slate-200 rounded-xs shadow-2xs">
+                <p className="text-[11px] font-bold text-navy font-sans">
+                  <span className="text-[#D32F2F]">The Reflection Team:</span> Dr. (Mrs.) N. F. Shaikh &nbsp;·&nbsp; Dr(Mrs) S. S. Raskar &nbsp;·&nbsp; Prof. J. A. Kalbhor
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col justify-around py-1 gap-2.5">
-        {publications.map((p, idx) => (
-          <div key={p.id || idx} className={`${theme.cardStyle} p-3 bg-paper/30 flex flex-col gap-1 border border-rule/70 shadow-2xs`}>
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-blue-100 text-navy border border-blue-200">
-                {p.type || 'Research Paper'}
-              </span>
-              <span className="text-xs text-draft font-mono font-medium">
-                {p.date}
-              </span>
-            </div>
-
-            <h3 className={`${theme.fontHeading} text-xs font-bold text-ink leading-snug mt-0.5`}>
-              "{p.title}"
-            </h3>
-
-            <p className="text-xs font-bold text-navy">
-              {p.facultyName}
-            </p>
-
-            <p className="text-xs text-draft italic">
-              {p.journal}
-            </p>
-
-            {p.description && (
-              <p className="text-[11.5px] text-ink leading-relaxed text-justify">
-                {p.description}
-              </p>
-            )}
-
-            {p.doi && (
-              <div className="pt-0.5 flex items-center gap-1.5">
-                <a
-                  href={p.url || `https://doi.org/${p.doi}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-[10.5px] font-mono text-blue-600 hover:underline inline-flex items-center gap-1 font-semibold"
-                >
-                  🔗 DOI: {p.doi}
-                </a>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      <div className="pt-2 border-t border-rule/60 flex items-center justify-between text-[10px] text-draft opacity-80 flex-shrink-0">
-        <span>Department of Computer Engineering</span>
-        <span>Peer-Reviewed Scholarly Publications</span>
-      </div>
+      {/* Bottom Inspirational Quote (only if not in classic frame) */}
+      {!isClassicFrame && (
+        <div className="text-center pt-3 border-t border-slate-200 mt-auto flex-shrink-0">
+          <p className="text-[11.5px] italic text-slate-700 font-serif">
+            {data?.quote || defaultQuote}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -964,11 +1757,71 @@ export function StudentPreviewCard({ student, index, theme = getTemplate('modern
   );
 }
 
-function ToppersPage({ data, theme = getTemplate('modern-academic') }) {
+function ToppersPage({ data, theme = getTemplate('modern-academic'), isClassicFrame }) {
   const divisions = data?.divisions || [];
   const totalStudents = data?.totalStudents || 0;
   const classLabel = data?.classLabel || data?.class || 'Class Toppers';
   const classYear = data?.classYear || 'SE';
+  const isClassic = theme.id === 'reflection-classic' || isClassicFrame;
+
+  if (isClassic) {
+    return (
+      <div className="w-full h-full flex flex-col justify-start px-2 py-1 overflow-hidden select-none">
+        {totalStudents === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-center p-6 border-2 border-dashed border-slate-300 rounded-sm my-4">
+            <p className="text-xs font-semibold text-slate-500">No topper records added for {classYear}</p>
+          </div>
+        ) : (
+          <div className="flex-1 flex flex-col justify-around py-2 gap-3 overflow-visible">
+            {divisions.map((div) => {
+              const divNameClean = div.name.replace(/division\s*/i, '').trim();
+              const divTitle = divNameClean.startsWith(classYear) ? divNameClean : `${classYear} ${divNameClean}`;
+
+              return (
+                <div key={div.name} className="w-full">
+                  {/* Division Title in serif italic bold */}
+                  <h3 className="text-center font-serif italic font-bold text-[13px] text-black mb-2">
+                    {divTitle}
+                  </h3>
+
+                  {/* 6-Column Student Grid matching PDF Issue 32 */}
+                  <div className="grid grid-cols-6 gap-2 justify-items-center">
+                    {div.students.map((student, idx) => {
+                      const photo = student?.photo || student?.photoUrl;
+                      return (
+                        <div key={student.id || idx} className="flex flex-col items-center text-center w-24">
+                          <div className="w-[74px] h-[86px] border border-slate-800 bg-slate-100 overflow-hidden flex items-center justify-center shadow-2xs">
+                            {photo ? (
+                              <img
+                                src={photo}
+                                alt={student.name || 'Student'}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                  if (e.target.nextSibling) e.target.nextSibling.style.display = 'block';
+                                }}
+                              />
+                            ) : null}
+                            <span className={`text-[10px] text-slate-500 ${photo ? 'hidden' : 'block'}`}>Photo</span>
+                          </div>
+                          <p className="text-[9px] font-bold text-black uppercase text-center mt-1 leading-tight tracking-tight px-0.5">
+                            {student.name || 'STUDENT NAME'}
+                          </p>
+                          <p className="text-[9.5px] font-bold text-black text-center mt-0.5 font-sans">
+                            {student.cgpa || student.sgpa || '—'}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={`w-full h-full p-8 pb-12 flex flex-col overflow-hidden justify-between ${theme.fontBody}`} style={{ backgroundColor: theme.backgroundColor || '#FFFFFF' }}>
@@ -1073,9 +1926,79 @@ export function MagazinePageSheet({ page, pageNumber, totalPages, currentMagazin
 
   const activeTemplateId = templateId || currentMagazine?.template || 'modern-academic';
   const theme = getTemplate(activeTemplateId);
+  const isClassic = theme.id === 'reflection-classic';
+  const isCover = page.template === 'cover';
+  const issueNum = currentMagazine?.issueNumber || page.data?.issueNumber || '32';
 
   const TemplateComponent = PAGE_TEMPLATES[page.template] || PAGE_TEMPLATES.article;
-  const isCover = page.template === 'cover';
+
+  // Authentic Wadia COE Reflection Classic (Issue 32 Print Format) Frame for Interior Pages
+  if (isClassic && !isCover) {
+    const classicTitle = getClassicSectionTitle(page);
+    const quoteIndex = (pageNumber - 1) % CLASSIC_PAGE_QUOTES.length;
+    const classicQuote = CLASSIC_PAGE_QUOTES[quoteIndex] || '“Knowledge grows when it is shared with others”';
+
+    return (
+      <div
+        className="magazine-pdf-page bg-white relative flex flex-col overflow-hidden select-none"
+        data-page-index={pageNumber}
+        style={{
+          width: '794px',
+          height: '1123px',
+          boxSizing: 'border-box',
+          backgroundColor: '#FFFFFF',
+          position: 'relative',
+        }}
+      >
+        {/* Left Vertical Orange Accent Stripe (full page height) */}
+        <div
+          className="absolute left-0 top-0 bottom-0 w-3.5 bg-[#FF6600] z-30 pointer-events-none"
+          aria-hidden="true"
+        />
+
+        {/* Top Header Bar matching reference PDF: [ ISSUE XX ]  Section Title  [ Page - XX ] */}
+        <div className="flex items-center justify-between pt-7 px-9 pb-3 pl-12 flex-shrink-0 z-20">
+          {/* Left: Red outline box with ISSUE */}
+          <div className="border-2 border-[#D32F2F] px-4 py-1 min-w-[125px] flex-shrink-0 text-center shadow-2xs">
+            <span className="text-sm font-bold font-serif text-[#D32F2F] tracking-wider uppercase leading-normal">
+              ISSUE {issueNum}
+            </span>
+          </div>
+
+          {/* Center: Red Title */}
+          <div className="text-center flex-1 mx-4 min-w-0">
+            <h2 className="text-xl md:text-2xl font-serif font-bold text-[#D32F2F] tracking-wide leading-normal">
+              {classicTitle}
+            </h2>
+          </div>
+
+          {/* Right: Red outline box with Page - X */}
+          <div className="border-2 border-[#D32F2F] px-4 py-1 min-w-[105px] flex-shrink-0 text-center shadow-2xs">
+            <span className="text-sm font-bold font-serif text-[#D32F2F] tracking-wider leading-normal">
+              Page - {pageNumber}
+            </span>
+          </div>
+        </div>
+
+        {/* Page Content */}
+        <div className="flex-1 w-full pl-8 pr-4 pb-2 overflow-hidden flex flex-col min-h-0">
+          <TemplateComponent
+            data={page.data}
+            theme={theme}
+            pageNumber={pageNumber}
+            totalPages={totalPages}
+            currentMagazine={currentMagazine}
+            isClassicFrame
+          />
+        </div>
+
+        {/* Bottom Footer Inspirational Quote */}
+        <div className="text-center py-2.5 px-8 text-[11px] italic text-slate-800 font-serif border-t border-slate-200 mt-auto flex-shrink-0 z-20">
+          {classicQuote}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -1091,11 +2014,11 @@ export function MagazinePageSheet({ page, pageNumber, totalPages, currentMagazin
     >
       {/* Page Content with Theme */}
       <div className="flex-1 w-full h-full overflow-hidden">
-        <TemplateComponent data={page.data} theme={theme} />
+        <TemplateComponent data={page.data} theme={theme} pageNumber={pageNumber} totalPages={totalPages} currentMagazine={currentMagazine} />
       </div>
 
-      {/* Running Footer for Interior Pages */}
-      {!isCover && (
+      {/* Running Footer for Interior Pages (publications template has its own slide header/footer) */}
+      {!isCover && page.template !== 'publications' && (
         <div
           style={{
             position: 'absolute',
@@ -1119,10 +2042,6 @@ export function MagazinePageSheet({ page, pageNumber, totalPages, currentMagazin
     </div>
   );
 }
-
-// ── Dynamic Page Generator ───────────────────────────────────────────────────
-export { generateMagazinePages } from '../../utils/magazinePages';
-import { generateMagazinePages } from '../../utils/magazinePages';
 
 // ── Main PagePreview Component ────────────────────────────────────────────────
 

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useMagazine } from '../../../contexts/MagazineContext';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -54,40 +54,122 @@ export default function OnlineMagazineViewer() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const { magazines, sectionData, loadMagazine } = useMagazine();
+  const { magazines, currentMagazine, sectionData, loadMagazine } = useMagazine();
 
   const isStudent = user?.role === 'student' || location.pathname.startsWith('/student') || location.search.includes('from=student');
 
   const [currentPage, setCurrentPage] = useState(1);
-  const [zoom, setZoom] = useState(90);
+  const [zoom, setZoom] = useState(85);
+  const [viewMode, setViewMode] = useState('fit-page'); // 'fit-page' | 'fit-width' | 'manual'
   const [fullscreen, setFullscreen] = useState(false);
   const [search, setSearch] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   const printContainerRef = useRef(null);
-
-  const magazine = magazines.find(m => m.id === id) || magazines[0];
+  const viewportRef = useRef(null);
 
   useEffect(() => {
-    if (id && (!magazine || magazine.id !== id)) {
+    if (id && (!currentMagazine || currentMagazine.id !== id)) {
       loadMagazine(id);
     }
-  }, [id, magazine, loadMagazine]);
+  }, [id, currentMagazine, loadMagazine]);
+
+  const magazine = (currentMagazine && currentMagazine.id === id)
+    ? currentMagazine
+    : (magazines.find(m => m.id === id) || currentMagazine || magazines[0]);
+
+  const effectiveSectionData = useMemo(() => {
+    if (currentMagazine && currentMagazine.id === id && sectionData && Object.keys(sectionData).length > 0) {
+      return sectionData;
+    }
+    if (magazine && (magazine.sectionData || magazine.section_data)) {
+      return magazine.sectionData || magazine.section_data;
+    }
+    return sectionData;
+  }, [currentMagazine, id, sectionData, magazine]);
 
   const pages = useMemo(() => {
-    return generateMagazinePages(magazine, sectionData);
-  }, [magazine, sectionData]);
+    return generateMagazinePages(magazine, effectiveSectionData);
+  }, [magazine, effectiveSectionData]);
 
   const totalPages = pages.length;
   const theme = getTemplate(magazine?.template || 'modern-academic');
 
-  const changeZoom = (delta) => setZoom(z => Math.min(140, Math.max(50, z + delta)));
+  // Dynamic Fit Scale calculation ensuring the whole A4 page fits the screen comfortably
+  const updateFitScale = useCallback(() => {
+    if (!viewportRef.current) return;
+    const { clientWidth, clientHeight } = viewportRef.current;
+    if (clientWidth <= 0 || clientHeight <= 0) return;
+
+    // Available space inside viewport container with padding margins
+    const availWidth = Math.max(200, clientWidth - 36);
+    const availHeight = Math.max(200, clientHeight - 36);
+
+    // Standard A4 dimensions in px: 794 x 1123
+    const fitPageScale = Math.min(availWidth / 794, availHeight / 1123);
+    const fitWidthScale = availWidth / 794;
+
+    if (viewMode === 'fit-page') {
+      const z = Math.round((fitPageScale / 0.72) * 100);
+      setZoom(Math.max(40, Math.min(130, z)));
+    } else if (viewMode === 'fit-width') {
+      const z = Math.round((fitWidthScale / 0.72) * 100);
+      setZoom(Math.max(50, Math.min(140, z)));
+    }
+  }, [viewMode]);
+
+  useEffect(() => {
+    updateFitScale();
+    let observer = null;
+    if (typeof ResizeObserver !== 'undefined' && viewportRef.current) {
+      observer = new ResizeObserver(() => updateFitScale());
+      observer.observe(viewportRef.current);
+    }
+    window.addEventListener('resize', updateFitScale);
+    return () => {
+      if (observer) observer.disconnect();
+      window.removeEventListener('resize', updateFitScale);
+    };
+  }, [updateFitScale]);
+
+  const changeZoom = (delta) => {
+    setViewMode('manual');
+    setZoom(z => Math.min(140, Math.max(45, z + delta)));
+  };
+
+  const handleFitPage = () => {
+    setViewMode('fit-page');
+  };
+
+  const handleFitWidth = () => {
+    setViewMode('fit-width');
+  };
 
   const goTo = (p) => {
     const clamped = Math.max(1, Math.min(totalPages, p));
     setCurrentPage(clamped);
+    // Scroll viewport to top on page transition
+    if (viewportRef.current) {
+      viewportRef.current.scrollTop = 0;
+    }
   };
+
+  // Keyboard navigation for page flip
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        goTo(currentPage - 1);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        goTo(currentPage + 1);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentPage, totalPages]);
 
   // Search through pages for keywords
   const searchResults = useMemo(() => {
@@ -141,7 +223,7 @@ export default function OnlineMagazineViewer() {
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
           </svg>
-          {isStudent ? 'Return to Magazines' : 'Back to Dashboard'}
+          {isStudent ? 'Return to Newsletters' : 'Back to Dashboard'}
         </button>
 
         <span className="text-slate-600 hidden sm:inline">|</span>
@@ -168,7 +250,7 @@ export default function OnlineMagazineViewer() {
                 type="text"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Search in magazine…"
+                placeholder="Search in newsletter…"
                 className="w-44 text-xs px-2.5 py-1.5 bg-slate-700 text-white border border-slate-600 rounded-sm focus:outline-none focus:border-blue-400 placeholder-slate-400"
               />
               {searchResults.length > 0 && (
@@ -193,17 +275,17 @@ export default function OnlineMagazineViewer() {
           <button
             onClick={() => setShowSearch(s => !s)}
             className="p-1.5 bg-slate-700/60 hover:bg-slate-700 border border-slate-600 rounded-sm transition-colors text-slate-300 hover:text-white"
-            title="Search magazine text"
+            title="Search newsletter text"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
             </svg>
           </button>
 
-          {/* Zoom */}
+          {/* Zoom & Fit Controls */}
           <div className="flex items-center gap-1 bg-slate-700/60 border border-slate-600 rounded-sm px-1">
             <button
-              onClick={() => changeZoom(-10)}
+              onClick={() => changeZoom(-8)}
               className="px-1.5 py-0.5 hover:bg-slate-600 rounded text-slate-300 hover:text-white font-bold text-sm"
               title="Zoom out"
             >
@@ -211,11 +293,34 @@ export default function OnlineMagazineViewer() {
             </button>
             <span className="text-xs text-slate-300 font-mono w-10 text-center">{zoom}%</span>
             <button
-              onClick={() => changeZoom(10)}
+              onClick={() => changeZoom(8)}
               className="px-1.5 py-0.5 hover:bg-slate-600 rounded text-slate-300 hover:text-white font-bold text-sm"
               title="Zoom in"
             >
               +
+            </button>
+            <div className="h-3 w-px bg-slate-600 mx-0.5" />
+            <button
+              onClick={handleFitPage}
+              className={`px-1.5 py-0.5 text-[10px] rounded font-medium transition-colors ${
+                viewMode === 'fit-page'
+                  ? 'bg-blue-600 text-white shadow-2xs'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-600'
+              }`}
+              title="Fit entire page vertically on screen"
+            >
+              Fit Page
+            </button>
+            <button
+              onClick={handleFitWidth}
+              className={`px-1.5 py-0.5 text-[10px] rounded font-medium transition-colors ${
+                viewMode === 'fit-width'
+                  ? 'bg-blue-600 text-white shadow-2xs'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-600'
+              }`}
+              title="Fit page width to window"
+            >
+              Fit Width
             </button>
           </div>
 
@@ -275,33 +380,38 @@ export default function OnlineMagazineViewer() {
           </svg>
         </button>
 
-        {/* Center Canvas: Exact Rendered Page Sheet */}
-        <div className="flex-1 flex items-center justify-center overflow-auto p-4 select-none bg-slate-950/60">
-          <div
-            className="shadow-2xl transition-all duration-150 overflow-hidden relative bg-white"
-            style={{
-              width: `${Math.round(794 * (zoom / 100) * 0.72)}px`,
-              height: `${Math.round(1123 * (zoom / 100) * 0.72)}px`,
-            }}
-          >
+        {/* Center Canvas: Exact Rendered Page Sheet with Safe Top-Scroll Origin */}
+        <div
+          ref={viewportRef}
+          className="flex-1 overflow-auto p-4 md:p-6 select-none bg-slate-950/60 min-h-0 relative scroll-smooth flex"
+        >
+          <div className="w-full min-h-full flex items-center justify-center m-auto">
             <div
+              className="shadow-2xl transition-all duration-150 overflow-hidden relative bg-white flex-shrink-0"
               style={{
-                width: '794px',
-                height: '1123px',
-                transform: `scale(${(zoom / 100) * 0.72})`,
-                transformOrigin: 'top left',
-                position: 'absolute',
-                top: 0,
-                left: 0,
+                width: `${Math.round(794 * (zoom / 100) * 0.72)}px`,
+                height: `${Math.round(1123 * (zoom / 100) * 0.72)}px`,
               }}
             >
-              <MagazinePageSheet
-                page={pages[currentPage - 1]}
-                pageNumber={currentPage}
-                totalPages={totalPages}
-                currentMagazine={magazine}
-                templateId={magazine?.template}
-              />
+              <div
+                style={{
+                  width: '794px',
+                  height: '1123px',
+                  transform: `scale(${(zoom / 100) * 0.72})`,
+                  transformOrigin: 'top left',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                }}
+              >
+                <MagazinePageSheet
+                  page={pages[currentPage - 1]}
+                  pageNumber={currentPage}
+                  totalPages={totalPages}
+                  currentMagazine={magazine}
+                  templateId={magazine?.template}
+                />
+              </div>
             </div>
           </div>
         </div>

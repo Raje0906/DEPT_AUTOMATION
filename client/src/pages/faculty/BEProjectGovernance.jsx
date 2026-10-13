@@ -4,6 +4,84 @@ import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../contexts/AuthContext';
 
+const Icons = {
+  search: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+    </svg>
+  ),
+  close: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+    </svg>
+  ),
+  download: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+    </svg>
+  ),
+  plus: (
+    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+    </svg>
+  ),
+  edit: (
+    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
+    </svg>
+  ),
+  trash: (
+    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+    </svg>
+  ),
+  transfer: (
+    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+    </svg>
+  ),
+  check: (
+    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+    </svg>
+  ),
+  users: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+    </svg>
+  ),
+  overview: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+    </svg>
+  ),
+  stages: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
+    </svg>
+  ),
+  governance: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.504-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.003 0H9.497m5.003 0a3.375 3.375 0 003.375-3.375V6.75A2.25 2.25 0 0015.625 4.5h-7.25A2.25 2.25 0 006.125 6.75v5.25a3.375 3.375 0 003.375 3.375z" />
+    </svg>
+  ),
+  copy: (
+    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
+    </svg>
+  ),
+  spreadsheet: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v18h16.5V3H3.75zm3 3h10.5v3H6.75V6zm0 4.5h10.5v3H6.75v-3zm0 4.5h10.5v3H6.75v-3z" />
+    </svg>
+  ),
+  document: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+    </svg>
+  )
+};
+
 export default function BEProjectGovernance() {
   const { user } = useAuth();
   const isHOD = user?.role === 'hod';
@@ -30,6 +108,21 @@ export default function BEProjectGovernance() {
   // Modals & form state
   const [guideModalGroup, setGuideModalGroup] = useState(null);
   const [selectedGuideId, setSelectedGuideId] = useState('');
+
+  // Guide Assignments Export Dropdown & PDF State
+  const [guideExportOpen, setGuideExportOpen] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const guideExportRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (guideExportRef.current && !guideExportRef.current.contains(e.target)) {
+        setGuideExportOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const [stageModal, setStageModal] = useState(null); // new or edit
   const [stageForm, setStageForm] = useState({
@@ -112,6 +205,10 @@ export default function BEProjectGovernance() {
     is_leader: false,
   });
   const [submittingStudent, setSubmittingStudent] = useState(false);
+  const [prnSuggestions, setPrnSuggestions] = useState([]);
+  const [searchingPrn, setSearchingPrn] = useState(false);
+  const [prnMatchedStudent, setPrnMatchedStudent] = useState(null);
+  const [showPrnDropdown, setShowPrnDropdown] = useState(false);
 
   const [transferModal, setTransferModal] = useState(null); // { group, member }
   const [transferTargetGroupId, setTransferTargetGroupId] = useState('');
@@ -443,10 +540,10 @@ export default function BEProjectGovernance() {
       if (res.data.warnings && res.data.warnings.length > 0) {
         toast((t) => (
           <div className="text-xs">
-            <p className="font-bold">⚠️ COI Protection Applied:</p>
+            <p className="font-bold">Conflict of Interest Protection Applied:</p>
             <p>{res.data.warnings.length} guide conflict(s) safely bypassed.</p>
           </div>
-        ), { duration: 5000, icon: '🛡️' });
+        ), { duration: 5000 });
       }
 
       setRangeAssignModal(false);
@@ -570,6 +667,291 @@ export default function BEProjectGovernance() {
     }
   };
 
+  // Generate and Download Official Guide Assignments PDF
+  // Generate and Download Official Guide Assignments PDF (Matrix layout mirroring Excel)
+  const handleExportGuideAssignmentsPdf = async () => {
+    const targetGroups = (selectedDivision && selectedDivision !== 'ALL') ? filteredGroups : groups;
+    if (!targetGroups || targetGroups.length === 0) {
+      toast.error('No project groups available to export.');
+      return;
+    }
+
+    setExportingPdf(true);
+    const toastId = toast.loading('Generating Guide Assignments PDF...');
+
+    try {
+      const [jspdfModule, autoTableModule] = await Promise.all([
+        import('jspdf'),
+        import('jspdf-autotable')
+      ]);
+
+      const jsPDF = jspdfModule.jsPDF || jspdfModule.default;
+      const autoTable = autoTableModule.default || autoTableModule.autoTable || autoTableModule;
+
+      const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'pt',
+        format: 'a4'
+      });
+
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 28; // Compact printable margin (785.89 pt usable)
+
+      // Institutional Header
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(13);
+      doc.setTextColor(20, 28, 56);
+      doc.text('MES WADIA COLLEGE OF ENGINEERING, PUNE - 411001', pageWidth / 2, 34, { align: 'center' });
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.setTextColor(70, 80, 95);
+      doc.text('(Affiliated to Savitribai Phule Pune University • Approved by AICTE)', pageWidth / 2, 46, { align: 'center' });
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(20, 28, 56);
+      doc.text('DEPARTMENT OF COMPUTER ENGINEERING', pageWidth / 2, 60, { align: 'center' });
+
+      // Title Bar
+      doc.setDrawColor(27, 94, 32);
+      doc.setLineWidth(1);
+      doc.line(margin, 68, pageWidth - margin, 68);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10.5);
+      doc.setTextColor(27, 94, 32); // Institutional Forest Green matching Excel
+      doc.text('FINAL YEAR B.E. PROJECT — GUIDE ALLOCATION & TOPIC ASSIGNMENT', pageWidth / 2, 81, { align: 'center' });
+
+      // Metadata info row
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(60, 60, 60);
+
+      const dateStr = new Date().toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      });
+
+      const divLabel = selectedDivision && selectedDivision !== 'ALL' ? selectedDivision : 'All Divisions';
+      doc.text(`Academic Year: AY ${academicYear}`, margin, 94);
+      doc.text(`Division: ${divLabel}`, margin + 175, 94);
+      doc.text(`Total Project Groups: ${targetGroups.length}`, pageWidth / 2 + 50, 94);
+      doc.text(`Date: ${dateStr}`, pageWidth - margin, 94, { align: 'right' });
+
+      // Prepare Matrix Table Rows matching Excel layout with merged cells
+      const tableData = [];
+
+      targetGroups.forEach((g, gIdx) => {
+        const members = g.members || [];
+        const maxRows = Math.max(members.length, 3);
+        const groupNum = g.group_code ? (parseInt(g.group_code.split('-').pop(), 10) || (gIdx + 1)) : (gIdx + 1);
+        const groupDiv = members[0]?.division || g.batch || 'BE-1';
+        const domainName = g.domain || '—';
+        const guideName = g.guide_name || g.proposed_guide_name || 'Unassigned';
+
+        for (let r = 0; r < maxRows; r++) {
+          const m = members[r] || null;
+          let topicText = '';
+          if (r === 0 && g.title) topicText = `1. ${g.title}`;
+          else if (r === 1 && g.title_2) topicText = `2. ${g.title_2}`;
+          else if (r === 2 && g.title_3) topicText = `3. ${g.title_3}`;
+
+          const studentDisplayName = m ? ((m.name || m.student_name || '—') + (m.is_leader ? ' [Leader]' : '')) : '';
+          const studentPRN = m ? (m.roll_no || m.prn || '') : '';
+          const studentDiv = m ? (m.division || groupDiv) : '';
+
+          if (r === 0) {
+            tableData.push([
+              {
+                content: String(groupNum),
+                rowSpan: maxRows,
+                styles: { halign: 'center', valign: 'middle', fontStyle: 'bold' }
+              },
+              {
+                content: studentDisplayName,
+                styles: { halign: 'left', valign: 'middle', fontStyle: m?.is_leader ? 'bold' : 'normal' }
+              },
+              {
+                content: studentPRN,
+                styles: { halign: 'center', valign: 'middle' }
+              },
+              {
+                content: studentDiv,
+                styles: { halign: 'center', valign: 'middle' }
+              },
+              {
+                content: domainName,
+                rowSpan: maxRows,
+                styles: { halign: 'center', valign: 'middle' }
+              },
+              {
+                content: guideName,
+                rowSpan: maxRows,
+                styles: { halign: 'center', valign: 'middle', fontStyle: 'bold' }
+              },
+              {
+                content: topicText,
+                styles: { halign: 'left', valign: 'middle' }
+              }
+            ]);
+          } else {
+            tableData.push([
+              {
+                content: studentDisplayName,
+                styles: { halign: 'left', valign: 'middle', fontStyle: m?.is_leader ? 'bold' : 'normal' }
+              },
+              {
+                content: studentPRN,
+                styles: { halign: 'center', valign: 'middle' }
+              },
+              {
+                content: studentDiv,
+                styles: { halign: 'center', valign: 'middle' }
+              },
+              {
+                content: topicText,
+                styles: { halign: 'left', valign: 'middle' }
+              }
+            ]);
+          }
+        }
+
+        // Blank separator row matching Excel's emptyRow
+        if (gIdx < targetGroups.length - 1) {
+          tableData.push([
+            {
+              content: '',
+              colSpan: 7,
+              styles: {
+                minCellHeight: 4,
+                cellPadding: 0,
+                fillColor: [255, 255, 255],
+                lineColor: [225, 230, 238],
+                lineWidth: 0.5
+              }
+            }
+          ]);
+        }
+      });
+
+      autoTable(doc, {
+        head: [['Group No', 'Name of Student', 'College PRN', 'Division', 'Domain Name', 'Guide Name', '3 Project Topics']],
+        body: tableData,
+        startY: 104,
+        margin: { top: 32, left: margin, right: margin, bottom: 45 },
+        theme: 'grid',
+        rowPageBreak: 'avoid',
+        headStyles: {
+          fillColor: [232, 245, 233], // Excel Light Green #E8F5E9
+          textColor: [27, 94, 32],    // Excel Dark Green #1B5E20
+          fontSize: 8.5,
+          fontStyle: 'bold',
+          halign: 'center',
+          valign: 'middle',
+          lineColor: [165, 214, 167], // #A5D6A7
+          lineWidth: 0.75,
+          minCellHeight: 22,
+          cellPadding: 4
+        },
+        bodyStyles: {
+          fontSize: 7.5,
+          textColor: [30, 30, 30],
+          cellPadding: { top: 3.5, bottom: 3.5, left: 4.5, right: 4.5 },
+          valign: 'middle',
+          lineColor: [210, 215, 225],
+          lineWidth: 0.5
+        },
+        columnStyles: {
+          0: { cellWidth: 46, halign: 'center' },
+          1: { cellWidth: 136, halign: 'left' },
+          2: { cellWidth: 68, halign: 'center' },
+          3: { cellWidth: 44, halign: 'center' },
+          4: { cellWidth: 106, halign: 'center' },
+          5: { cellWidth: 110, halign: 'center' },
+          6: { cellWidth: 275.89, halign: 'left' }
+        }
+      });
+
+      // Signature Block on final page
+      const finalY = doc.lastAutoTable.finalY || 450;
+      let signY = finalY + 36;
+
+      if (signY > pageHeight - 65) {
+        doc.addPage();
+        signY = 70;
+      }
+
+      doc.setDrawColor(180, 180, 180);
+      doc.setLineWidth(0.5);
+
+      const col1X = margin + 35;
+      doc.line(col1X, signY, col1X + 130, signY);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.setTextColor(40, 40, 40);
+      doc.text('Project Coordinator', col1X + 65, signY + 14, { align: 'center' });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.text('Dept. of Computer Engg.', col1X + 65, signY + 25, { align: 'center' });
+
+      const col2X = pageWidth / 2 - 65;
+      doc.line(col2X, signY, col2X + 130, signY);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.text('Academic Coordinator', col2X + 65, signY + 14, { align: 'center' });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.text('MES WCOE Pune', col2X + 65, signY + 25, { align: 'center' });
+
+      const col3X = pageWidth - margin - 165;
+      doc.line(col3X, signY, col3X + 130, signY);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.text('Head of Department', col3X + 65, signY + 14, { align: 'center' });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.text('Dept. of Computer Engg.', col3X + 65, signY + 25, { align: 'center' });
+
+      // Clean footer stamped across all pages
+      const totalPages = doc.internal.getNumberOfPages();
+      for (let p = 1; p <= totalPages; p++) {
+        doc.setPage(p);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(120, 120, 120);
+        doc.text(
+          `Page ${p} of ${totalPages}`,
+          pageWidth / 2,
+          pageHeight - 16,
+          { align: 'center' }
+        );
+        doc.text(
+          'Department of Computer Engineering • MES WCOE Pune',
+          margin,
+          pageHeight - 16
+        );
+        doc.text(
+          `Academic Year: AY ${academicYear}`,
+          pageWidth - margin,
+          pageHeight - 16,
+          { align: 'right' }
+        );
+      }
+
+      const cleanFileName = `BE_Project_Guide_Assignments_${academicYear.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
+      doc.save(cleanFileName);
+      toast.success(`Downloaded: ${cleanFileName}`, { id: toastId });
+    } catch (pdfErr) {
+      console.error('Error generating Guide Assignments PDF:', pdfErr);
+      toast.error('Failed to generate PDF: ' + (pdfErr.message || 'Unknown error'), { id: toastId });
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
   const handleExportScoreExcel = async () => {
     try {
       const res = await api.get(`/projects/export/score-excel?academic_year=${academicYear}`, {
@@ -640,7 +1022,7 @@ export default function BEProjectGovernance() {
   };
 
   const handlePurgeAllGroups = async () => {
-    if (!window.confirm(`⚠️ DANGER: Are you sure you want to DELETE ALL registered project group forms for Academic Year ${academicYear}?\n\nThis will permanently remove all ${groups.length} registered groups and their member details. This action CANNOT be undone.`)) {
+    if (!window.confirm(`Are you sure you want to reset and clear all registered project group forms for Academic Year ${academicYear}?\n\nThis will permanently remove all ${groups.length} registered groups and student choices. This action cannot be undone.`)) {
       return;
     }
     setSubmitting(true);
@@ -655,7 +1037,24 @@ export default function BEProjectGovernance() {
     }
   };
 
+  // Helper to map department divisions (like 'TE Comp 2', 'A', '2', etc.) to standard project batches 'BE-1'..'BE-4'
+  const mapToBEDivision = (div, defaultBatch = 'BE-1') => {
+    if (!div) return defaultBatch;
+    const s = String(div).toUpperCase().trim();
+    if (s.includes('BE-1') || s === 'A' || s.endsWith(' 1') || s === '1' || s.includes('COMP 1')) return 'BE-1';
+    if (s.includes('BE-2') || s === 'B' || s.endsWith(' 2') || s === '2' || s.includes('COMP 2')) return 'BE-2';
+    if (s.includes('BE-3') || s === 'C' || s.endsWith(' 3') || s === '3' || s.includes('COMP 3')) return 'BE-3';
+    if (s.includes('BE-4') || s === 'D' || s.endsWith(' 4') || s === '4' || s.includes('COMP 4')) return 'BE-4';
+    if (['BE-1', 'BE-2', 'BE-3', 'BE-4'].includes(s)) return s;
+    return defaultBatch;
+  };
+
   const handleOpenAddStudent = (group) => {
+    const memCount = group.members?.length || group.members_count || 0;
+    if (memCount >= 4) {
+      toast.error(`Group ${group.group_code} is already full (maximum capacity of 4 members reached).`);
+      return;
+    }
     setStudentModal({ mode: 'add', group });
     setStudentForm({
       name: '',
@@ -665,6 +1064,10 @@ export default function BEProjectGovernance() {
       mobile_no: '',
       is_leader: false,
     });
+    setPrnSuggestions([]);
+    setSearchingPrn(false);
+    setPrnMatchedStudent(null);
+    setShowPrnDropdown(false);
   };
 
   const handleOpenEditStudent = (group, member) => {
@@ -677,7 +1080,84 @@ export default function BEProjectGovernance() {
       mobile_no: member.mobile_no || '',
       is_leader: Boolean(member.is_leader),
     });
+    setPrnSuggestions([]);
+    setSearchingPrn(false);
+    setPrnMatchedStudent(null);
+    setShowPrnDropdown(false);
   };
+
+  const handleSelectStudentSuggestion = (s) => {
+    setStudentForm((prev) => ({
+      ...prev,
+      name: s.name || prev.name,
+      roll_no: s.enrollment_no || s.roll_no || prev.roll_no,
+      division: mapToBEDivision(s.division, studentModal?.group?.batch || prev.division),
+      email: s.email || prev.email,
+      mobile_no: s.mobile_no || prev.mobile_no,
+    }));
+    setPrnMatchedStudent(s);
+    setShowPrnDropdown(false);
+    setPrnSuggestions([]);
+    if (s.current_group_code) {
+      toast(`Note: Student is currently registered in ${s.current_group_code} (will be transferred automatically upon saving).`);
+    } else {
+      toast.success(`Loaded ${s.name} (${s.enrollment_no || s.roll_no})`);
+    }
+  };
+
+  // Debounced PRN lookup to automatically pop up student name
+  useEffect(() => {
+    if (!studentModal || studentModal.mode !== 'add') {
+      setPrnSuggestions([]);
+      setShowPrnDropdown(false);
+      return;
+    }
+    const q = (studentForm.roll_no || '').trim();
+    if (q.length < 2) {
+      setPrnSuggestions([]);
+      setShowPrnDropdown(false);
+      setPrnMatchedStudent(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setSearchingPrn(true);
+      try {
+        const res = await api.get(`/projects/hod/students/search?academic_year=${academicYear}&q=${encodeURIComponent(q)}`);
+        const list = res.data || [];
+        setPrnSuggestions(list);
+        if (list.length > 0) {
+          setShowPrnDropdown(true);
+          // Check for exact match on enrollment_no or roll_no (case-insensitive)
+          const queryUpper = q.toUpperCase();
+          const exact = list.find((item) => {
+            const enr = String(item.enrollment_no || '').trim().toUpperCase();
+            const rNo = String(item.roll_no || '').trim().toUpperCase();
+            return enr === queryUpper || rNo === queryUpper;
+          });
+          if (exact) {
+            setPrnMatchedStudent(exact);
+            setStudentForm((prev) => ({
+              ...prev,
+              name: exact.name || prev.name,
+              division: mapToBEDivision(exact.division, studentModal?.group?.batch || prev.division),
+              email: exact.email || prev.email,
+              mobile_no: exact.mobile_no || prev.mobile_no,
+            }));
+          }
+        } else {
+          setShowPrnDropdown(false);
+          setPrnMatchedStudent(null);
+        }
+      } catch (err) {
+        console.error('Failed to search student by PRN:', err);
+      } finally {
+        setSearchingPrn(false);
+      }
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [studentForm.roll_no, studentModal, academicYear]);
 
   const handleOpenEditGroup = (group) => {
     setEditGroupModal(group);
@@ -710,7 +1190,7 @@ export default function BEProjectGovernance() {
   };
 
   const handleDeleteGroup = async (group) => {
-    if (!window.confirm(`⚠️ Are you sure you want to delete Project Group "${group.group_code}"?\n\nThis will remove the group and all its members permanently.`)) {
+    if (!window.confirm(`Are you sure you want to delete Project Group "${group.group_code}"?\n\nThis will remove the group and all its members permanently.`)) {
       return;
     }
     try {
@@ -923,17 +1403,30 @@ export default function BEProjectGovernance() {
 
   return (
     <div className="p-8 lg:p-10 w-full max-w-7xl mx-auto space-y-8">
-      {/* Header */}
+      {/* Institutional Header */}
       <div className="pb-5 border-b border-rule flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-serif text-3xl font-bold text-ink">BE Project Governance Center</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="font-serif text-2xl lg:text-3xl font-bold text-ink">BE Project Governance</h1>
+            <span className="px-2.5 py-0.5 rounded text-xs font-semibold bg-white text-navy border border-rule shadow-2xs">
+              Coordinator Console
+            </span>
+            {isHOD && (
+              <span className="px-2.5 py-0.5 rounded text-xs font-semibold bg-blue-50 text-navy border border-blue-200">
+                HOD Oversight
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-draft mt-1 font-medium">
+            Department of Computer Engineering · Academic Year {academicYear}
+          </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <label className="text-xs font-semibold text-draft">Academic Year:</label>
           <select
             value={academicYear}
             onChange={(e) => setAcademicYear(e.target.value)}
-            className="input-field py-1 text-xs font-mono font-bold"
+            className="input-field py-1 text-xs font-mono font-bold max-w-[140px]"
           >
             <option value="2026-27">2026-27 (Current)</option>
             <option value="2025-26">2025-26</option>
@@ -942,44 +1435,29 @@ export default function BEProjectGovernance() {
         </div>
       </div>
 
-      {/* Role Banner */}
-      {isHOD && (
-        <div className="bg-blue-50/70 border border-blue-200 text-blue-950 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-semibold shadow-xs">
-          <div className="flex items-center gap-2.5">
-            <span className="text-xl">🏛️</span>
-            <div>
-              <p className="font-bold text-navy">Head of Department (HOD) Oversight Active</p>
-              <p className="text-[11px] text-draft font-normal mt-0.5">
-                Direct oversight of BE Projects (AY {academicYear}). Guide assignments, continuous assessment stages, and panel scoring are synced in real-time.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="flex items-center gap-2.5 border-b border-rule pb-3 overflow-x-auto">
+      {/* Tabs Navigation */}
+      <div className="flex items-center gap-2 border-b border-rule pb-3 overflow-x-auto">
         <button
           type="button"
           onClick={() => setActiveTab('overview')}
-          className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-md border transition-all whitespace-nowrap ${activeTab === 'overview'
+          className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-sm border transition-all whitespace-nowrap ${activeTab === 'overview'
             ? 'bg-navy text-white border-navy shadow-xs'
-            : 'bg-white text-slate-700 border-rule hover:bg-slate-50 hover:text-ink hover:border-slate-300 shadow-2xs'
+            : 'bg-white text-slate-700 border-rule hover:bg-slate-50 hover:text-ink shadow-2xs'
             }`}
         >
-          <span className="text-sm">📊</span>
-          <span>Governance Overview</span>
+          {Icons.overview}
+          <span>Overview &amp; Allocation</span>
         </button>
         <button
           type="button"
           onClick={() => setActiveTab('groups')}
-          className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-md border transition-all whitespace-nowrap ${activeTab === 'groups'
+          className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-sm border transition-all whitespace-nowrap ${activeTab === 'groups'
             ? 'bg-navy text-white border-navy shadow-xs'
-            : 'bg-white text-slate-700 border-rule hover:bg-slate-50 hover:text-ink hover:border-slate-300 shadow-2xs'
+            : 'bg-white text-slate-700 border-rule hover:bg-slate-50 hover:text-ink shadow-2xs'
             }`}
         >
-          <span className="text-sm">👥</span>
-          <span>Groups, Guides &amp; Mentors</span>
+          {Icons.users}
+          <span>Project Groups &amp; Guides</span>
           <span
             className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${activeTab === 'groups'
               ? 'bg-white/20 text-white'
@@ -992,12 +1470,12 @@ export default function BEProjectGovernance() {
         <button
           type="button"
           onClick={() => setActiveTab('stages')}
-          className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-md border transition-all whitespace-nowrap ${activeTab === 'stages'
+          className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-sm border transition-all whitespace-nowrap ${activeTab === 'stages'
             ? 'bg-navy text-white border-navy shadow-xs'
-            : 'bg-white text-slate-700 border-rule hover:bg-slate-50 hover:text-ink hover:border-slate-300 shadow-2xs'
+            : 'bg-white text-slate-700 border-rule hover:bg-slate-50 hover:text-ink shadow-2xs'
             }`}
         >
-          <span className="text-sm">📝</span>
+          {Icons.stages}
           <span>Evaluation Stages</span>
           <span
             className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${activeTab === 'stages'
@@ -1011,13 +1489,13 @@ export default function BEProjectGovernance() {
         <button
           type="button"
           onClick={() => setActiveTab('governance')}
-          className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-md border transition-all whitespace-nowrap ${activeTab === 'governance'
+          className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-sm border transition-all whitespace-nowrap ${activeTab === 'governance'
             ? 'bg-navy text-white border-navy shadow-xs'
-            : 'bg-white text-slate-700 border-rule hover:bg-slate-50 hover:text-ink hover:border-slate-300 shadow-2xs'
+            : 'bg-white text-slate-700 border-rule hover:bg-slate-50 hover:text-ink shadow-2xs'
             }`}
         >
-          <span className="text-sm">🔓</span>
-          <span>Score Release &amp; Unlocks</span>
+          {Icons.governance}
+          <span>Panel Matrix &amp; Scores</span>
         </button>
       </div>
 
@@ -1065,7 +1543,7 @@ export default function BEProjectGovernance() {
                   className="px-3.5 py-2 bg-navy text-white hover:bg-slate-800 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-2xs"
                   title="Designate all eligible non-mentor faculty as Guides for this academic year"
                 >
-                  <span>✓</span> Assign All Eligible as Guides
+                  <span className="text-emerald-300">{Icons.check}</span> <span>Assign All Eligible as Guides</span>
                 </button>
               </div>
             </div>
@@ -1080,16 +1558,17 @@ export default function BEProjectGovernance() {
                     placeholder="Search faculty by name, employee ID, or designation…"
                     value={facultySearch}
                     onChange={(e) => setFacultySearch(e.target.value)}
-                    className="w-full px-3.5 py-2 pl-9 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-navy focus:border-navy outline-none transition-all placeholder:text-slate-400 font-medium"
+                    className="w-full px-3.5 py-2 pl-9 pr-9 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-navy focus:border-navy outline-none transition-all placeholder:text-slate-400 font-medium"
                   />
-                  <span className="absolute left-3 top-2.5 text-slate-400 text-sm">🔍</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none flex items-center">{Icons.search}</span>
                   {facultySearch && (
                     <button
                       type="button"
                       onClick={() => setFacultySearch('')}
-                      className="absolute right-3 top-2 text-slate-400 hover:text-slate-600 text-xs font-bold p-1 rounded-full hover:bg-slate-100"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors flex items-center justify-center"
+                      title="Clear search"
                     >
-                      ✕
+                      {Icons.close}
                     </button>
                   )}
                 </div>
@@ -1185,12 +1664,12 @@ export default function BEProjectGovernance() {
                           <td>
                             {isMentor ? (
                               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-purple-50 text-purple-800 border border-purple-200">
-                                <span>🛡️</span>
+
                                 <span>Panel Mentor</span>
                               </span>
                             ) : isGuide ? (
                               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                                <span>✓</span>
+                                <span className="text-emerald-300">{Icons.check}</span>
                                 <span>BE Project Guide</span>
                               </span>
                             ) : (
@@ -1228,7 +1707,7 @@ export default function BEProjectGovernance() {
                                     : 'Click to remove guide designation'
                                 }
                               >
-                                {isToggling ? 'Updating...' : Number(fac.guided_groups) > 0 ? '✓ Active (Guiding)' : '✓ Guide (Click to Remove)'}
+                                {isToggling ? 'Updating...' : Number(fac.guided_groups) > 0 ? 'Active Guide' : 'Designated Guide'}
                               </button>
                             ) : (
                               <button
@@ -1272,7 +1751,7 @@ export default function BEProjectGovernance() {
                   onClick={handleExportFormResponses}
                   className="px-3.5 py-1.5 bg-indigo-700 hover:bg-indigo-800 text-white rounded text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
                 >
-                  <span>📥</span> Form Responses (Excel)
+                  {Icons.spreadsheet} <span>Form Responses (Excel)</span>
                 </button>
               </div>
             </div>
@@ -1281,7 +1760,7 @@ export default function BEProjectGovernance() {
               {/* Controls Panel */}
               <div className="space-y-4 bg-paper/50 p-4 border border-rule rounded-md">
                 <h4 className="font-semibold text-sm text-ink flex items-center gap-2">
-                  <span>📅</span> Registration Window
+                  <span>Registration Window &amp; Deadlines</span>
                 </h4>
 
                 <div className="space-y-4">
@@ -1300,7 +1779,7 @@ export default function BEProjectGovernance() {
                         : 'bg-red-600 hover:bg-red-700 text-white'
                         }`}
                     >
-                      {regSettings.is_registration_open ? '✓ Enabled (Click to Close Form)' : '🔒 Closed (Click to Open Form)'}
+                      {regSettings.is_registration_open ? 'Close Registration' : 'Open Registration'}
                     </button>
                   </div>
 
@@ -1338,10 +1817,10 @@ export default function BEProjectGovernance() {
                     {regSettings.due_date && (
                       <div className="text-xs text-draft mt-2 font-mono bg-paper p-2.5 rounded border border-rule space-y-1">
                         <div className="flex items-center gap-4 flex-wrap">
-                          <span>📅 <strong>Due Date:</strong> <span className="text-ink font-bold">{new Date(regSettings.due_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span></span>
-                          <span>⏰ <strong>Due Time:</strong> <span className="text-ink font-bold">{new Date(regSettings.due_date).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}</span></span>
+                          <span><strong>Deadline Date:</strong> <span className="text-ink font-bold">{new Date(regSettings.due_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span></span>
+                          <span><strong>Deadline Time:</strong> <span className="text-ink font-bold">{new Date(regSettings.due_date).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}</span></span>
                         </div>
-                        {regSettings.is_past_due_date && <p className="text-red-600 font-bold mt-1">⚠️ Deadline Passed</p>}
+                        {regSettings.is_past_due_date && <p className="text-red-600 font-semibold text-[11px] mt-1">● Deadline has passed</p>}
                       </div>
                     )}
                   </div>
@@ -1352,7 +1831,7 @@ export default function BEProjectGovernance() {
               <div className="space-y-4 bg-red-50/40 p-4 border border-red-200 rounded-md flex flex-col justify-between">
                 <div>
                   <h4 className="font-semibold text-sm text-red-900 flex items-center gap-2">
-                    <span>⚠️</span> Danger Zone: Reset Registered Forms
+                    <span>Administrative Action: Reset Registered Forms</span>
                   </h4>
                   <p className="text-xs text-red-800 mt-2 leading-relaxed">
                     Delete all registered BE project group forms for Academic Year <strong>{academicYear}</strong> ({groups.length} registered groups).
@@ -1367,7 +1846,7 @@ export default function BEProjectGovernance() {
                     disabled={groups.length === 0}
                     className="w-full py-2.5 px-4 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold text-xs rounded transition-colors shadow-xs flex items-center justify-center gap-2"
                   >
-                    <span>🗑️</span> Delete All Forms Registered ({groups.length} Groups)
+                    {Icons.trash} <span>Reset All Registered Forms ({groups.length} Groups)</span>
                   </button>
                 </div>
               </div>
@@ -1379,11 +1858,8 @@ export default function BEProjectGovernance() {
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-rule pb-3">
               <div>
                 <h3 className="font-serif text-base font-bold text-ink flex items-center gap-2">
-                  <span>🛡️</span> Evaluation Stage &amp; Batch Mentor Operations
+                  <span>Evaluation Stage &amp; Panel Mentors</span>
                 </h3>
-                <p className="text-xs text-draft mt-0.5">
-                  Select an evaluation stage to view and manage panel mentors across groups, or use bulk allocation operations.
-                </p>
               </div>
 
               {/* Stage Selector */}
@@ -1424,7 +1900,7 @@ export default function BEProjectGovernance() {
                 }}
                 className="px-3.5 py-2 bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold rounded flex items-center gap-1.5 shadow-xs transition-colors"
               >
-                <span>🎯</span> Assign Mentors by Range / Domain
+                {Icons.users} <span>Assign Mentors by Range / Domain</span>
               </button>
               <button
                 type="button"
@@ -1437,14 +1913,14 @@ export default function BEProjectGovernance() {
                 }}
                 className="px-3.5 py-2 bg-navy hover:bg-blue-900 text-white text-xs font-bold rounded flex items-center gap-1.5 shadow-xs transition-colors"
               >
-                <span>📋</span> Copy Stage Panels
+                {Icons.copy} <span>Copy Stage Panels</span>
               </button>
               <button
                 type="button"
                 onClick={handleClearStagePanels}
                 className="px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold rounded flex items-center gap-1.5 shadow-xs transition-colors"
               >
-                <span>🗑️</span> Clear Stage Panels
+                {Icons.trash} <span>Clear Stage Panels</span>
               </button>
               <button
                 type="button"
@@ -1456,7 +1932,7 @@ export default function BEProjectGovernance() {
                 }}
                 className="ml-auto px-3.5 py-2 bg-paper hover:bg-gray-100 text-ink border border-rule text-xs font-semibold rounded flex items-center gap-1.5 transition-colors"
               >
-                <span>➕</span> Single Group Manual Panel
+                {Icons.plus} <span>Manual Group Panel</span>
               </button>
             </div>
           </div>
@@ -1470,19 +1946,78 @@ export default function BEProjectGovernance() {
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleExportGuideAssignments}
-                  className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
-                >
-                  <span>📥</span> Guide Assignments (Excel)
-                </button>
+                {/* Guide Assignments Export Dropdown (Excel / PDF) */}
+                <div className="relative inline-block" ref={guideExportRef}>
+                  <button
+                    type="button"
+                    onClick={() => setGuideExportOpen((prev) => !prev)}
+                    className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
+                    title="Export Guide Assignments as Excel or PDF"
+                    aria-expanded={guideExportOpen}
+                  >
+                    {Icons.download}
+                    <span>Guide Assignments</span>
+                    <svg
+                      className={`w-3.5 h-3.5 ml-0.5 transition-transform duration-200 ${guideExportOpen ? 'rotate-180' : ''}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {guideExportOpen && (
+                    <div className="absolute right-0 sm:right-auto sm:left-0 mt-1.5 w-60 bg-white rounded-lg border border-slate-200 shadow-xl z-50 py-1 text-xs animate-fade-in">
+                      <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 flex items-center justify-between">
+                        <span>Export Format</span>
+                        <span className="text-[9px] font-normal text-slate-400">AY {academicYear}</span>
+                      </div>
+
+                      {/* Option 1: Excel */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setGuideExportOpen(false);
+                          handleExportGuideAssignments();
+                        }}
+                        className="w-full text-left px-3 py-2 flex items-center gap-2.5 hover:bg-emerald-50 text-slate-700 hover:text-emerald-900 transition-colors"
+                      >
+                        <span className="w-7 h-7 rounded bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs shrink-0">
+
+                        </span>
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-bold text-slate-800 text-xs">Excel Spreadsheet</span>
+                        </div>
+                      </button>
+
+                      {/* Option 2: PDF */}
+                      <button
+                        type="button"
+                        disabled={exportingPdf}
+                        onClick={() => {
+                          setGuideExportOpen(false);
+                          handleExportGuideAssignmentsPdf();
+                        }}
+                        className="w-full text-left px-3 py-2 flex items-center gap-2.5 hover:bg-rose-50 text-slate-700 hover:text-rose-900 transition-colors disabled:opacity-50"
+                      >
+                        <span className="w-7 h-7 rounded bg-rose-100 text-rose-800 flex items-center justify-center font-bold text-xs shrink-0">
+
+                        </span>
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-bold text-slate-800 text-xs">PDF Document</span>
+                        </div>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 <button
                   type="button"
                   onClick={handleClearAllGuides}
                   className="px-3 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors"
                 >
-                  <span>🗑️</span> Reset / Unassign All Guides
+                  {Icons.trash} <span>Unassign All Guides</span>
                 </button>
               </div>
             </div>
@@ -1497,13 +2032,15 @@ export default function BEProjectGovernance() {
                   onChange={(e) => setGroupSearch(e.target.value)}
                   className="input-field text-xs py-1.5 pl-8 pr-8 w-full"
                 />
-                <span className="absolute left-2.5 top-2 text-draft text-xs">🔍</span>
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-draft pointer-events-none flex items-center">{Icons.search}</span>
                 {groupSearch && (
                   <button
+                    type="button"
                     onClick={() => setGroupSearch('')}
-                    className="absolute right-2.5 top-1.5 text-draft hover:text-ink text-xs font-bold"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-draft hover:text-ink hover:bg-slate-100 rounded transition-colors flex items-center justify-center"
+                    title="Clear search"
                   >
-                    ✕
+                    {Icons.close}
                   </button>
                 )}
               </div>
@@ -1531,7 +2068,6 @@ export default function BEProjectGovernance() {
                 <thead>
                   <tr>
                     <th>Group Code</th>
-                    <th>Division</th>
                     <th>Title &amp; Domain</th>
                     <th>Team Members</th>
                     <th>Assigned Guide</th>
@@ -1543,7 +2079,7 @@ export default function BEProjectGovernance() {
                 <tbody>
                   {filteredGroups.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="text-center py-8 text-draft text-sm">
+                      <td colSpan={7} className="text-center py-8 text-draft text-sm">
                         No BE project groups matched the search or filter criteria.
                       </td>
                     </tr>
@@ -1554,21 +2090,8 @@ export default function BEProjectGovernance() {
                         <React.Fragment key={g.id}>
                           <tr className={isExpanded ? 'bg-blue-50/30' : ''}>
                             <td>
-                              <div className="font-mono text-sm font-bold text-navy flex items-center gap-1.5">
-                                <span>{g.group_code}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => setExpandedGroupId(isExpanded ? null : g.id)}
-                                  className="text-[11px] text-draft hover:text-navy px-1 rounded bg-gray-100 hover:bg-blue-100 transition-colors"
-                                  title="View full topic choices and team"
-                                >
-                                  {isExpanded ? '▲' : '▼'}
-                                </button>
-                              </div>
-                            </td>
-                            <td>
-                              <span className="px-2 py-0.5 rounded text-xs font-bold font-mono bg-paper border border-rule text-ink">
-                                {g.batch || 'BE-1'}
+                              <span className="font-mono text-sm font-bold text-navy whitespace-nowrap">
+                                {g.group_code}
                               </span>
                             </td>
                             <td className="max-w-xs">
@@ -1578,8 +2101,11 @@ export default function BEProjectGovernance() {
                             <td>
                               <div className="space-y-1">
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="px-2 py-0.5 rounded text-xs font-bold font-mono bg-blue-50 border border-blue-200 text-navy">
-                                    👥 {g.members?.length || g.members_count || 0} / 5
+                                  <span className={`px-2 py-0.5 rounded text-xs font-bold font-mono border ${(g.members?.length || g.members_count || 0) >= 4
+                                    ? 'bg-amber-50 border-amber-300 text-amber-900'
+                                    : 'bg-blue-50 border-blue-200 text-navy'
+                                    }`}>
+                                    {g.members?.length || g.members_count || 0} / 4
                                   </span>
                                   <button
                                     type="button"
@@ -1591,7 +2117,7 @@ export default function BEProjectGovernance() {
                                   </button>
                                 </div>
                                 <div className="text-[11px] text-draft truncate max-w-[190px]" title={g.members?.find(m => m.is_leader)?.name || g.leader_name}>
-                                  👑 {g.members?.find(m => m.is_leader)?.name || g.leader_name || 'Leader unassigned'}
+                                  {g.members?.find(m => m.is_leader)?.name || g.leader_name || 'Leader unassigned'}
                                 </div>
                               </div>
                             </td>
@@ -1613,9 +2139,7 @@ export default function BEProjectGovernance() {
                                 </div>
                               ) : (
                                 <div className="space-y-1">
-                                  <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded inline-block">
-                                    Unassigned
-                                  </span>
+                                  <span className="text-draft text-[11px] italic font-mono block">No guide assigned</span>
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -1683,29 +2207,23 @@ export default function BEProjectGovernance() {
                               </span>
                             </td>
                             <td className="text-right space-x-1.5 whitespace-nowrap">
-                              <button
-                                type="button"
-                                onClick={() => handleOpenAddStudent(g)}
-                                className="px-2 py-1 text-xs font-semibold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition-colors"
-                                title="Directly add a student to this group"
-                              >
-                                ➕ Add
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleOpenEditGroup(g)}
-                                className="px-2 py-1 text-xs font-semibold rounded bg-white hover:bg-gray-100 text-draft hover:text-ink border border-rule transition-colors"
-                                title="Edit group topic choices"
-                              >
-                                ✏️
-                              </button>
+                              {(g.members?.length || g.members_count || 0) < 4 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenAddStudent(g)}
+                                  className="px-2.5 py-1 text-xs font-semibold rounded border bg-slate-100 hover:bg-blue-50 hover:text-navy hover:border-blue-300 text-slate-700 border-slate-300 transition-colors shadow-2xs"
+                                  title="Add a student member to this group"
+                                >
+                                  {Icons.plus} Add
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 onClick={() => handleDeleteGroup(g)}
                                 className="px-2 py-1 text-xs font-semibold rounded bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 transition-colors"
                                 title="Delete this group"
                               >
-                                🗑️
+                                {Icons.trash}
                               </button>
                             </td>
                           </tr>
@@ -1713,20 +2231,20 @@ export default function BEProjectGovernance() {
                           {/* Expanded Details Row */}
                           {isExpanded && (
                             <tr className="bg-blue-50/20 border-b-2 border-blue-200">
-                              <td colSpan={8} className="p-4">
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 bg-white p-4 rounded border border-blue-200 shadow-2xs">
+                              <td colSpan={7} className="p-4">
+                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 bg-white p-4 rounded border border-blue-200 shadow-2xs">
                                   {/* 3 Project Topic Choices */}
-                                  <div className="space-y-3">
+                                  <div className="lg:col-span-5 xl:col-span-5 space-y-3">
                                     <div className="flex items-center justify-between border-b border-rule pb-2">
                                       <h4 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-navy flex items-center gap-1.5">
-                                        <span>📑</span> 3 Project Topic Preferences
+                                        3 Project Topic Preferences
                                       </h4>
                                       <button
                                         type="button"
                                         onClick={() => handleOpenEditGroup(g)}
-                                        className="px-2 py-0.5 text-[11px] font-semibold text-navy bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded transition-colors"
+                                        className="px-2 py-0.5 text-[11px] font-semibold text-navy bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded transition-colors shrink-0"
                                       >
-                                        ✏️ Edit Topics
+                                        {Icons.edit} <span>Edit Topics</span>
                                       </button>
                                     </div>
                                     <div className="space-y-2">
@@ -1750,19 +2268,25 @@ export default function BEProjectGovernance() {
                                   </div>
 
                                   {/* Team Members */}
-                                  <div className="space-y-3">
+                                  <div className="lg:col-span-7 xl:col-span-7 space-y-3">
                                     <div className="flex items-center justify-between border-b border-rule pb-2">
                                       <h4 className="text-xs font-bold uppercase tracking-wider text-navy flex items-center gap-1.5">
-                                        <span>👥</span> Student Team Members ({g.members?.length || 0})
+                                        Student Team Members ({g.members?.length || 0}/4)
                                       </h4>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleOpenAddStudent(g)}
-                                        className="px-2.5 py-1 bg-navy hover:bg-slate-800 text-white rounded text-[11px] font-bold flex items-center gap-1 transition-colors shadow-2xs"
-                                        title="Manually add a student to this project group"
-                                      >
-                                        <span>➕</span> Add Student
-                                      </button>
+                                      {(g.members?.length || 0) < 4 ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenAddStudent(g)}
+                                          className="px-2.5 py-1 rounded text-[11px] font-bold flex items-center gap-1 transition-colors shadow-2xs bg-navy hover:bg-slate-800 text-white"
+                                          title="Manually add a student to this project group"
+                                        >
+                                          {Icons.plus} <span>Add Student</span>
+                                        </button>
+                                      ) : (
+                                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                                          Full (4/4)
+                                        </span>
+                                      )}
                                     </div>
                                     <div className="overflow-x-auto">
                                       <table className="w-full text-xs">
@@ -1771,14 +2295,13 @@ export default function BEProjectGovernance() {
                                             <th className="py-1.5 px-2 text-left whitespace-nowrap">Role</th>
                                             <th className="py-1.5 px-2 text-left">Student Name</th>
                                             <th className="py-1.5 px-2 text-left whitespace-nowrap">PRN</th>
-                                            <th className="py-1.5 px-3 text-center whitespace-nowrap">Division</th>
                                             <th className="py-1.5 px-2 text-right whitespace-nowrap">Actions</th>
                                           </tr>
                                         </thead>
                                         <tbody className="divide-y divide-rule/60">
                                           {(g.members || []).length === 0 ? (
                                             <tr>
-                                              <td colSpan={5} className="py-4 text-center text-draft text-xs italic">
+                                              <td colSpan={4} className="py-4 text-center text-draft text-xs italic">
                                                 No students in this group yet. Click &quot;+ Add Student&quot; to manually add a member.
                                               </td>
                                             </tr>
@@ -1792,16 +2315,10 @@ export default function BEProjectGovernance() {
                                                     <span className="text-draft text-[11px]">Member</span>
                                                   )}
                                                 </td>
-                                                <td className="py-1.5 px-2">
-                                                  <div className="font-semibold text-ink">{m.name}</div>
-                                                  {m.email && <div className="text-[10px] text-draft font-mono">{m.email}</div>}
+                                                <td className="py-1.5 px-2 align-middle">
+                                                  <div className="text-xs font-semibold text-ink leading-snug">{m.name}</div>
                                                 </td>
                                                 <td className="py-1.5 px-2 font-mono text-draft whitespace-nowrap">{m.roll_no}</td>
-                                                <td className="py-1.5 px-3 text-center whitespace-nowrap">
-                                                  <span className="px-2 py-0.5 rounded text-[11px] font-bold font-mono bg-paper border border-rule text-ink whitespace-nowrap">
-                                                    {m.division || g.batch || 'BE-1'}
-                                                  </span>
-                                                </td>
                                                 <td className="py-1.5 px-2 text-right whitespace-nowrap space-x-1">
                                                   <button
                                                     type="button"
@@ -1809,7 +2326,7 @@ export default function BEProjectGovernance() {
                                                     className="px-2 py-0.5 text-[11px] font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-rule rounded transition-colors shadow-2xs"
                                                     title="Edit student details"
                                                   >
-                                                    ✏️ Edit
+                                                    {Icons.edit} <span>Edit</span>
                                                   </button>
                                                   <button
                                                     type="button"
@@ -1817,7 +2334,7 @@ export default function BEProjectGovernance() {
                                                     className="px-2 py-0.5 text-[11px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded transition-colors shadow-2xs"
                                                     title="Transfer student to another project group"
                                                   >
-                                                    🔄 Transfer
+                                                    {Icons.transfer} <span>Transfer</span>
                                                   </button>
                                                   <button
                                                     type="button"
@@ -1825,7 +2342,7 @@ export default function BEProjectGovernance() {
                                                     className="px-2 py-0.5 text-[11px] font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded transition-colors shadow-2xs"
                                                     title="Remove student from this group"
                                                   >
-                                                    🗑️ Remove
+                                                    {Icons.trash} <span>Remove</span>
                                                   </button>
                                                 </td>
                                               </tr>
@@ -1878,7 +2395,7 @@ export default function BEProjectGovernance() {
               }}
               className="btn-primary py-2 px-4 text-xs font-semibold"
             >
-              + Add Evaluation Stage
+              {Icons.plus} <span>Add Evaluation Stage</span>
             </button>
           </div>
 
@@ -1918,7 +2435,7 @@ export default function BEProjectGovernance() {
                       onClick={() => handleDeleteStage(stage.id, stage.name)}
                       className="px-3 py-1 bg-red-50 text-red-700 border border-red-200 rounded text-xs font-semibold hover:bg-red-100"
                     >
-                      🗑️ Delete Stage
+                      <span>Delete Stage</span>
                     </button>
                   </div>
                 </div>
@@ -1954,9 +2471,9 @@ export default function BEProjectGovernance() {
       {/* COPY STAGE PANELS MODAL */}
       {copyStageModal && createPortal(
         <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded border border-rule max-w-md w-full p-6 shadow-2xl animate-fade-in">
+          <div className="bg-white rounded border border-rule max-w-md w-full p-6 shadow-xl animate-fade-in">
             <h3 className="font-serif text-xl font-bold text-ink border-b border-rule pb-3 mb-4 flex items-center gap-2">
-              <span className="text-navy">📋</span> Copy Panel Assignments Between Stages
+              Copy Panel Assignments Between Stages
             </h3>
 
             <form onSubmit={handleCopyStagePanels} className="space-y-4">
@@ -2022,19 +2539,12 @@ export default function BEProjectGovernance() {
       {/* RANGE & DOMAIN PANEL ASSIGNMENT MODAL */}
       {rangeAssignModal && createPortal(
         <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6">
-          <div className="bg-white rounded-lg border border-rule max-w-4xl w-full p-6 sm:p-7 shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto space-y-5">
+          <div className="bg-white rounded-lg border border-rule max-w-4xl w-full p-6 sm:p-7 shadow-xl animate-fade-in max-h-[90vh] overflow-y-auto space-y-5">
             <div className="border-b border-rule pb-3.5 flex items-center justify-between">
               <h3 className="font-serif text-2xl font-bold text-ink flex items-center gap-2.5">
                 Assign Mentors by Range or Domain
               </h3>
-              <button
-                type="button"
-                onClick={() => setRangeAssignModal(false)}
-                className="text-draft hover:text-ink font-bold text-xl p-1 rounded hover:bg-slate-100 transition-colors"
-                title="Close dialog"
-              >
-                ✕
-              </button>
+              <button type="button" onClick={() => setRangeAssignModal(false)} className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors" title="Close">{Icons.close}</button>
             </div>
 
             <form onSubmit={handleRangeAssignPanels} className="space-y-5">
@@ -2068,7 +2578,7 @@ export default function BEProjectGovernance() {
                       : 'text-draft hover:text-ink'
                       }`}
                   >
-                    <span>🎯</span> By Group Range
+                    By Group Range
                   </button>
                   <button
                     type="button"
@@ -2083,7 +2593,7 @@ export default function BEProjectGovernance() {
                       : 'text-draft hover:text-ink'
                       }`}
                   >
-                    <span>🏷️</span> By Project Domain
+                    By Project Domain
                   </button>
                 </div>
 
@@ -2315,16 +2825,17 @@ export default function BEProjectGovernance() {
                     placeholder="Search mentor by name, employee ID, or designation…"
                     value={rangeMentorSearch}
                     onChange={(e) => setRangeMentorSearch(e.target.value)}
-                    className="w-full px-3 py-1.5 pl-8 text-xs border border-slate-300 rounded-md focus:ring-1 focus:ring-navy outline-none placeholder:text-slate-400 font-medium"
+                    className="w-full px-3 py-1.5 pl-8 pr-8 text-xs border border-slate-300 rounded-md focus:ring-1 focus:ring-navy outline-none placeholder:text-slate-400 font-medium"
                   />
-                  <span className="absolute left-2.5 top-2 text-slate-400 text-xs">🔍</span>
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none flex items-center">{Icons.search}</span>
                   {rangeMentorSearch && (
                     <button
                       type="button"
                       onClick={() => setRangeMentorSearch('')}
-                      className="absolute right-2.5 top-1.5 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors flex items-center justify-center"
+                      title="Clear search"
                     >
-                      ✕
+                      {Icons.close}
                     </button>
                   )}
                 </div>
@@ -2388,7 +2899,7 @@ export default function BEProjectGovernance() {
                 {coiWarningsPreview.length > 0 && rangeSkipGuideConflict && (
                   <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-lg text-xs text-navy space-y-1.5">
                     <p className="font-bold text-sm flex items-center gap-2">
-                      <span>🛡️</span> Notice: {coiWarningsPreview.length} Group(s) with Guide Overlap
+                      Notice: {coiWarningsPreview.length} Group(s) with Guide Overlap
                     </p>
                     <p className="text-xs text-draft leading-relaxed">
                       The following group(s) have their guide selected as a mentor. The guide will be automatically skipped for these groups to maintain academic evaluation integrity:
@@ -2443,7 +2954,7 @@ export default function BEProjectGovernance() {
                 onClick={handleExportScoreExcel}
                 className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-xs font-bold flex items-center gap-2 transition-colors shadow-xs self-start sm:self-auto"
               >
-                <span>📊</span> Export Score Excel ↓
+                {Icons.spreadsheet} <span>Export Score Report</span>
               </button>
             </div>
             <div className="grid md:grid-cols-3 gap-4 pt-2">
@@ -2468,7 +2979,7 @@ export default function BEProjectGovernance() {
       {/* ASSIGN GUIDE MODAL */}
       {guideModalGroup && createPortal(
         <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg border border-rule max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto animate-fade-in">
+          <div className="bg-white rounded-lg border border-rule max-w-lg w-full p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto animate-fade-in">
             <div className="border-b border-rule pb-3 flex items-center justify-between">
               <div>
                 <h3 className="font-serif text-lg font-bold text-ink">
@@ -2480,13 +2991,7 @@ export default function BEProjectGovernance() {
                   </p>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={() => setGuideModalGroup(null)}
-                className="text-draft hover:text-ink font-bold text-base p-1"
-              >
-                ✕
-              </button>
+              <button type="button" onClick={() => setGuideModalGroup(null)} className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors" title="Close">{Icons.close}</button>
             </div>
 
             <form onSubmit={handleAssignGuide} className="space-y-4 pt-1">
@@ -2500,16 +3005,17 @@ export default function BEProjectGovernance() {
                     placeholder="Search faculty by name, employee ID, email, or designation…"
                     value={guideModalSearch}
                     onChange={(e) => setGuideModalSearch(e.target.value)}
-                    className="w-full px-3 py-2 pl-8 text-xs border border-slate-300 rounded-md focus:ring-1 focus:ring-navy outline-none placeholder:text-slate-400 font-medium"
+                    className="w-full px-3 py-2 pl-8 pr-8 text-xs border border-slate-300 rounded-md focus:ring-1 focus:ring-navy outline-none placeholder:text-slate-400 font-medium"
                   />
-                  <span className="absolute left-2.5 top-2 text-slate-400 text-xs">🔍</span>
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none flex items-center">{Icons.search}</span>
                   {guideModalSearch && (
                     <button
                       type="button"
                       onClick={() => setGuideModalSearch('')}
-                      className="absolute right-2.5 top-1.5 text-slate-400 hover:text-slate-600 text-xs font-bold p-0.5"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors flex items-center justify-center"
+                      title="Clear search"
                     >
-                      ✕
+                      {Icons.close}
                     </button>
                   )}
                 </div>
@@ -2553,19 +3059,12 @@ export default function BEProjectGovernance() {
       {/* PANEL ASSIGNMENT MODAL (SINGLE GROUP) */}
       {panelModal && createPortal(
         <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6">
-          <div className="bg-white rounded-lg border border-rule max-w-3xl w-full p-6 sm:p-7 shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto space-y-5">
+          <div className="bg-white rounded-lg border border-rule max-w-3xl w-full p-6 sm:p-7 shadow-xl animate-fade-in max-h-[90vh] overflow-y-auto space-y-5">
             <div className="border-b border-rule pb-3.5 flex items-center justify-between">
               <h3 className="font-serif text-2xl font-bold text-ink flex items-center gap-2">
-                <span>🛡️</span> Assign Panel Mentors
+                Assign Panel Mentors
               </h3>
-              <button
-                type="button"
-                onClick={() => setPanelModal(false)}
-                className="text-draft hover:text-ink font-bold text-xl p-1 rounded hover:bg-slate-100 transition-colors"
-                title="Close dialog"
-              >
-                ✕
-              </button>
+              <button type="button" onClick={() => setPanelModal(false)} className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors" title="Close">{Icons.close}</button>
             </div>
 
             <form onSubmit={handleAssignPanel} className="space-y-5">
@@ -2634,16 +3133,17 @@ export default function BEProjectGovernance() {
                     placeholder="Search mentor by name, employee ID, or designation…"
                     value={panelMentorSearch}
                     onChange={(e) => setPanelMentorSearch(e.target.value)}
-                    className="w-full px-3 py-1.5 pl-8 text-xs border border-slate-300 rounded-md focus:ring-1 focus:ring-navy outline-none placeholder:text-slate-400 font-medium"
+                    className="w-full px-3 py-1.5 pl-8 pr-8 text-xs border border-slate-300 rounded-md focus:ring-1 focus:ring-navy outline-none placeholder:text-slate-400 font-medium"
                   />
-                  <span className="absolute left-2.5 top-2 text-slate-400 text-xs">🔍</span>
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none flex items-center">{Icons.search}</span>
                   {panelMentorSearch && (
                     <button
                       type="button"
                       onClick={() => setPanelMentorSearch('')}
-                      className="absolute right-2.5 top-1.5 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors flex items-center justify-center"
+                      title="Clear search"
                     >
-                      ✕
+                      {Icons.close}
                     </button>
                   )}
                 </div>
@@ -2709,16 +3209,10 @@ export default function BEProjectGovernance() {
       {/* EVALUATION STAGE MODAL (CREATE / EDIT) */}
       {stageModal && createPortal(
         <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded border border-rule max-w-xl w-full p-6 shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded border border-rule max-w-xl w-full p-6 shadow-xl animate-fade-in max-h-[90vh] overflow-y-auto">
             <h3 className="font-serif text-xl font-bold text-ink border-b border-rule pb-3 mb-4 flex items-center justify-between">
               <span>{stageModal === 'edit' ? 'Edit Evaluation Stage' : 'Add New Evaluation Stage'}</span>
-              <button
-                type="button"
-                onClick={() => setStageModal(null)}
-                className="text-draft hover:text-ink font-bold text-base"
-              >
-                ✕
-              </button>
+              <button type="button" onClick={() => setStageModal(null)} className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors" title="Close">{Icons.close}</button>
             </h3>
 
             <form onSubmit={handleSaveStage} className="space-y-4">
@@ -2831,9 +3325,7 @@ export default function BEProjectGovernance() {
                             setStageForm({ ...stageForm, criteria: updated });
                           }}
                           className="text-xs font-bold text-red-600 hover:text-red-800 px-1"
-                        >
-                          ✕
-                        </button>
+                        >{Icons.close}</button>
                       )}
                     </div>
                   ))}
@@ -2860,50 +3352,113 @@ export default function BEProjectGovernance() {
       {/* STUDENT MODAL (ADD / EDIT) */}
       {studentModal && createPortal(
         <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg border border-rule max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto animate-fade-in">
+          <div className="bg-white rounded-lg border border-rule max-w-lg w-full p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto animate-fade-in">
             <div className="border-b border-rule pb-3 flex items-center justify-between">
               <div>
                 <h3 className="font-serif text-lg font-bold text-ink flex items-center gap-2">
-                  <span>{studentModal.mode === 'add' ? '➕' : '✏️'}</span>
+                  {studentModal.mode === 'add' ? Icons.plus : Icons.edit}
                   <span>{studentModal.mode === 'add' ? 'Add Student Member' : 'Edit Student Member'}</span>
                 </h3>
                 <p className="text-xs text-draft mt-0.5">
                   Group: <strong className="text-navy">{studentModal.group.group_code}</strong> — {studentModal.group.title?.substring(0, 45)}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setStudentModal(null)}
-                className="text-draft hover:text-ink font-bold text-lg p-1"
-              >
-                ✕
-              </button>
+              <button type="button" onClick={() => setStudentModal(null)} className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors" title="Close">{Icons.close}</button>
             </div>
 
-            <form onSubmit={handleSaveStudent} className="space-y-4 pt-1">
-              <div>
-                <label className="input-label mb-1 block">Full Student Name *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Rahul Sharma"
-                  value={studentForm.name}
-                  onChange={(e) => setStudentForm({ ...studentForm, name: e.target.value })}
-                  className="input-field text-sm"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Reassignment Notice if matched student is currently in another group */}
+            {studentModal.mode === 'add' && prnMatchedStudent?.current_group_code && (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-md text-xs text-blue-900 flex items-start gap-2 animate-fade-in">
+                <span className="text-base shrink-0">ℹ️</span>
                 <div>
-                  <label className="input-label mb-1 block">College PRN / Roll No *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. 121B1B045"
-                    value={studentForm.roll_no}
-                    onChange={(e) => setStudentForm({ ...studentForm, roll_no: e.target.value })}
-                    className="input-field text-sm font-mono uppercase"
-                  />
+                  <strong className="font-semibold block">Automatic Transfer Notice:</strong>
+                  <span>Student is currently in group <strong className="font-bold underline">{prnMatchedStudent.current_group_code}</strong>. Submitting will automatically move them into {studentModal.group.group_code}.</span>
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveStudent} className="space-y-4 pt-1">
+              {/* Row 1: College PRN (Primary Search) + Division */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="relative">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="input-label block">College PRN / Roll No *</label>
+                    {searchingPrn && (
+                      <span className="text-[11px] text-draft font-medium animate-pulse">Searching...</span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. F23112035"
+                      value={studentForm.roll_no}
+                      onChange={(e) => setStudentForm({ ...studentForm, roll_no: e.target.value })}
+                      onFocus={() => {
+                        if (prnSuggestions.length > 0) setShowPrnDropdown(true);
+                      }}
+                      onBlur={() => {
+                        setTimeout(() => setShowPrnDropdown(false), 220);
+                      }}
+                      className="input-field text-sm font-mono uppercase pr-8"
+                      autoFocus
+                    />
+                    {searchingPrn && (
+                      <span className="absolute right-2.5 top-2.5 text-xs text-draft">⏳</span>
+                    )}
+                    {!searchingPrn && prnMatchedStudent && (
+                      <span className="absolute right-2.5 top-2.5 text-xs text-emerald-600 font-bold" title="Student matched">{Icons.check}</span>
+                    )}
+                  </div>
+
+                  {/* Autocomplete Popup Dropdown */}
+                  {showPrnDropdown && prnSuggestions.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-md shadow-xl max-h-52 overflow-y-auto divide-y divide-slate-100">
+                      <div className="px-2.5 py-1 bg-slate-50 text-[10px] font-bold text-draft uppercase tracking-wider flex items-center justify-between">
+                        <span>Matching Students ({prnSuggestions.length})</span>
+                        <span className="text-[9px] font-normal lowercase">click to auto-fill</span>
+                      </div>
+                      {prnSuggestions.map((s) => {
+                        const isEnrolled = Boolean(s.current_group_code);
+                        const isExact = (s.enrollment_no && s.enrollment_no.toUpperCase() === studentForm.roll_no.trim().toUpperCase()) ||
+                          (s.roll_no && s.roll_no.toUpperCase() === studentForm.roll_no.trim().toUpperCase());
+                        return (
+                          <div
+                            key={s.student_id || s.user_id || s.roll_no}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleSelectStudentSuggestion(s);
+                            }}
+                            className={`p-2.5 hover:bg-blue-50 cursor-pointer flex items-center justify-between text-xs transition-colors ${isExact ? 'bg-emerald-50/50' : ''
+                              }`}
+                          >
+                            <div className="min-w-0 pr-2">
+                              <div className="font-bold text-slate-800 truncate flex items-center gap-1.5">
+                                <span>{s.name}</span>
+                                {isExact && <span className="text-[10px] text-emerald-700 font-semibold uppercase tracking-wider">Exact Match</span>}
+                              </div>
+                              <div className="text-[11px] text-slate-500 font-mono flex items-center gap-2 mt-0.5">
+                                <span>PRN: <strong className="text-navy">{s.enrollment_no || s.roll_no}</strong></span>
+                                <span>·</span>
+                                <span>Div: {s.division || 'BE-1'}</span>
+                              </div>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              {isEnrolled ? (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                  In {s.current_group_code} (Move)
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 hover:bg-emerald-200">
+                                  Populate →
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -2921,6 +3476,30 @@ export default function BEProjectGovernance() {
                 </div>
               </div>
 
+              {/* Row 2: Full Student Name (Auto-filled or manual) */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="input-label block">Full Student Name *</label>
+                  {prnMatchedStudent ? (
+                    <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 animate-fade-in">
+                      Auto-filled from registry
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-draft">Auto-fills from PRN or enter manually</span>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Rahul Sharma"
+                  value={studentForm.name}
+                  onChange={(e) => setStudentForm({ ...studentForm, name: e.target.value })}
+                  className={`input-field text-sm transition-all ${prnMatchedStudent ? 'bg-emerald-50/40 border-emerald-300 font-semibold text-slate-900' : ''
+                    }`}
+                />
+              </div>
+
+              {/* Row 3: Email + Mobile */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="input-label mb-1 block">Email (Optional)</label>
@@ -2945,6 +3524,7 @@ export default function BEProjectGovernance() {
                 </div>
               </div>
 
+              {/* Row 4: Leader Option */}
               <div className="p-3 bg-paper rounded border border-rule">
                 <label className="flex items-center gap-2.5 text-xs font-semibold text-ink cursor-pointer">
                   <input
@@ -2982,24 +3562,18 @@ export default function BEProjectGovernance() {
       {/* TRANSFER STUDENT MODAL */}
       {transferModal && createPortal(
         <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg border border-rule max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto animate-fade-in">
+          <div className="bg-white rounded-lg border border-rule max-w-lg w-full p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto animate-fade-in">
             <div className="border-b border-rule pb-3 flex items-center justify-between">
               <div>
                 <h3 className="font-serif text-lg font-bold text-ink flex items-center gap-2">
-                  <span>🔄</span>
+                  {Icons.transfer}
                   <span>Transfer Student to Another Group</span>
                 </h3>
                 <p className="text-xs text-draft mt-0.5">
                   Move student from current group to a different project group.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setTransferModal(null)}
-                className="text-draft hover:text-ink font-bold text-lg p-1"
-              >
-                ✕
-              </button>
+              <button type="button" onClick={() => setTransferModal(null)} className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors" title="Close">{Icons.close}</button>
             </div>
 
             {/* Student & Source Info */}
@@ -3025,16 +3599,17 @@ export default function BEProjectGovernance() {
                     placeholder="Search target group by code, title, or domain…"
                     value={transferSearch}
                     onChange={(e) => setTransferSearch(e.target.value)}
-                    className="w-full px-3 py-1.5 pl-8 text-xs border border-slate-300 rounded-md focus:ring-1 focus:ring-navy outline-none placeholder:text-slate-400 font-medium"
+                    className="w-full px-3 py-1.5 pl-8 pr-8 text-xs border border-slate-300 rounded-md focus:ring-1 focus:ring-navy outline-none placeholder:text-slate-400 font-medium"
                   />
-                  <span className="absolute left-2.5 top-2 text-slate-400 text-xs">🔍</span>
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none flex items-center">{Icons.search}</span>
                   {transferSearch && (
                     <button
                       type="button"
                       onClick={() => setTransferSearch('')}
-                      className="absolute right-2.5 top-1.5 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors flex items-center justify-center"
+                      title="Clear search"
                     >
-                      ✕
+                      {Icons.close}
                     </button>
                   )}
                 </div>
@@ -3049,10 +3624,10 @@ export default function BEProjectGovernance() {
                   <option value="">-- Select Destination Group --</option>
                   {filteredTransferGroups.map((tg) => {
                     const memCount = tg.members?.length || tg.members_count || 0;
-                    const isFull = memCount >= 5;
+                    const isFull = memCount >= 4;
                     return (
                       <option key={tg.id} value={tg.id} disabled={isFull}>
-                        {tg.group_code} — {tg.title?.substring(0, 35)}... ({memCount}/5 members){isFull ? ' [FULL]' : ''}
+                        {tg.group_code} — {tg.title?.substring(0, 35)}... ({memCount}/4 members){isFull ? ' [FULL]' : ''}
                       </option>
                     );
                   })}
@@ -3075,7 +3650,7 @@ export default function BEProjectGovernance() {
               </div>
 
               <div className="p-3 bg-amber-50 border border-amber-200 rounded text-xs text-amber-900 leading-relaxed">
-                <span className="font-bold block mb-0.5">⚠️ Note on Transfer:</span>
+                <span className="font-bold block mb-0.5">Transfer Notice:</span>
                 Previous evaluation scores awarded to this student under the source group&apos;s panel assignments will be safely reset so the student can be newly evaluated with their new team.
               </div>
 
@@ -3104,24 +3679,18 @@ export default function BEProjectGovernance() {
       {/* EDIT GROUP DETAILS MODAL */}
       {editGroupModal && createPortal(
         <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg border border-rule max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto animate-fade-in">
+          <div className="bg-white rounded-lg border border-rule max-w-lg w-full p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto animate-fade-in">
             <div className="border-b border-rule pb-3 flex items-center justify-between">
               <div>
                 <h3 className="font-serif text-lg font-bold text-ink flex items-center gap-2">
-                  <span>✏️</span>
+                  {Icons.edit}
                   <span>Edit Project Group Details</span>
                 </h3>
                 <p className="text-xs text-draft mt-0.5">
                   Update group code: <strong className="text-navy">{editGroupModal.group_code}</strong>
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setEditGroupModal(null)}
-                className="text-draft hover:text-ink font-bold text-lg p-1"
-              >
-                ✕
-              </button>
+              <button type="button" onClick={() => setEditGroupModal(null)} className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors" title="Close">{Icons.close}</button>
             </div>
 
             <form onSubmit={handleSaveEditGroup} className="space-y-4 pt-1">

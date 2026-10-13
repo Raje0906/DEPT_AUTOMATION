@@ -63,24 +63,26 @@ export default function ResultGeneration() {
   return (
     <div className="p-6 lg:p-10 w-full max-w-7xl mx-auto">
       {/* Page Header */}
-      <div className="mb-8 pb-5 border-b border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="mb-6 pb-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="font-serif text-3xl font-bold text-gray-900">Result Generation &amp; Marks Entry</h1>
-          <p className="text-sm text-gray-500 mt-1 font-medium">
-            Select a class to enter marks in dedicated sections: Assignments, Unit Tests, In-Sem, and End-Sem/Practicals.
+          <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 tracking-tight">
+            Result Generation &amp; Evaluation Ledger
+          </h1>
+          <p className="text-sm text-slate-500 mt-1 font-normal">
+            Manage continuous assessments, in-semester examinations, and term marks by class division.
           </p>
         </div>
 
         {/* Academic Year Selector */}
-        <div className="flex items-center gap-3">
-          <label htmlFor="academic-year-select" className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+        <div className="flex items-center gap-2 self-start md:self-auto">
+          <label htmlFor="academic-year-select" className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
             Academic Year:
           </label>
           <select
             id="academic-year-select"
             value={academicYear}
             onChange={(e) => setAcademicYear(e.target.value)}
-            className="px-3 py-1.5 bg-white border border-gray-300 rounded-md text-sm font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs"
+            className="px-3 py-1.5 bg-white border border-slate-300 rounded-md text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#1E2D5A] shadow-2xs"
           >
             {academicYears.map((yr) => (
               <option key={yr} value={yr}>{yr}</option>
@@ -90,22 +92,17 @@ export default function ResultGeneration() {
       </div>
 
       {/* Class & Filter Bar */}
-      <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm mb-8 flex flex-col md:flex-row md:items-center justify-between gap-5">
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
         {/* Class Selection Dropdown */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold text-base">
-              🎓
-            </span>
-            <label htmlFor="class-select" className="text-sm font-bold text-gray-800 whitespace-nowrap">
-              Select Class:
-            </label>
-          </div>
+          <label htmlFor="class-select" className="text-xs font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap">
+            Assigned Class:
+          </label>
           <select
             id="class-select"
             value={selectedClass}
             onChange={(e) => setSelectedClass(e.target.value)}
-            className="px-4 py-2 bg-indigo-50/50 border-2 border-indigo-200 hover:border-indigo-400 focus:border-indigo-600 rounded-xl text-sm font-bold text-indigo-950 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer min-w-[220px]"
+            className="px-3 py-2 bg-slate-50 border border-slate-300 hover:border-slate-400 focus:border-[#1E2D5A] rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:ring-1 focus:ring-[#1E2D5A] transition-colors cursor-pointer min-w-[200px]"
           >
             {availableClasses.map((cls) => (
               <option key={cls} value={cls}>
@@ -115,27 +112,29 @@ export default function ResultGeneration() {
             <option value="ALL">All Assigned Classes ({availableClasses.length})</option>
           </select>
           {selectedClass && selectedClass !== 'ALL' && (
-            <span className="text-xs text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full font-semibold border border-indigo-100">
-              Showing subjects for <strong>{selectedClass}</strong> only
+            <span className="text-[11px] text-slate-600 bg-slate-100 px-2.5 py-1 rounded font-medium border border-slate-200">
+              Displaying subjects for <strong>{selectedClass}</strong>
             </span>
           )}
         </div>
 
-        {/* Semester Filter */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-gray-500 uppercase tracking-wider mr-1">Semester:</span>
+        {/* Semester Filter Tabs */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider mr-1">Semester:</span>
           {[
             { label: 'All', val: 'ALL' },
-            { label: 'Sem 5', val: '5' },
-            { label: 'Sem 6', val: '6' }
+            { label: 'Sem 3 (SE)', val: '3' },
+            { label: 'Sem 4 (SE)', val: '4' },
+            { label: 'Sem 5 (TE)', val: '5' },
+            { label: 'Sem 6 (TE)', val: '6' }
           ].map((sem) => (
             <button
               key={sem.val}
               onClick={() => setSelectedSemFilter(sem.val)}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
                 selectedSemFilter === sem.val
-                  ? 'bg-gray-900 text-white shadow-2xs'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-[#1E2D5A] text-white shadow-2xs font-semibold'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
               {sem.label}
@@ -146,31 +145,33 @@ export default function ResultGeneration() {
 
       {/* Main Content Area */}
       {loading ? (
-        <div className="text-center py-20 text-gray-500 text-sm font-medium">Loading subjects for selected class...</div>
+        <div className="text-center py-20 text-slate-500 text-sm font-medium">Loading course assignments...</div>
       ) : filteredSubjects.length === 0 ? (
-        <div className="bg-white border border-gray-200 rounded-2xl p-12 text-center text-gray-500 shadow-2xs">
-          <div className="w-14 h-14 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-3 text-2xl">📚</div>
-          <p className="text-lg font-bold text-gray-800">No subjects found for {selectedClass === 'ALL' ? 'the selected filters' : `Class ${selectedClass}`}</p>
-          <p className="text-sm text-gray-400 mt-1">Please select another class from the dropdown above or switch to "All Classes".</p>
+        <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-500 shadow-2xs">
+          <svg className="w-10 h-10 text-slate-300 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+          </svg>
+          <p className="text-base font-bold text-slate-800">No subjects found for {selectedClass === 'ALL' ? 'the selected filters' : `Class ${selectedClass}`}</p>
+          <p className="text-xs text-slate-400 mt-1">Please select another class division or clear semester filters above.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {filteredSubjects.map((sub) => {
             const baseMarksUrl = `/faculty/marks/${sub.id}?sem=${sub.semester}&ay=${encodeURIComponent(sub.academic_year)}&div=${encodeURIComponent(sub.division)}`;
 
             return (
               <div
                 key={sub.map_id || `${sub.id}-${sub.division}`}
-                className="bg-white border border-gray-200 hover:border-indigo-300 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+                className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between"
               >
                 <div>
-                  {/* Top Badges */}
-                  <div className="flex items-center justify-between gap-2 mb-3">
+                  {/* Card Header: Code, Division & Status */}
+                  <div className="flex items-center justify-between gap-2 mb-2.5">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100">
+                      <span className="text-xs font-mono font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
                         {sub.code}
                       </span>
-                      <span className="text-xs font-bold text-gray-800 bg-blue-50 text-blue-900 border border-blue-200 px-2.5 py-1 rounded-md">
+                      <span className="text-xs font-semibold text-blue-900 bg-blue-50 px-2.5 py-0.5 rounded border border-blue-200">
                         Class {sub.division}
                       </span>
                     </div>
@@ -178,126 +179,137 @@ export default function ResultGeneration() {
                   </div>
 
                   {/* Subject Name & Meta */}
-                  <h2 className="font-serif font-bold text-2xl text-gray-900 tracking-tight">{sub.name}</h2>
-                  <div className="flex items-center gap-2 mt-1.5 text-xs text-gray-500 font-medium">
+                  <h2 className="text-lg font-bold text-slate-900 tracking-tight leading-snug">{sub.name}</h2>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-xs text-slate-500 font-normal">
                     <span>Semester {sub.semester}</span>
-                    <span>•</span>
+                    <span>·</span>
                     <span>{sub.credits} Credits</span>
-                    <span>•</span>
+                    <span>·</span>
                     <span className="capitalize">{sub.subject_type} Course</span>
-                    <span>•</span>
-                    <span>{sub.enrolled_count || 0} Students Enrolled</span>
+                    <span>·</span>
+                    <span>{sub.enrolled_count || 0} Students</span>
                   </div>
 
-                  {/* ─── SEPARATE EVALUATION SECTIONS ─── */}
-                  <div className="mt-6 pt-5 border-t border-gray-100">
-                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
-                      Enter Marks By Section:
+                  {/* Assessment Portals */}
+                  <div className="mt-5 pt-4 border-t border-slate-100">
+                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">
+                      Evaluation Components
                     </p>
 
-                    <div className="grid grid-cols-2 gap-2.5">
-                      {/* Section 1: Assignments & Term Work */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {/* Component 1: Assignments & Term Work */}
                       <Link
                         to={`${baseMarksUrl}&section=assignments`}
-                        className="p-3 bg-amber-50/60 hover:bg-amber-100/70 border border-amber-200/80 rounded-xl transition-all group flex flex-col justify-between"
+                        className="group p-3 rounded-lg border border-slate-200 hover:border-slate-300 hover:bg-slate-50/70 transition-all flex flex-col justify-between bg-white"
                       >
-                        <div>
-                          <div className="flex items-center gap-1.5 mb-1">
-                            <span className="text-base">📚</span>
-                            <span className="text-xs font-bold text-amber-900 group-hover:text-amber-950">
-                              Assignments &amp; TW
-                            </span>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0 group-hover:bg-[#1E2D5A] group-hover:text-white transition-colors">
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                              </svg>
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-slate-900 group-hover:text-[#1E2D5A]">Assignments &amp; TW</p>
+                              <p className="text-[11px] text-slate-500 leading-tight">Continuous Term Work</p>
+                            </div>
                           </div>
-                          <p className="text-[11px] text-amber-700 leading-tight">
-                            Assignment 1 &amp; 2, Attendance, Timely Sub.
-                          </p>
+                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">25M</span>
                         </div>
-                        <div className="mt-3 text-right">
-                          <span className="text-[11px] font-bold text-amber-900 group-hover:underline">
-                            Enter Marks (25M) →
-                          </span>
+                        <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-semibold text-slate-600 group-hover:text-[#1E2D5A]">
+                          <span>Enter Marks</span>
+                          <span className="transition-transform group-hover:translate-x-0.5">→</span>
                         </div>
                       </Link>
 
-                      {/* Section 2: Unit Tests */}
+                      {/* Component 2: Unit Tests */}
                       <Link
                         to={`${baseMarksUrl}&section=ut`}
-                        className="p-3 bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/80 rounded-xl transition-all group flex flex-col justify-between"
+                        className="group p-3 rounded-lg border border-slate-200 hover:border-slate-300 hover:bg-slate-50/70 transition-all flex flex-col justify-between bg-white"
                       >
-                        <div>
-                          <div className="flex items-center gap-1.5 mb-1">
-                            <span className="text-base">📝</span>
-                            <span className="text-xs font-bold text-blue-900 group-hover:text-blue-950">
-                              Unit Tests (UT)
-                            </span>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0 group-hover:bg-[#1E2D5A] group-hover:text-white transition-colors">
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-slate-900 group-hover:text-[#1E2D5A]">Unit Tests (UT)</p>
+                              <p className="text-[11px] text-slate-500 leading-tight">UT1 &amp; UT2 Assessments</p>
+                            </div>
                           </div>
-                          <p className="text-[11px] text-blue-700 leading-tight">
-                            Unit Test 1 (30M) &amp; Unit Test 2 (30M)
-                          </p>
+                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">30M</span>
                         </div>
-                        <div className="mt-3 text-right">
-                          <span className="text-[11px] font-bold text-blue-900 group-hover:underline">
-                            Enter UT Marks →
-                          </span>
+                        <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-semibold text-slate-600 group-hover:text-[#1E2D5A]">
+                          <span>Enter Marks</span>
+                          <span className="transition-transform group-hover:translate-x-0.5">→</span>
                         </div>
                       </Link>
 
-                      {/* Section 3: In-Sem Exam */}
+                      {/* Component 3: In-Sem Exam */}
                       <Link
                         to={`${baseMarksUrl}&section=insem`}
-                        className="p-3 bg-emerald-50/60 hover:bg-emerald-100/70 border border-emerald-200/80 rounded-xl transition-all group flex flex-col justify-between"
+                        className="group p-3 rounded-lg border border-slate-200 hover:border-slate-300 hover:bg-slate-50/70 transition-all flex flex-col justify-between bg-white"
                       >
-                        <div>
-                          <div className="flex items-center gap-1.5 mb-1">
-                            <span className="text-base">📋</span>
-                            <span className="text-xs font-bold text-emerald-900 group-hover:text-emerald-950">
-                              In-Sem Exam
-                            </span>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0 group-hover:bg-[#1E2D5A] group-hover:text-white transition-colors">
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                              </svg>
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-slate-900 group-hover:text-[#1E2D5A]">In-Sem Exam</p>
+                              <p className="text-[11px] text-slate-500 leading-tight">Mid-Term CCE Evaluation</p>
+                            </div>
                           </div>
-                          <p className="text-[11px] text-emerald-700 leading-tight">
-                            In-Semester Midterm Exam (30 Marks)
-                          </p>
+                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">30M</span>
                         </div>
-                        <div className="mt-3 text-right">
-                          <span className="text-[11px] font-bold text-emerald-900 group-hover:underline">
-                            Enter In-Sem →
-                          </span>
+                        <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-semibold text-slate-600 group-hover:text-[#1E2D5A]">
+                          <span>Enter Marks</span>
+                          <span className="transition-transform group-hover:translate-x-0.5">→</span>
                         </div>
                       </Link>
 
-                      {/* Section 4: End-Sem & Practicals */}
+                      {/* Component 4: End-Sem & Practicals */}
                       <Link
                         to={`${baseMarksUrl}&section=endsem`}
-                        className="p-3 bg-purple-50/60 hover:bg-purple-100/70 border border-purple-200/80 rounded-xl transition-all group flex flex-col justify-between"
+                        className="group p-3 rounded-lg border border-slate-200 hover:border-slate-300 hover:bg-slate-50/70 transition-all flex flex-col justify-between bg-white"
                       >
-                        <div>
-                          <div className="flex items-center gap-1.5 mb-1">
-                            <span className="text-base">🎓</span>
-                            <span className="text-xs font-bold text-purple-900 group-hover:text-purple-950">
-                              End-Sem &amp; Oral
-                            </span>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0 group-hover:bg-[#1E2D5A] group-hover:text-white transition-colors">
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                              </svg>
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-slate-900 group-hover:text-[#1E2D5A]">End-Sem &amp; Oral</p>
+                              <p className="text-[11px] text-slate-500 leading-tight">Theory &amp; Practical Finals</p>
+                            </div>
                           </div>
-                          <p className="text-[11px] text-purple-700 leading-tight">
-                            End-Sem (70M), Practical &amp; Mock Exams
-                          </p>
+                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">70M / 25M</span>
                         </div>
-                        <div className="mt-3 text-right">
-                          <span className="text-[11px] font-bold text-purple-900 group-hover:underline">
-                            Enter End-Sem →
-                          </span>
+                        <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-semibold text-slate-600 group-hover:text-[#1E2D5A]">
+                          <span>Enter Marks</span>
+                          <span className="transition-transform group-hover:translate-x-0.5">→</span>
                         </div>
                       </Link>
                     </div>
                   </div>
                 </div>
 
-                {/* Open Master Sheet Action */}
-                <div className="mt-6 pt-4 border-t border-gray-100">
+                {/* Primary Action Button */}
+                <div className="mt-5 pt-3.5 border-t border-slate-100">
                   <Link
                     to={baseMarksUrl}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-gray-900 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-all shadow-sm"
+                    className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-[#1E2D5A] hover:bg-[#152042] text-white rounded-lg text-xs font-semibold tracking-wide transition-colors shadow-2xs"
                   >
-                    <span>✏️</span> Open Full Marks Sheet for {sub.division}
+                    <svg className="w-3.5 h-3.5 text-white/80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    <span>Open Consolidated Marksheet ({sub.division})</span>
                   </Link>
                 </div>
               </div>

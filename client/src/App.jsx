@@ -125,8 +125,8 @@ export default function App() {
           <Route path="/faculty/marksheet/end-term-internal" element={<FacultyLayout><EndTermInternalMarksheet /></FacultyLayout>} />
           <Route path="/faculty/reports" element={<FacultyLayout><ClassReports /></FacultyLayout>} />
           <Route path="/faculty/project-eval" element={<FacultyLayout><ProjectEval /></FacultyLayout>} />
-          <Route path="/faculty/project-coordination" element={<AnyLayout><BEProjectGovernance /></AnyLayout>} />
-          <Route path="/hod/project-governance" element={<HODLayout><BEProjectGovernance /></HODLayout>} />
+          <Route path="/faculty/project-coordination" element={<FacultyLayout><BEProjectGovernance /></FacultyLayout>} />
+          <Route path="/hod/project-governance" element={<Navigate to="/hod/projects" replace />} />
           <Route path="/faculty/magazines" element={<FacultyLayout><Magazines /></FacultyLayout>} />
           <Route path="/faculty/magazines/create" element={<MagazineCreatorLayout><CreateMagazineForm /></MagazineCreatorLayout>} />
           <Route path="/faculty/magazines/editor/:id" element={<MagazineEditor />} />
@@ -165,7 +165,7 @@ export default function App() {
           <Route path="/hod/publish" element={<HODLayout><PublishResults /></HODLayout>} />
           <Route path="/hod/rollover" element={<HODLayout><TermRollover /></HODLayout>} />
           <Route path="/hod/analytics" element={<HODLayout><HODAnalytics /></HODLayout>} />
-          <Route path="/hod/projects" element={<HODLayout><BEProjectGovernance /></HODLayout>} />
+          <Route path="/hod/projects" element={<HODLayout><HODProjectView /></HODLayout>} />
 
           {/* Alumni */}
           <Route path="/alumni/feedback"      element={<AnyLayout><AlumniFeedback /></AnyLayout>} />
