@@ -2,8 +2,9 @@ import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { isAuthorizedMagazineCreator } from '../utils/magazinePermissions';
+import { isAuthorizedFeedbackCoordinator } from '../utils/feedbackPermissions';
 
-export default function ProtectedRoute({ children, role, requireCoordinator, requireMagazineCreator }) {
+export default function ProtectedRoute({ children, role, requireCoordinator, requireMagazineCreator, requireFeedbackCoordinator }) {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -28,6 +29,10 @@ export default function ProtectedRoute({ children, role, requireCoordinator, req
 
   if (requireMagazineCreator && !isAuthorizedMagazineCreator(user)) {
     return <Navigate to="/faculty/magazines" replace />;
+  }
+
+  if (requireFeedbackCoordinator && !isAuthorizedFeedbackCoordinator(user)) {
+    return <Navigate to="/faculty" replace />;
   }
 
   return children;

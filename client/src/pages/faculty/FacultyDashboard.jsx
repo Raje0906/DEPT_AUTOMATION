@@ -2,6 +2,8 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api/axios';
 import { StatusBadge } from '../../components/ResultTable';
+import { useAuth } from '../../contexts/AuthContext';
+import { isAuthorizedFeedbackCoordinator } from '../../utils/feedbackPermissions';
 import {
   AcademicCapIcon,
   BookOpenIcon,
@@ -17,6 +19,7 @@ import {
 } from '@heroicons/react/24/outline';
 
 export default function FacultyDashboard() {
+  const { user }                      = useAuth();
   const [data, setData]               = useState(null);
   const [loading, setLoading]         = useState(true);
   const [academicYear, setAcademicYear] = useState('');
@@ -214,6 +217,34 @@ export default function FacultyDashboard() {
               </Link>
             </div>
           )}
+
+          {isAuthorizedFeedbackCoordinator(user) && (
+            <div className="bg-gradient-to-r from-blue-50/90 to-blue-100/40 border border-blue-200/80 rounded-xl p-4 flex items-center justify-between gap-4 shadow-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-blue-100 text-navy flex items-center justify-center flex-shrink-0">
+                  <DocumentChartBarIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-navy bg-blue-200/80 px-2 py-0.5 rounded border border-blue-200">
+                      Feedback Coordinator
+                    </span>
+                    <span className="text-xs font-bold text-ink">TE Mid-Sem Evaluations</span>
+                  </div>
+                  <p className="text-xs text-draft mt-0.5">
+                    You are the designated Coordinator for TE Mid-Sem Feedback. Manage forms, monitor submissions, and review reports.
+                  </p>
+                </div>
+              </div>
+              <Link
+                to="/faculty/feedback"
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-navy text-white rounded-lg hover:bg-slate-900 transition-all shadow-2xs flex-shrink-0"
+              >
+                <span>Dashboard</span>
+                <ChevronRightIcon className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          )}
         </div>
       )}
 
@@ -370,6 +401,34 @@ export default function FacultyDashboard() {
               <ChevronRightIcon className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
             </div>
           </Link>
+
+          {isAuthorizedFeedbackCoordinator(user) && (
+            <Link
+              to="/faculty/feedback"
+              className="group bg-white border border-blue-200 rounded-xl p-5 hover:border-navy hover:shadow-md transition-all flex flex-col justify-between bg-blue-50/20"
+            >
+              <div>
+                <div className="w-10 h-10 rounded-lg bg-blue-100 text-navy flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+                  <DocumentChartBarIcon className="w-5 h-5" />
+                </div>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-blue-100 text-navy">
+                    Coordinator Desk
+                  </span>
+                </div>
+                <h3 className="font-bold text-ink text-sm group-hover:text-navy transition-colors">
+                  TE Mid-Sem Feedback
+                </h3>
+                <p className="text-xs text-draft mt-1 leading-relaxed">
+                  Create, configure, publish, and view live analytics for student course evaluations.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs font-bold text-navy">
+                <span>Manage Feedback</span>
+                <ChevronRightIcon className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </Link>
+          )}
         </div>
       </div>
 
