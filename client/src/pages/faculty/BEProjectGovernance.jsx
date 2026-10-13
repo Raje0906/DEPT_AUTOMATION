@@ -160,6 +160,8 @@ export default function BEProjectGovernance() {
 
   const [unlockModalEval, setUnlockModalEval] = useState(null);
   const [unlockReason, setUnlockReason] = useState('');
+  const [unassignMentorsModal, setUnassignMentorsModal] = useState(false);
+  const [unassignMentorsScope, setUnassignMentorsScope] = useState('ALL');
   const [submitting, setSubmitting] = useState(false);
 
   const fetchPanelMatrix = async (stageId) => {
@@ -226,27 +228,114 @@ export default function BEProjectGovernance() {
   });
   const [submittingGroupEdit, setSubmittingGroupEdit] = useState(false);
 
+  // Staged / Pending Changes State (Apply Changes altogether)
+  const [pendingChanges, setPendingChanges] = useState({
+    guideDesignations: {}, // facultyId (number) -> boolean (is_guide)
+    groupGuides: {},       // groupId (number) -> { guide_id: number | null, guide_name: string }
+    panelAssignments: {},  // `${stageId}_${groupId}` -> { stage_id, group_id, panel_member_ids, panel_members }
+  });
+  const [applyingBatch, setApplyingBatch] = useState(false);
+  const [showChangesModal, setShowChangesModal] = useState(false);
+
+  // 1. Effective Groups: overlay staged groupGuides
+  const effectiveGroups = useMemo(() => {
+    return groups.map((g) => {
+      const stagedGuide = pendingChanges.groupGuides[g.id];
+      const effectiveGuideId = stagedGuide !== undefined ? stagedGuide.guide_id : (g.guide_id || g.guide_faculty_id || null);
+      const effectiveGuideName = stagedGuide !== undefined ? stagedGuide.guide_name : g.guide_name;
+      const isGuideStaged = stagedGuide !== undefined;
+
+      return {
+        ...g,
+        guide_id: effectiveGuideId,
+        guide_faculty_id: effectiveGuideId,
+        guide_name: effectiveGuideName,
+        _isGuideStaged: isGuideStaged,
+      };
+    });
+  }, [groups, pendingChanges.groupGuides]);
+
+  // 2. Base groupPanelistsMap from database panelMatrix
+  const baseGroupPanelistsMap = useMemo(() => {
+    const map = {};
+    for (const item of panelMatrix) {
+      map[item.id] = (item.panelists || []).filter(
+        (p) =>
+          Number(p.faculty_id) !== Number(item.guide_id) &&
+          (!item.guide_name || (p.name || '').trim().toLowerCase() !== item.guide_name.trim().toLowerCase())
+      );
+    }
+    return map;
+  }, [panelMatrix]);
+
+  // 3. Effective Group Panelists Map: overlay staged panelAssignments
+  const effectiveGroupPanelistsMap = useMemo(() => {
+    const map = { ...baseGroupPanelistsMap };
+    if (panelMatrixStageId) {
+      for (const staged of Object.values(pendingChanges.panelAssignments)) {
+        if (Number(staged.stage_id) === Number(panelMatrixStageId)) {
+          map[staged.group_id] = staged.panel_members || [];
+        }
+      }
+    }
+    return map;
+  }, [baseGroupPanelistsMap, pendingChanges.panelAssignments, panelMatrixStageId]);
+
+  // 4. Effective Faculty Load: overlay staged guideDesignations, guided_groups counts, and panel_assignments counts
+  const effectiveFacultyLoad = useMemo(() => {
+    const list = dashboardData?.faculty_load || [];
+    return list.map((fac) => {
+      const fId = Number(fac.faculty_id);
+      const stagedDesig = pendingChanges.guideDesignations[fId];
+      const isStaged = stagedDesig !== undefined;
+      const isGuide = isStaged ? stagedDesig : Boolean(fac.is_designated_guide);
+
+      // Effective guided groups count
+      const guidedCount = effectiveGroups.filter(
+        (g) => Number(g.guide_id) === fId
+      ).length;
+
+      // Effective panel assignments count
+      let panelCount = Number(fac.panel_assignments || 0);
+      for (const staged of Object.values(pendingChanges.panelAssignments)) {
+        const wasInOriginal = (baseGroupPanelistsMap[staged.group_id] || []).some(
+          (p) => Number(p.faculty_id) === fId
+        );
+        const isInStaged = staged.panel_member_ids.includes(fId);
+        if (!wasInOriginal && isInStaged) panelCount++;
+        if (wasInOriginal && !isInStaged) panelCount = Math.max(0, panelCount - 1);
+      }
+
+      return {
+        ...fac,
+        is_designated_guide: isGuide,
+        guided_groups: guidedCount,
+        panel_assignments: panelCount,
+        _isDesignationStaged: isStaged,
+      };
+    });
+  }, [dashboardData?.faculty_load, pendingChanges.guideDesignations, effectiveGroups, pendingChanges.panelAssignments, baseGroupPanelistsMap]);
+
   const guidesCount = useMemo(() => {
-    return (dashboardData?.faculty_load || []).filter(
+    return effectiveFacultyLoad.filter(
       (f) => Boolean(f.is_designated_guide || Number(f.guided_groups) > 0) && Number(f.panel_assignments) === 0
     ).length;
-  }, [dashboardData?.faculty_load]);
+  }, [effectiveFacultyLoad]);
 
   const mentorsCount = useMemo(() => {
-    return (dashboardData?.faculty_load || []).filter(
+    return effectiveFacultyLoad.filter(
       (f) => Number(f.panel_assignments) > 0
     ).length;
-  }, [dashboardData?.faculty_load]);
+  }, [effectiveFacultyLoad]);
 
   const eligibleCount = useMemo(() => {
-    return (dashboardData?.faculty_load || []).filter(
+    return effectiveFacultyLoad.filter(
       (f) => !f.is_designated_guide && Number(f.guided_groups) === 0 && Number(f.panel_assignments) === 0
     ).length;
-  }, [dashboardData?.faculty_load]);
+  }, [effectiveFacultyLoad]);
 
   const filteredFacultyLoad = useMemo(() => {
-    const list = dashboardData?.faculty_load || [];
-    return list.filter((fac) => {
+    return effectiveFacultyLoad.filter((fac) => {
       const isMentor = Number(fac.panel_assignments) > 0;
       const isGuide = Boolean(fac.is_designated_guide || Number(fac.guided_groups) > 0) && !isMentor;
 
@@ -264,12 +353,30 @@ export default function BEProjectGovernance() {
       }
       return true;
     });
-  }, [dashboardData?.faculty_load, facultySearch, facultyFilter]);
+  }, [effectiveFacultyLoad, facultySearch, facultyFilter]);
+
+  const effectiveAvailableGuides = useMemo(() => {
+    const list = [];
+    for (const fac of effectiveFacultyLoad) {
+      if (Boolean(fac.is_designated_guide || Number(fac.guided_groups) > 0) && Number(fac.panel_assignments) === 0) {
+        list.push({
+          faculty_id: fac.faculty_id,
+          id: fac.faculty_id,
+          name: fac.name,
+          employee_id: fac.employee_id,
+          email: fac.email,
+          designation: fac.designation,
+          current_guided_groups: fac.guided_groups,
+        });
+      }
+    }
+    return list;
+  }, [effectiveFacultyLoad]);
 
   const filteredModalGuides = useMemo(() => {
-    if (!guideModalSearch.trim()) return availableGuides;
+    if (!guideModalSearch.trim()) return effectiveAvailableGuides;
     const q = guideModalSearch.toLowerCase().trim();
-    return availableGuides.filter((g) => {
+    return effectiveAvailableGuides.filter((g) => {
       return (
         g.name?.toLowerCase().includes(q) ||
         g.employee_id?.toLowerCase().includes(q) ||
@@ -277,49 +384,91 @@ export default function BEProjectGovernance() {
         g.designation?.toLowerCase().includes(q)
       );
     });
-  }, [availableGuides, guideModalSearch]);
+  }, [effectiveAvailableGuides, guideModalSearch]);
 
   const allDepartmentFaculty = useMemo(() => {
-    if (dashboardData?.faculty_load && dashboardData.faculty_load.length > 0) {
-      return dashboardData.faculty_load;
+    if (effectiveFacultyLoad && effectiveFacultyLoad.length > 0) {
+      return effectiveFacultyLoad;
     }
-    return availableGuides;
-  }, [dashboardData?.faculty_load, availableGuides]);
+    return effectiveAvailableGuides;
+  }, [effectiveFacultyLoad, effectiveAvailableGuides]);
+
+  // All faculty IDs and names who are designated guides or active guides (guides cannot be panel mentors)
+  const allGuideFacultyIds = useMemo(() => {
+    const set = new Set();
+    effectiveFacultyLoad.forEach((f) => {
+      if (f.is_designated_guide || Number(f.guided_groups) > 0) {
+        set.add(Number(f.faculty_id));
+      }
+    });
+    effectiveGroups.forEach((g) => {
+      if (g.guide_id) set.add(Number(g.guide_id));
+    });
+    return set;
+  }, [effectiveFacultyLoad, effectiveGroups]);
+
+  const allGuideNames = useMemo(() => {
+    const set = new Set();
+    effectiveFacultyLoad.forEach((f) => {
+      if ((f.is_designated_guide || Number(f.guided_groups) > 0) && f.name) {
+        set.add(f.name.trim().toLowerCase());
+      }
+    });
+    effectiveGroups.forEach((g) => {
+      if (g.guide_name) set.add(g.guide_name.trim().toLowerCase());
+    });
+    return set;
+  }, [effectiveFacultyLoad, effectiveGroups]);
 
   const filteredPanelMentors = useMemo(() => {
-    if (!panelMentorSearch.trim()) return allDepartmentFaculty;
+    const selectedGroup = effectiveGroups.find((g) => g.id === Number(selectedGroupId));
+    let list = (allDepartmentFaculty || []).filter((f) => {
+      const fId = Number(f.faculty_id || f.id);
+      const fName = (f.name || '').trim().toLowerCase();
+      // Exclude ANY faculty member who is a designated guide or active guide
+      if (allGuideFacultyIds.has(fId) || allGuideNames.has(fName)) return false;
+      if (f.is_designated_guide || Number(f.guided_groups) > 0) return false;
+      // Exclude group's guide
+      if (selectedGroup?.guide_id && fId === Number(selectedGroup.guide_id)) return false;
+      if (selectedGroup?.guide_faculty_id && fId === Number(selectedGroup.guide_faculty_id)) return false;
+      if (selectedGroup?.guide_name && fName === selectedGroup.guide_name.trim().toLowerCase()) return false;
+      return true;
+    });
+
+    if (!panelMentorSearch.trim()) return list;
     const q = panelMentorSearch.toLowerCase().trim();
-    return allDepartmentFaculty.filter(
+    return list.filter(
       (f) =>
         f.name?.toLowerCase().includes(q) ||
         f.designation?.toLowerCase().includes(q) ||
         f.employee_id?.toLowerCase().includes(q)
     );
-  }, [allDepartmentFaculty, panelMentorSearch]);
+  }, [allDepartmentFaculty, panelMentorSearch, effectiveGroups, selectedGroupId, allGuideFacultyIds, allGuideNames]);
 
   const filteredRangeMentors = useMemo(() => {
-    if (!rangeMentorSearch.trim()) return allDepartmentFaculty;
+    let list = (allDepartmentFaculty || []).filter((f) => {
+      const fId = Number(f.faculty_id || f.id);
+      const fName = (f.name || '').trim().toLowerCase();
+      // Exclude ANY faculty member who is a designated guide or active guide
+      if (allGuideFacultyIds.has(fId) || allGuideNames.has(fName)) return false;
+      if (f.is_designated_guide || Number(f.guided_groups) > 0) return false;
+      return true;
+    });
+
+    if (!rangeMentorSearch.trim()) return list;
     const q = rangeMentorSearch.toLowerCase().trim();
-    return allDepartmentFaculty.filter(
+    return list.filter(
       (f) =>
         f.name?.toLowerCase().includes(q) ||
         f.designation?.toLowerCase().includes(q) ||
         f.employee_id?.toLowerCase().includes(q)
     );
-  }, [allDepartmentFaculty, rangeMentorSearch]);
+  }, [allDepartmentFaculty, rangeMentorSearch, allGuideFacultyIds, allGuideNames]);
 
-
-
-  const groupPanelistsMap = useMemo(() => {
-    const map = {};
-    for (const item of panelMatrix) {
-      map[item.id] = item.panelists || [];
-    }
-    return map;
-  }, [panelMatrix]);
+  const groupPanelistsMap = effectiveGroupPanelistsMap;
 
   const filteredGroups = useMemo(() => {
-    return groups.filter((g) => {
+    return effectiveGroups.filter((g) => {
       if (selectedDivision !== 'ALL') {
         const matchesBatch = g.batch?.toLowerCase() === selectedDivision.toLowerCase();
         const matchesMemberDiv = g.members?.some(m => m.division?.toLowerCase() === selectedDivision.toLowerCase());
@@ -336,35 +485,56 @@ export default function BEProjectGovernance() {
           m.roll_no?.toLowerCase().includes(q) ||
           m.email?.toLowerCase().includes(q)
         );
-        const mentors = groupPanelistsMap[g.id] || [];
+        const mentors = effectiveGroupPanelistsMap[g.id] || [];
         const mentorMatch = mentors.some(m => m.name?.toLowerCase().includes(q));
         if (!codeMatch && !titleMatch && !domainMatch && !guideMatch && !memberMatch && !mentorMatch) return false;
       }
       return true;
     });
-  }, [groups, selectedDivision, groupSearch, groupPanelistsMap]);
+  }, [effectiveGroups, selectedDivision, groupSearch, effectiveGroupPanelistsMap]);
+
+  // Pending counts
+  const pendingGuideCount = Object.keys(pendingChanges.guideDesignations).length;
+  const pendingGroupGuideCount = Object.keys(pendingChanges.groupGuides).length;
+  const pendingPanelCount = Object.keys(pendingChanges.panelAssignments).length;
+  const totalPendingCount = pendingGuideCount + pendingGroupGuideCount + pendingPanelCount;
+  const hasPendingChanges = totalPendingCount > 0;
+
+  // Prevent accidental navigation when changes are staged
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (hasPendingChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasPendingChanges]);
 
   const fetchHODData = async () => {
     setLoading(true);
     try {
+      const ts = Date.now();
+      const noCacheConfig = { headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' } };
       const [dashRes, groupsRes, stagesRes, guidesRes, settingsRes] = await Promise.all([
-        api.get(`/projects/hod/dashboard?academic_year=${academicYear}`).catch((err) => {
+        api.get(`/projects/hod/dashboard?academic_year=${academicYear}&_t=${ts}`, noCacheConfig).catch((err) => {
           console.error('Error fetching dashboard:', err);
           return { data: { total_groups: 0, group_status_breakdown: [], stages: [], faculty_load: [] } };
         }),
-        api.get(`/projects/hod/groups?academic_year=${academicYear}`).catch((err) => {
+        api.get(`/projects/hod/groups?academic_year=${academicYear}&_t=${ts}`, noCacheConfig).catch((err) => {
           console.error('Error fetching groups:', err);
           return { data: [] };
         }),
-        api.get(`/projects/hod/stages?academic_year=${academicYear}`).catch((err) => {
+        api.get(`/projects/hod/stages?academic_year=${academicYear}&_t=${ts}`, noCacheConfig).catch((err) => {
           console.error('Error fetching stages:', err);
           return { data: [] };
         }),
-        api.get(`/projects/student/available-guides?academic_year=${academicYear}`).catch((err) => {
+        api.get(`/projects/student/available-guides?academic_year=${academicYear}&_t=${ts}`, noCacheConfig).catch((err) => {
           console.error('Error fetching guides:', err);
           return { data: [] };
         }),
-        api.get(`/projects/registration-settings?academic_year=${academicYear}`).catch(() => ({ data: { is_registration_open: true, due_date: null, is_open: true } })),
+        api.get(`/projects/registration-settings?academic_year=${academicYear}&_t=${ts}`, noCacheConfig).catch(() => ({ data: { is_registration_open: true, due_date: null, is_open: true } })),
       ]);
       setDashboardData(dashRes.data || {});
       setGroups(groupsRes.data || []);
@@ -403,7 +573,7 @@ export default function BEProjectGovernance() {
   }, [panelMatrixStageId]);
 
   // Handlers
-  const handleToggleDesignatedGuide = async (facultyId, currentIsGuide, guidedCount, panelAssignments) => {
+  const handleToggleDesignatedGuide = (facultyId, currentIsGuide, guidedCount, panelAssignments) => {
     if (Number(panelAssignments) > 0) {
       toast.error('This faculty member is assigned as a Panel Mentor and cannot be a Guide.');
       return;
@@ -413,51 +583,86 @@ export default function BEProjectGovernance() {
       return;
     }
 
-    setTogglingGuideId(facultyId);
-    try {
-      const res = await api.post('/projects/hod/designated-guides/toggle', {
-        academic_year: academicYear,
-        faculty_id: facultyId,
-        is_guide: !currentIsGuide,
+    const originalFac = dashboardData?.faculty_load?.find((f) => Number(f.faculty_id) === Number(facultyId));
+    const originalIsGuide = Boolean(originalFac?.is_designated_guide);
+    const nextIsGuide = !currentIsGuide;
+
+    setPendingChanges((prev) => {
+      const updated = { ...prev.guideDesignations };
+      if (nextIsGuide === originalIsGuide) {
+        delete updated[facultyId];
+      } else {
+        updated[facultyId] = nextIsGuide;
+      }
+      return { ...prev, guideDesignations: updated };
+    });
+
+    if (nextIsGuide === originalIsGuide) {
+      toast.success('Reverted guide designation to database value');
+    } else {
+      toast.success(nextIsGuide ? 'Staged: Faculty designated as Guide' : 'Staged: Faculty removed from Guides', {
+        icon: '⚡',
       });
-      toast.success(res.data.message || 'Guide designation updated');
-      await fetchHODData();
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to update guide designation');
-    } finally {
-      setTogglingGuideId(null);
     }
   };
 
-  const handleBatchAssignAllGuides = async () => {
-    try {
-      const res = await api.post('/projects/hod/designated-guides/batch-assign-all', {
-        academic_year: academicYear,
-      });
-      toast.success(res.data.message || 'Eligible faculty designated as Guides');
-      await fetchHODData();
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to batch assign guides');
+  const handleBatchAssignAllGuides = () => {
+    const eligible = effectiveFacultyLoad.filter(
+      (f) => !f.is_designated_guide && Number(f.guided_groups) === 0 && Number(f.panel_assignments) === 0
+    );
+    if (eligible.length === 0) {
+      toast.info('No additional eligible faculty found to designate as guides');
+      return;
     }
+
+    setPendingChanges((prev) => {
+      const updated = { ...prev.guideDesignations };
+      eligible.forEach((f) => {
+        const originalFac = dashboardData?.faculty_load?.find((x) => Number(x.faculty_id) === Number(f.faculty_id));
+        const originalIsGuide = Boolean(originalFac?.is_designated_guide);
+        if (!originalIsGuide) {
+          updated[f.faculty_id] = true;
+        }
+      });
+      return { ...prev, guideDesignations: updated };
+    });
+
+    toast.success(`Staged ${eligible.length} eligible faculty as Guides`, { icon: '⚡' });
   };
 
-  const handleAssignGuide = async (e) => {
+  const handleAssignGuide = (e) => {
     e.preventDefault();
     if (!guideModalGroup) return;
-    setSubmitting(true);
-    try {
-      const res = await api.patch(`/projects/hod/groups/${guideModalGroup.id}/guide`, {
-        guide_id: selectedGuideId ? Number(selectedGuideId) : null,
-      });
-      toast.success(res.data.message);
-      setGuideModalGroup(null);
-      setGuideModalSearch('');
-      fetchHODData();
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to assign guide');
-    } finally {
-      setSubmitting(false);
+
+    const gId = guideModalGroup.id;
+    const newGuideId = selectedGuideId ? Number(selectedGuideId) : null;
+    const originalGroup = groups.find((g) => g.id === gId);
+    const originalGuideId = originalGroup ? (originalGroup.guide_id || originalGroup.guide_faculty_id || null) : null;
+
+    let guideName = null;
+    if (newGuideId) {
+      const fac = allDepartmentFaculty.find((f) => Number(f.faculty_id || f.id) === newGuideId);
+      guideName = fac?.name || 'Faculty';
     }
+
+    setPendingChanges((prev) => {
+      const updated = { ...prev.groupGuides };
+      if (newGuideId === (originalGuideId ? Number(originalGuideId) : null)) {
+        delete updated[gId];
+      } else {
+        updated[gId] = { guide_id: newGuideId, guide_name: guideName };
+      }
+      return { ...prev, groupGuides: updated };
+    });
+
+    setGuideModalGroup(null);
+    setGuideModalSearch('');
+    toast.success(
+      newGuideId
+        ? `Staged guide "${guideName}" for ${guideModalGroup.group_code}`
+        : `Staged guide unassignment for ${guideModalGroup.group_code}`,
+      { icon: '⚡' }
+    );
   };
 
   const handleSaveStage = async (e) => {
@@ -491,31 +696,77 @@ export default function BEProjectGovernance() {
     }
   };
 
-  const handleAssignPanel = async (e) => {
+  const handleAssignPanel = (e) => {
     e.preventDefault();
-    if (!selectedStageId || !selectedGroupId || selectedPanelistIds.length === 0) {
-      return toast.error('Please select stage, group, and at least one panel member');
+    if (!selectedStageId || !selectedGroupId) {
+      return toast.error('Please select stage and group');
     }
-    setSubmitting(true);
-    try {
-      const res = await api.post('/projects/hod/panel-assignments', {
-        stage_id: Number(selectedStageId),
-        group_id: Number(selectedGroupId),
-        panel_member_ids: selectedPanelistIds.map(Number),
-      });
-      toast.success(res.data.message);
-      setPanelModal(false);
-      fetchHODData();
-      if (panelMatrixStageId) fetchPanelMatrix(panelMatrixStageId);
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Panel assignment failed');
-    } finally {
-      setSubmitting(false);
-    }
+
+    const stageId = Number(selectedStageId);
+    const groupId = Number(selectedGroupId);
+    const panelMemberIds = selectedPanelistIds.map(Number);
+    const key = `${stageId}_${groupId}`;
+
+    const originalPanelists = (baseGroupPanelistsMap[groupId] || []).map((p) => Number(p.faculty_id)).sort();
+    const isSameAsOriginal =
+      panelMemberIds.length === originalPanelists.length &&
+      panelMemberIds.slice().sort().every((val, idx) => val === originalPanelists[idx]);
+
+    const panelMembers = panelMemberIds.map((id) => {
+      const fac = allDepartmentFaculty.find((f) => Number(f.faculty_id || f.id) === id);
+      return {
+        faculty_id: id,
+        name: fac?.name || 'Faculty',
+        designation: fac?.designation || '',
+      };
+    });
+
+    setPendingChanges((prev) => {
+      const updated = { ...prev.panelAssignments };
+      if (isSameAsOriginal) {
+        delete updated[key];
+      } else {
+        updated[key] = {
+          stage_id: stageId,
+          group_id: groupId,
+          panel_member_ids: panelMemberIds,
+          panel_members: panelMembers,
+        };
+      }
+      return { ...prev, panelAssignments: updated };
+    });
+
+    setPanelModal(false);
+    toast.success(
+      panelMemberIds.length === 0
+        ? 'Staged: Panel mentors unassigned'
+        : `Staged: ${panelMemberIds.length} mentor(s) assigned`,
+      { icon: '⚡' }
+    );
   };
 
+  const handleStageUnassignGroupMentors = (group) => {
+    if (!panelMatrixStageId) return;
+    const stageId = Number(panelMatrixStageId);
+    const groupId = Number(group.id);
+    const key = `${stageId}_${groupId}`;
 
-  const handleRangeAssignPanels = async (e) => {
+    setPendingChanges((prev) => ({
+      ...prev,
+      panelAssignments: {
+        ...prev.panelAssignments,
+        [key]: {
+          stage_id: stageId,
+          group_id: groupId,
+          panel_member_ids: [],
+          panel_members: [],
+        },
+      },
+    }));
+    toast.success(`Staged: Mentors unassigned for ${group.group_code}`, { icon: '⚡' });
+  };
+
+  const handleRangeAssignPanels = (e) => {
     e.preventDefault();
     if (!rangeStageId) return toast.error('Please select an evaluation stage');
     if (selectedGroupsToAssign.length === 0) {
@@ -527,33 +778,140 @@ export default function BEProjectGovernance() {
     }
     if (rangePanelistIds.length === 0) return toast.error('Please select at least 1 panel mentor');
 
-    setSubmitting(true);
-    try {
-      const res = await api.post('/projects/hod/panel-range-assign', {
-        stage_id: Number(rangeStageId),
-        group_ids: selectedGroupsToAssign.map((g) => g.id),
-        panel_member_ids: rangePanelistIds.map(Number),
-        skip_guide_conflict: rangeSkipGuideConflict,
+    const stageId = Number(rangeStageId);
+    const rawPanelistIds = rangePanelistIds.map(Number);
+
+    setPendingChanges((prev) => {
+      const updated = { ...prev.panelAssignments };
+      selectedGroupsToAssign.forEach((grp) => {
+        const key = `${stageId}_${grp.id}`;
+        const grpGuideId = grp.guide_id || grp.proposed_guide_id;
+
+        const effectivePanelistIds = rawPanelistIds.filter((id) => {
+          if (rangeSkipGuideConflict && grpGuideId && Number(id) === Number(grpGuideId)) return false;
+          if (allGuideFacultyIds.has(Number(id))) return false;
+          return true;
+        });
+
+        const panelMembers = effectivePanelistIds.map((id) => {
+          const fac = allDepartmentFaculty.find((f) => Number(f.faculty_id || f.id) === id);
+          return {
+            faculty_id: id,
+            name: fac?.name || 'Faculty',
+            designation: fac?.designation || '',
+          };
+        });
+
+        updated[key] = {
+          stage_id: stageId,
+          group_id: grp.id,
+          panel_member_ids: effectivePanelistIds,
+          panel_members: panelMembers,
+        };
       });
+      return { ...prev, panelAssignments: updated };
+    });
 
-      toast.success(res.data.message);
-      if (res.data.warnings && res.data.warnings.length > 0) {
-        toast((t) => (
-          <div className="text-xs">
-            <p className="font-bold">Conflict of Interest Protection Applied:</p>
-            <p>{res.data.warnings.length} guide conflict(s) safely bypassed.</p>
-          </div>
-        ), { duration: 5000 });
-      }
+    setRangeAssignModal(false);
+    toast.success(`Staged panel mentors for ${selectedGroupsToAssign.length} groups`, { icon: '⚡' });
+  };
 
-      setRangeAssignModal(false);
-      fetchHODData();
-      if (panelMatrixStageId) fetchPanelMatrix(panelMatrixStageId);
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Assignment failed');
-    } finally {
-      setSubmitting(false);
+  const revertGuideDesignation = (facultyId) => {
+    setPendingChanges((prev) => {
+      const updated = { ...prev.guideDesignations };
+      delete updated[facultyId];
+      return { ...prev, guideDesignations: updated };
+    });
+    toast.success('Reverted guide designation');
+  };
+
+  const revertGroupGuide = (groupId) => {
+    setPendingChanges((prev) => {
+      const updated = { ...prev.groupGuides };
+      delete updated[groupId];
+      return { ...prev, groupGuides: updated };
+    });
+    toast.success('Reverted group guide assignment');
+  };
+
+  const revertPanelAssignment = (key) => {
+    setPendingChanges((prev) => {
+      const updated = { ...prev.panelAssignments };
+      delete updated[key];
+      return { ...prev, panelAssignments: updated };
+    });
+    toast.success('Reverted mentor assignment');
+  };
+
+  const handleDiscardAllChanges = () => {
+    if (!hasPendingChanges) return;
+    if (
+      window.confirm(
+        `Discard all ${totalPendingCount} staged changes? All pending guide and mentor assignments will be reverted back to current database values.`
+      )
+    ) {
+      setPendingChanges({
+        guideDesignations: {},
+        groupGuides: {},
+        panelAssignments: {},
+      });
+      toast.success('All staged changes discarded');
     }
+  };
+
+  const handleApplyAllChanges = async () => {
+    if (!hasPendingChanges) return;
+    setApplyingBatch(true);
+    try {
+      const payload = {
+        academic_year: academicYear,
+        guide_designations: Object.entries(pendingChanges.guideDesignations).map(([facId, isGuide]) => ({
+          faculty_id: Number(facId),
+          is_guide: isGuide,
+        })),
+        group_guides: Object.entries(pendingChanges.groupGuides).map(([grpId, data]) => ({
+          group_id: Number(grpId),
+          guide_id: data.guide_id,
+        })),
+        panel_assignments: Object.values(pendingChanges.panelAssignments).map((item) => ({
+          stage_id: item.stage_id,
+          group_id: item.group_id,
+          panel_member_ids: item.panel_member_ids,
+        })),
+      };
+
+      const res = await api.post('/projects/hod/governance/batch-apply', payload);
+      toast.success(res.data.message || 'All changes saved to database successfully!');
+      setPendingChanges({
+        guideDesignations: {},
+        groupGuides: {},
+        panelAssignments: {},
+      });
+      setShowChangesModal(false);
+      await fetchHODData();
+      if (panelMatrixStageId) {
+        await fetchPanelMatrix(panelMatrixStageId);
+      }
+    } catch (err) {
+      console.error('Error applying batch changes:', err);
+      toast.error(err.response?.data?.error || 'Failed to apply changes to database');
+    } finally {
+      setApplyingBatch(false);
+    }
+  };
+
+  const handleAcademicYearChange = (newYear) => {
+    if (hasPendingChanges) {
+      if (
+        !window.confirm(
+          'You have unsaved staged changes for the current academic year. Switching academic years will discard them. Proceed?'
+        )
+      ) {
+        return;
+      }
+      setPendingChanges({ guideDesignations: {}, groupGuides: {}, panelAssignments: {} });
+    }
+    setAcademicYear(newYear);
   };
 
   const handleCopyStagePanels = async (e) => {
@@ -596,9 +954,63 @@ export default function BEProjectGovernance() {
     try {
       const res = await api.post('/projects/hod/groups/clear-guides', { academic_year: academicYear });
       toast.success(res.data.message);
-      fetchHODData();
+      // Immediately reset guide statuses in state
+      setDashboardData((prev) => {
+        if (!prev) return prev;
+        const updatedLoad = (prev.faculty_load || []).map((f) => ({
+          ...f,
+          guided_groups: 0,
+          is_designated_guide: false,
+        }));
+        return { ...prev, faculty_load: updatedLoad };
+      });
+      setAvailableGuides([]);
+      setGroups((prev) => prev.map((g) => ({ ...g, guide_id: null, guide_faculty_id: null, guide_name: null })));
+      setPendingChanges((prev) => ({
+        ...prev,
+        guideDesignations: {},
+        groupGuides: {},
+      }));
+      await fetchHODData();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to clear guide assignments');
+    }
+  };
+
+  const handleClearAllMentors = async () => {
+    setSubmitting(true);
+    try {
+      const res = await api.post('/projects/hod/groups/clear-mentors', {
+        academic_year: academicYear,
+        stage_id: unassignMentorsScope === 'STAGE' ? panelMatrixStageId : 'ALL',
+      });
+      toast.success(res.data.message);
+      setUnassignMentorsModal(false);
+      // Immediately reset panel mentor statuses in state
+      if (unassignMentorsScope === 'ALL') {
+        setDashboardData((prev) => {
+          if (!prev) return prev;
+          const updatedLoad = (prev.faculty_load || []).map((f) => ({
+            ...f,
+            panel_assignments: 0,
+          }));
+          return { ...prev, faculty_load: updatedLoad };
+        });
+      }
+      setPanelMatrix((prev) => prev.map((item) => ({ ...item, panelists: [] })));
+      setPendingChanges((prev) => ({
+        ...prev,
+        panelAssignments: {},
+      }));
+      await fetchHODData();
+      if (panelMatrixStageId) {
+        await fetchPanelMatrix(panelMatrixStageId);
+      }
+    } catch (err) {
+      console.error('Failed to unassign mentors:', err);
+      toast.error(err.response?.data?.error || err.message || 'Failed to unassign panel mentors');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -1270,10 +1682,10 @@ export default function BEProjectGovernance() {
 
   // Memoized sorted groups & range/domain selection calculations
   const sortedGroups = useMemo(() => {
-    return [...(groups || [])].sort((a, b) =>
+    return [...(effectiveGroups || [])].sort((a, b) =>
       (a.group_code || '').localeCompare(b.group_code || '', undefined, { numeric: true })
     );
-  }, [groups]);
+  }, [effectiveGroups]);
 
   const filteredTransferGroups = useMemo(() => {
     if (!transferModal) return [];
@@ -1293,7 +1705,7 @@ export default function BEProjectGovernance() {
   // Distinct available domains with group counts
   const availableDomains = useMemo(() => {
     const map = new Map();
-    groups.forEach((g) => {
+    effectiveGroups.forEach((g) => {
       const d = (g.domain || 'Unspecified').trim();
       if (!map.has(d)) {
         map.set(d, []);
@@ -1399,7 +1811,7 @@ export default function BEProjectGovernance() {
 
 
   // Find guide of selected group
-  const currentSelectedGroupObj = groups.find((g) => g.id === Number(selectedGroupId));
+  const currentSelectedGroupObj = effectiveGroups.find((g) => g.id === Number(selectedGroupId));
 
   return (
     <div className="p-8 lg:p-10 w-full max-w-7xl mx-auto space-y-8">
@@ -1425,7 +1837,7 @@ export default function BEProjectGovernance() {
           <label className="text-xs font-semibold text-draft">Academic Year:</label>
           <select
             value={academicYear}
-            onChange={(e) => setAcademicYear(e.target.value)}
+            onChange={(e) => handleAcademicYearChange(e.target.value)}
             className="input-field py-1 text-xs font-mono font-bold max-w-[140px]"
           >
             <option value="2026-27">2026-27 (Current)</option>
@@ -1434,6 +1846,70 @@ export default function BEProjectGovernance() {
           </select>
         </div>
       </div>
+
+      {/* Staged Changes Notification Banner */}
+      {hasPendingChanges && (
+        <div className="bg-amber-50/90 border border-amber-300/80 rounded-xl p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3 animate-fade-in">
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-700 text-lg font-bold border border-amber-400/30">
+              ⚡
+            </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-sm text-amber-950">
+                  {totalPendingCount} Staged Change{totalPendingCount > 1 ? 's' : ''} Pending Database Update
+                </span>
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-amber-200/70 text-amber-900 border border-amber-400/40">
+                  Unsaved Local Draft
+                </span>
+              </div>
+              <p className="text-xs text-amber-800 mt-0.5">
+                Changes are previewed live below across all tables. Click <strong>Apply Changes to Database</strong> to commit them altogether.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 self-end md:self-auto">
+            <button
+              type="button"
+              onClick={() => setShowChangesModal(true)}
+              className="px-3 py-1.5 text-xs font-semibold rounded-md text-amber-900 hover:bg-amber-100 border border-amber-300 transition-colors"
+            >
+              Review ({totalPendingCount})
+            </button>
+            <button
+              type="button"
+              onClick={handleDiscardAllChanges}
+              disabled={applyingBatch}
+              className="px-3 py-1.5 text-xs font-semibold rounded-md text-rose-700 hover:bg-rose-50 border border-rose-200 transition-colors"
+            >
+              Discard All
+            </button>
+            <button
+              type="button"
+              onClick={handleApplyAllChanges}
+              disabled={applyingBatch}
+              className="px-4 py-1.5 text-xs font-bold rounded-md bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-50"
+            >
+              {applyingBatch ? (
+                <>
+                  <svg className="animate-spin h-3.5 w-3.5 text-white" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                  </svg>
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <>
+                  <span>Apply Changes to Database</span>
+                  <span className="bg-emerald-800 px-1.5 py-0.2 rounded text-[11px] font-mono">
+                    {totalPendingCount}
+                  </span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Tabs Navigation */}
       <div className="flex items-center gap-2 border-b border-rule pb-3 overflow-x-auto">
@@ -1536,7 +2012,7 @@ export default function BEProjectGovernance() {
                   Designate which faculty members will serve as BE Project Guides.
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={handleBatchAssignAllGuides}
@@ -1629,17 +2105,16 @@ export default function BEProjectGovernance() {
                 <thead>
                   <tr>
                     <th>Faculty Member</th>
-                    <th>Designation &amp; Info</th>
+                    <th>Designation</th>
                     <th>Role &amp; Status</th>
-                    <th className="numeric">Guided Groups (Max 5)</th>
-                    <th className="numeric">Panel Assignments</th>
+                    <th className="text-center !text-center">Guided Groups</th>
                     <th className="text-right">Guide Assignment Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredFacultyLoad.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="text-center py-10 text-draft">
+                      <td colSpan={5} className="text-center py-10 text-draft">
                         No faculty matched your active search or role filters.
                       </td>
                     </tr>
@@ -1657,35 +2132,49 @@ export default function BEProjectGovernance() {
                           </td>
                           <td>
                             <div className="text-xs text-ink font-medium">{fac.designation}</div>
-                            {fac.employee_id && (
-                              <div className="text-[10px] text-draft font-mono">ID: {fac.employee_id}</div>
-                            )}
                           </td>
                           <td>
-                            {isMentor ? (
-                              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-purple-50 text-purple-800 border border-purple-200">
-
-                                <span>Panel Mentor</span>
-                              </span>
-                            ) : isGuide ? (
-                              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                                <span className="text-emerald-300">{Icons.check}</span>
-                                <span>BE Project Guide</span>
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-                                <span>Eligible Faculty</span>
-                              </span>
-                            )}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {isMentor ? (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-purple-50 text-purple-800 border border-purple-200">
+                                  <span>Panel Mentor</span>
+                                </span>
+                              ) : isGuide ? (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                  <span className="text-emerald-300">{Icons.check}</span>
+                                  <span>BE Project Guide</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                                  <span>Eligible Faculty</span>
+                                </span>
+                              )}
+                              {fac._isDesignationStaged && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                                  ⚡ Staged
+                                </span>
+                              )}
+                            </div>
                           </td>
-                          <td className="numeric font-mono font-bold text-navy">
-                            {fac.guided_groups} / 5
-                          </td>
-                          <td className="numeric font-mono font-bold text-purple-900">
-                            {fac.panel_assignments}
+                          <td className="text-center !text-center font-mono font-bold text-navy">
+                            {fac.guided_groups}
                           </td>
                           <td className="text-right">
-                            {isMentor ? (
+                            {fac._isDesignationStaged ? (
+                              <div className="flex items-center justify-end gap-1.5">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-md bg-amber-50 text-amber-900 border border-amber-300">
+                                  ⚡ {fac.is_designated_guide ? 'Staged as Guide' : 'Staged: Non-Guide'}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => revertGuideDesignation(fac.faculty_id)}
+                                  className="px-2 py-1 text-xs font-semibold text-slate-700 hover:text-rose-700 hover:bg-rose-50 rounded border border-slate-300 hover:border-rose-300 transition-colors"
+                                  title="Revert to database value"
+                                >
+                                  Undo
+                                </button>
+                              </div>
+                            ) : isMentor ? (
                               <span
                                 className="inline-flex items-center justify-center px-3.5 py-1.5 rounded-md text-xs font-bold italic bg-purple-100/80 text-purple-800 border border-purple-300 shadow-2xs"
                                 title="Faculty is assigned as a Panel Mentor"
@@ -1695,7 +2184,7 @@ export default function BEProjectGovernance() {
                             ) : isGuide ? (
                               <button
                                 type="button"
-                                disabled={isToggling || Number(fac.guided_groups) > 0}
+                                disabled={Number(fac.guided_groups) > 0}
                                 onClick={() => handleToggleDesignatedGuide(fac.faculty_id, true, fac.guided_groups, fac.panel_assignments)}
                                 className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${Number(fac.guided_groups) > 0
                                   ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
@@ -1704,19 +2193,18 @@ export default function BEProjectGovernance() {
                                 title={
                                   Number(fac.guided_groups) > 0
                                     ? `Guiding ${fac.guided_groups} group(s). Reassign them first to remove guide status.`
-                                    : 'Click to remove guide designation'
+                                    : 'Click to stage removing guide designation'
                                 }
                               >
-                                {isToggling ? 'Updating...' : Number(fac.guided_groups) > 0 ? 'Active Guide' : 'Designated Guide'}
+                                {Number(fac.guided_groups) > 0 ? 'Active Guide' : 'Designated Guide'}
                               </button>
                             ) : (
                               <button
                                 type="button"
-                                disabled={isToggling}
                                 onClick={() => handleToggleDesignatedGuide(fac.faculty_id, false, fac.guided_groups, fac.panel_assignments)}
                                 className="px-3.5 py-1.5 text-xs font-bold bg-navy hover:bg-slate-800 text-white rounded-md transition-colors shadow-2xs"
                               >
-                                {isToggling ? 'Updating...' : '+ Assign as Guide'}
+                                + Assign as Guide
                               </button>
                             )}
                           </td>
@@ -1984,7 +2472,7 @@ export default function BEProjectGovernance() {
                         className="w-full text-left px-3 py-2 flex items-center gap-2.5 hover:bg-emerald-50 text-slate-700 hover:text-emerald-900 transition-colors"
                       >
                         <span className="w-7 h-7 rounded bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs shrink-0">
-
+                          📊
                         </span>
                         <div className="flex flex-col min-w-0">
                           <span className="font-bold text-slate-800 text-xs">Excel Spreadsheet</span>
@@ -2002,7 +2490,7 @@ export default function BEProjectGovernance() {
                         className="w-full text-left px-3 py-2 flex items-center gap-2.5 hover:bg-rose-50 text-slate-700 hover:text-rose-900 transition-colors disabled:opacity-50"
                       >
                         <span className="w-7 h-7 rounded bg-rose-100 text-rose-800 flex items-center justify-center font-bold text-xs shrink-0">
-
+                          📄
                         </span>
                         <div className="flex flex-col min-w-0">
                           <span className="font-bold text-slate-800 text-xs">PDF Document</span>
@@ -2011,14 +2499,6 @@ export default function BEProjectGovernance() {
                     </div>
                   )}
                 </div>
-
-                <button
-                  type="button"
-                  onClick={handleClearAllGuides}
-                  className="px-3 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors"
-                >
-                  {Icons.trash} <span>Unassign All Guides</span>
-                </button>
               </div>
             </div>
 
@@ -2045,21 +2525,24 @@ export default function BEProjectGovernance() {
                 )}
               </div>
 
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[11px] font-bold text-draft uppercase tracking-wider mr-1">Division:</span>
-                {['ALL', 'BE-1', 'BE-2', 'BE-3', 'BE-4'].map((div) => (
-                  <button
-                    key={div}
-                    type="button"
-                    onClick={() => setSelectedDivision(div)}
-                    className={`px-2.5 py-1 text-xs font-semibold rounded transition-colors ${selectedDivision === div
-                      ? 'bg-navy text-white shadow-xs'
-                      : 'bg-white hover:bg-gray-100 text-draft border border-rule'
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-semibold text-slate-600">Division:</span>
+                <div className="bg-slate-100 p-0.5 rounded-md flex items-center gap-0.5 border border-slate-200/80">
+                  {['ALL', 'BE-1', 'BE-2', 'BE-3', 'BE-4'].map((div) => (
+                    <button
+                      key={div}
+                      type="button"
+                      onClick={() => setSelectedDivision(div)}
+                      className={`px-3 py-1 text-xs font-semibold rounded transition-all ${
+                        selectedDivision === div
+                          ? 'bg-white text-navy shadow-2xs font-bold'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
                       }`}
-                  >
-                    {div === 'ALL' ? 'All Divisions' : div}
-                  </button>
-                ))}
+                    >
+                      {div}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -2124,79 +2607,177 @@ export default function BEProjectGovernance() {
                             <td>
                               {g.guide_name ? (
                                 <div className="space-y-1">
-                                  <div className="font-bold text-emerald-800 text-xs">{g.guide_name}</div>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setGuideModalSearch('');
-                                      setGuideModalGroup(g);
-                                      setSelectedGuideId(g.proposed_guide_faculty_id || g.guide_faculty_id ? String(g.proposed_guide_faculty_id || g.guide_faculty_id) : '');
-                                    }}
-                                    className="text-[10px] font-semibold text-navy hover:underline block"
-                                  >
-                                    Change Guide
-                                  </button>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="font-bold text-emerald-800 text-xs">{g.guide_name}</span>
+                                    {g._isGuideStaged && (
+                                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                                        ⚡ Staged
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setGuideModalSearch('');
+                                        setGuideModalGroup(g);
+                                        setSelectedGuideId(g.guide_id ? String(g.guide_id) : '');
+                                      }}
+                                      className="text-[10px] font-semibold text-navy hover:underline block"
+                                    >
+                                      Change Guide
+                                    </button>
+                                    {g._isGuideStaged && (
+                                      <>
+                                        <span className="text-slate-300">·</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => revertGroupGuide(g.id)}
+                                          className="text-[10px] font-semibold text-amber-800 hover:text-amber-950 underline"
+                                          title="Revert to database guide"
+                                        >
+                                          Undo
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
                                 </div>
                               ) : (
                                 <div className="space-y-1">
-                                  <span className="text-draft text-[11px] italic font-mono block">No guide assigned</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setGuideModalSearch('');
-                                      setGuideModalGroup(g);
-                                      setSelectedGuideId(g.proposed_guide_faculty_id || g.guide_faculty_id ? String(g.proposed_guide_faculty_id || g.guide_faculty_id) : '');
-                                    }}
-                                    className="px-2 py-0.5 bg-navy hover:bg-navy/90 text-white rounded text-[10px] font-bold block transition-colors"
-                                  >
-                                    + Assign Guide
-                                  </button>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-draft text-[11px] italic font-mono block">No guide assigned</span>
+                                    {g._isGuideStaged && (
+                                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                                        ⚡ Staged
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setGuideModalSearch('');
+                                        setGuideModalGroup(g);
+                                        setSelectedGuideId(g.guide_id ? String(g.guide_id) : '');
+                                      }}
+                                      className="px-2 py-0.5 bg-navy hover:bg-navy/90 text-white rounded text-[10px] font-bold block transition-colors"
+                                    >
+                                      + Assign Guide
+                                    </button>
+                                    {g._isGuideStaged && (
+                                      <button
+                                        type="button"
+                                        onClick={() => revertGroupGuide(g.id)}
+                                        className="text-[10px] font-semibold text-amber-800 hover:text-amber-950 underline ml-1"
+                                        title="Revert to database guide"
+                                      >
+                                        Undo
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                               )}
                             </td>
                             <td>
                               {(() => {
-                                const groupPanelists = groupPanelistsMap[g.id] || [];
+                                const rawGroupPanelists = effectiveGroupPanelistsMap[g.id] || [];
+                                const groupPanelists = rawGroupPanelists.filter(
+                                  (p) =>
+                                    Number(p.faculty_id) !== Number(g.guide_id) &&
+                                    Number(p.faculty_id) !== Number(g.guide_faculty_id) &&
+                                    (!g.guide_name || (p.name || '').trim().toLowerCase() !== g.guide_name.trim().toLowerCase())
+                                );
+                                const isPanelStaged = Boolean(pendingChanges.panelAssignments[`${panelMatrixStageId}_${g.id}`]);
+
                                 return groupPanelists.length > 0 ? (
                                   <div className="space-y-1">
                                     <div className="space-y-0.5">
-                                      {groupPanelists.map((p) => (
-                                        <div
-                                          key={p.faculty_id}
-                                          className="font-bold text-indigo-950 text-xs"
-                                        >
-                                          {p.name}
-                                        </div>
-                                      ))}
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        {groupPanelists.map((p) => (
+                                          <span
+                                            key={p.faculty_id}
+                                            className="font-bold text-indigo-950 text-xs block"
+                                          >
+                                            {p.name}
+                                          </span>
+                                        ))}
+                                        {isPanelStaged && (
+                                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                                            ⚡ Staged
+                                          </span>
+                                        )}
+                                      </div>
                                     </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setSelectedStageId(panelMatrixStageId);
-                                        setSelectedGroupId(String(g.id));
-                                        setSelectedPanelistIds(groupPanelists.map((p) => String(p.faculty_id)));
-                                        setPanelModal(true);
-                                      }}
-                                      className="text-[10px] font-semibold text-indigo-700 hover:underline block"
-                                    >
-                                      Edit Mentors
-                                    </button>
+                                    <div className="flex items-center gap-2 pt-0.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedStageId(panelMatrixStageId);
+                                          setSelectedGroupId(String(g.id));
+                                          setSelectedPanelistIds(groupPanelists.map((p) => String(p.faculty_id)));
+                                          setPanelModal(true);
+                                        }}
+                                        className="text-[10px] font-semibold text-indigo-700 hover:underline"
+                                      >
+                                        Edit Mentors
+                                      </button>
+                                      <span className="text-slate-300">·</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleStageUnassignGroupMentors(g)}
+                                        className="text-[10px] font-semibold text-red-600 hover:underline"
+                                      >
+                                        Unassign
+                                      </button>
+                                      {isPanelStaged && (
+                                        <>
+                                          <span className="text-slate-300">·</span>
+                                          <button
+                                            type="button"
+                                            onClick={() => revertPanelAssignment(`${panelMatrixStageId}_${g.id}`)}
+                                            className="text-[10px] font-semibold text-amber-800 hover:text-amber-950 underline"
+                                            title="Revert to database mentors"
+                                          >
+                                            Undo
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
                                   </div>
                                 ) : (
                                   <div className="space-y-1">
-                                    <span className="text-draft text-[11px] italic font-mono block">No mentors assigned</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setSelectedStageId(panelMatrixStageId);
-                                        setSelectedGroupId(String(g.id));
-                                        setSelectedPanelistIds([]);
-                                        setPanelModal(true);
-                                      }}
-                                      className="px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded text-[10px] font-bold block transition-colors"
-                                    >
-                                      + Assign Mentors
-                                    </button>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-draft text-[11px] italic font-mono block">No mentors assigned</span>
+                                      {isPanelStaged && (
+                                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                                          ⚡ Staged
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedStageId(panelMatrixStageId);
+                                          setSelectedGroupId(String(g.id));
+                                          setSelectedPanelistIds([]);
+                                          setPanelModal(true);
+                                        }}
+                                        className="px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded text-[10px] font-bold block transition-colors"
+                                      >
+                                        + Assign Mentors
+                                      </button>
+                                      {isPanelStaged && (
+                                        <button
+                                          type="button"
+                                          onClick={() => revertPanelAssignment(`${panelMatrixStageId}_${g.id}`)}
+                                          className="text-[10px] font-semibold text-amber-800 hover:text-amber-950 underline ml-1"
+                                          title="Revert to database mentors"
+                                        >
+                                          Undo
+                                        </button>
+                                      )}
+                                    </div>
                                   </div>
                                 );
                               })()}
@@ -2372,7 +2953,7 @@ export default function BEProjectGovernance() {
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-rule pb-4">
             <div>
-              <h2 className="font-serif text-xl font-bold text-ink">Continuous Assessment Evaluation Stages</h2>
+              <h2 className="font-mono text-xl font-bold text-ink">Continuous Assessment Evaluation Stages</h2>
             </div>
             <button
               onClick={() => {
@@ -2841,39 +3422,42 @@ export default function BEProjectGovernance() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-56 overflow-y-auto p-3.5 border border-rule rounded-lg bg-paper">
-                  {filteredRangeMentors.map((fac) => {
-                    const isChecked = rangePanelistIds.includes(String(fac.faculty_id));
-                    return (
-                      <label
-                        key={fac.faculty_id}
-                        className={`flex items-center justify-between p-2.5 rounded-md text-xs cursor-pointer border transition-colors ${isChecked ? 'bg-indigo-50 border-indigo-400 text-indigo-950 font-semibold shadow-2xs' : 'bg-white border-rule text-ink hover:bg-slate-50'
-                          }`}
-                      >
-                        <div className="flex items-center gap-2.5 truncate pr-2">
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            className="w-4 h-4 rounded text-indigo-600"
-                            onChange={(e) => {
-                              const idStr = String(fac.faculty_id);
-                              if (e.target.checked) {
-                                setRangePanelistIds([...rangePanelistIds, idStr]);
-                              } else {
-                                setRangePanelistIds(rangePanelistIds.filter((x) => x !== idStr));
-                              }
-                            }}
-                          />
-                          <div className="truncate">
-                            <span className="font-bold text-sm block truncate">{fac.name}</span>
-                            <span className="text-[11px] text-draft block truncate">{fac.designation}</span>
+                  {filteredRangeMentors.length === 0 ? (
+                    <div className="col-span-full py-8 text-center text-xs text-slate-500 italic">
+                      No eligible non-guide faculty available to assign as mentors.
+                    </div>
+                  ) : (
+                    filteredRangeMentors.map((fac) => {
+                      const isChecked = rangePanelistIds.includes(String(fac.faculty_id));
+                      return (
+                        <label
+                          key={fac.faculty_id}
+                          className={`flex items-center justify-between p-2.5 rounded-md text-xs cursor-pointer border transition-colors ${isChecked ? 'bg-indigo-50 border-indigo-400 text-indigo-950 font-semibold shadow-2xs' : 'bg-white border-rule text-ink hover:bg-slate-50'
+                            }`}
+                        >
+                          <div className="flex items-center gap-2.5 truncate pr-2">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              className="w-4 h-4 rounded text-indigo-600"
+                              onChange={(e) => {
+                                const idStr = String(fac.faculty_id);
+                                if (e.target.checked) {
+                                  setRangePanelistIds([...rangePanelistIds, idStr]);
+                                } else {
+                                  setRangePanelistIds(rangePanelistIds.filter((x) => x !== idStr));
+                                }
+                              }}
+                            />
+                            <div className="truncate">
+                              <span className="font-bold text-sm block truncate">{fac.name}</span>
+                              <span className="text-[11px] text-draft block truncate">{fac.designation}</span>
+                            </div>
                           </div>
-                        </div>
-                        <span className="text-[11px] font-mono text-draft bg-slate-100 px-2 py-0.5 rounded border border-rule shrink-0">
-                          {fac.guided_groups ?? fac.current_guided_groups ?? 0} guided
-                        </span>
-                      </label>
-                    );
-                  })}
+                        </label>
+                      );
+                    })
+                  )}
                 </div>
               </div>
 
@@ -3094,8 +3678,14 @@ export default function BEProjectGovernance() {
                       const gId = e.target.value;
                       setSelectedGroupId(gId);
                       const groupInMatrix = panelMatrix.find((x) => String(x.id) === String(gId));
+                      const grpObj = groups.find((x) => String(x.id) === String(gId));
                       if (groupInMatrix) {
-                        setSelectedPanelistIds(groupInMatrix.panelists.map((p) => String(p.faculty_id)));
+                        const cleanPanelists = (groupInMatrix.panelists || []).filter((p) => {
+                          if (grpObj?.guide_id && Number(p.faculty_id) === Number(grpObj.guide_id)) return false;
+                          if (grpObj?.guide_name && (p.name || '').trim().toLowerCase() === grpObj.guide_name.trim().toLowerCase()) return false;
+                          return true;
+                        });
+                        setSelectedPanelistIds(cleanPanelists.map((p) => String(p.faculty_id)));
                       } else {
                         setSelectedPanelistIds([]);
                       }
@@ -3114,17 +3704,30 @@ export default function BEProjectGovernance() {
               </div>
 
               {currentSelectedGroupObj && (
-                <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-lg text-sm text-navy">
-                  <p><span className="font-bold">Group Guide:</span> {currentSelectedGroupObj.guide_name || 'Unassigned'} ({currentSelectedGroupObj.domain || 'Domain'})</p>
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 flex items-center justify-between">
+                  <span className="font-semibold text-slate-800 truncate pr-2">
+                    Group: {currentSelectedGroupObj.group_code} — {currentSelectedGroupObj.title || 'No Title'}
+                  </span>
                 </div>
               )}
 
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-bold text-ink">Select Panel Mentors (1 to 3) *</label>
-                  <span className="text-xs font-mono text-navy font-bold bg-blue-50 px-2.5 py-0.5 rounded border border-blue-200">
-                    {selectedPanelistIds.length} of 3 selected
-                  </span>
+                  <label className="text-sm font-bold text-ink">Select Panel Mentors (1 to 3)</label>
+                  <div className="flex items-center gap-2.5">
+                    {selectedPanelistIds.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPanelistIds([])}
+                        className="text-xs text-red-600 font-semibold hover:underline"
+                      >
+                        Deselect All (Unassign)
+                      </button>
+                    )}
+                    <span className="text-xs font-mono text-navy font-bold bg-blue-50 px-2.5 py-0.5 rounded border border-blue-200">
+                      {selectedPanelistIds.length} of 3 selected
+                    </span>
+                  </div>
                 </div>
 
                 <div className="relative mb-2">
@@ -3149,38 +3752,41 @@ export default function BEProjectGovernance() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto p-3.5 border border-rule rounded-lg bg-paper">
-                  {filteredPanelMentors.map((fac) => (
-                    <label
-                      key={fac.faculty_id}
-                      className={`flex items-center justify-between p-2.5 rounded-md text-xs cursor-pointer border transition-colors ${selectedPanelistIds.includes(String(fac.faculty_id))
-                        ? 'bg-indigo-50 border-indigo-400 text-indigo-950 font-semibold shadow-2xs'
-                        : 'bg-white border-rule text-ink hover:bg-slate-50'
-                        }`}
-                    >
-                      <div className="flex items-center gap-2.5 truncate pr-2">
-                        <input
-                          type="checkbox"
-                          className="w-4 h-4 rounded text-indigo-600"
-                          checked={selectedPanelistIds.includes(String(fac.faculty_id))}
-                          onChange={(e) => {
-                            const idStr = String(fac.faculty_id);
-                            if (e.target.checked) {
-                              setSelectedPanelistIds([...selectedPanelistIds, idStr]);
-                            } else {
-                              setSelectedPanelistIds(selectedPanelistIds.filter((x) => x !== idStr));
-                            }
-                          }}
-                        />
-                        <div className="truncate">
-                          <span className="font-bold text-sm block truncate">{fac.name}</span>
-                          <span className="text-[11px] text-draft block truncate">{fac.designation}</span>
+                  {filteredPanelMentors.length === 0 ? (
+                    <div className="col-span-full py-8 text-center text-xs text-slate-500 italic">
+                      No eligible non-guide faculty available to assign as mentors.
+                    </div>
+                  ) : (
+                    filteredPanelMentors.map((fac) => (
+                      <label
+                        key={fac.faculty_id}
+                        className={`flex items-center justify-between p-2.5 rounded-md text-xs cursor-pointer border transition-colors ${selectedPanelistIds.includes(String(fac.faculty_id))
+                          ? 'bg-indigo-50 border-indigo-400 text-indigo-950 font-semibold shadow-2xs'
+                          : 'bg-white border-rule text-ink hover:bg-slate-50'
+                          }`}
+                      >
+                        <div className="flex items-center gap-2.5 truncate pr-2">
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 rounded text-indigo-600"
+                            checked={selectedPanelistIds.includes(String(fac.faculty_id))}
+                            onChange={(e) => {
+                              const idStr = String(fac.faculty_id);
+                              if (e.target.checked) {
+                                setSelectedPanelistIds([...selectedPanelistIds, idStr]);
+                              } else {
+                                setSelectedPanelistIds(selectedPanelistIds.filter((x) => x !== idStr));
+                              }
+                            }}
+                          />
+                          <div className="truncate">
+                            <span className="font-bold text-sm block truncate">{fac.name}</span>
+                            <span className="text-[11px] text-draft block truncate">{fac.designation}</span>
+                          </div>
                         </div>
-                      </div>
-                      <span className="text-[11px] font-mono text-draft bg-slate-100 px-2 py-0.5 rounded border border-rule shrink-0">
-                        {fac.guided_groups ?? fac.current_guided_groups ?? 0} guided
-                      </span>
-                    </label>
-                  ))}
+                      </label>
+                    ))
+                  )}
                 </div>
               </div>
 
@@ -3195,9 +3801,17 @@ export default function BEProjectGovernance() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="btn-primary py-2.5 px-6 text-sm font-bold shadow-xs"
+                  className={
+                    selectedPanelistIds.length === 0
+                      ? 'px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm font-bold shadow-xs transition-colors'
+                      : 'btn-primary py-2.5 px-6 text-sm font-bold shadow-xs'
+                  }
                 >
-                  {submitting ? 'Saving...' : 'Save Panel Assignment'}
+                  {submitting
+                    ? 'Saving...'
+                    : selectedPanelistIds.length === 0
+                      ? 'Unassign Mentors for this Group'
+                      : 'Save Panel Assignment'}
                 </button>
               </div>
             </form>
@@ -3772,6 +4386,393 @@ export default function BEProjectGovernance() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* UNASSIGN ALL MENTORS MODAL */}
+      {unassignMentorsModal && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg border border-rule max-w-md w-full p-6 shadow-xl animate-fade-in space-y-4">
+            <div className="flex items-center justify-between border-b border-rule pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-red-100 text-red-700 flex items-center justify-center shrink-0">
+                  {Icons.trash}
+                </div>
+                <div>
+                  <h3 className="font-serif text-lg font-bold text-ink">
+                    Unassign All Mentors
+                  </h3>
+                  <p className="text-xs text-draft font-medium">Academic Year {academicYear}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setUnassignMentorsModal(false)}
+                className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                title="Close"
+              >
+                {Icons.close}
+              </button>
+            </div>
+
+            <p className="text-xs text-ink leading-relaxed">
+              Are you sure you want to remove panel mentors from project groups? Assigned project guides, student teams, and approved marks remain completely safe.
+            </p>
+
+            <div className="space-y-2.5 bg-paper p-3.5 rounded border border-rule text-xs">
+              <p className="font-bold text-slate-800 uppercase tracking-wider text-[11px]">
+                Choose Unassign Scope:
+              </p>
+              <label className="flex items-start gap-2.5 p-2 rounded-md hover:bg-slate-50 cursor-pointer border border-transparent has-[:checked]:border-navy/30 has-[:checked]:bg-blue-50/50">
+                <input
+                  type="radio"
+                  name="unassignMentorsScope"
+                  value="ALL"
+                  checked={unassignMentorsScope === 'ALL'}
+                  onChange={() => setUnassignMentorsScope('ALL')}
+                  className="mt-0.5 text-navy"
+                />
+                <div>
+                  <span className="font-semibold text-ink">All Evaluation Stages (AY {academicYear}) — Recommended</span>
+                  <span className="block text-[11px] text-draft mt-0.5">
+                    Completely resets mentor assignments across all stages and restores faculty to "Eligible Faculty" status.
+                  </span>
+                </div>
+              </label>
+
+              {panelMatrixStageId && (
+                <label className="flex items-start gap-2.5 p-2 rounded-md hover:bg-slate-50 cursor-pointer border border-transparent has-[:checked]:border-navy/30 has-[:checked]:bg-blue-50/50 pt-2 border-t border-rule/60">
+                  <input
+                    type="radio"
+                    name="unassignMentorsScope"
+                    value="STAGE"
+                    checked={unassignMentorsScope === 'STAGE'}
+                    onChange={() => setUnassignMentorsScope('STAGE')}
+                    className="mt-0.5 text-navy"
+                  />
+                  <div>
+                    <span className="font-semibold text-ink">
+                      Active Stage Only ({stages.find((s) => String(s.id) === String(panelMatrixStageId))?.name || `Stage #${panelMatrixStageId}`})
+                    </span>
+                    <span className="block text-[11px] text-draft mt-0.5">
+                      Only unassigns mentors for this single stage. Mentors assigned to other stages will stay in "Panel Mentor" status.
+                    </span>
+                  </div>
+                </label>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2.5 pt-2 border-t border-rule">
+              <button
+                type="button"
+                onClick={() => setUnassignMentorsModal(false)}
+                className="px-4 py-2 border border-rule rounded text-xs font-semibold hover:bg-slate-50 transition-colors"
+                disabled={submitting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleClearAllMentors}
+                disabled={submitting}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-bold transition-colors shadow-xs flex items-center gap-1.5"
+              >
+                {submitting ? 'Unassigning...' : 'Confirm & Unassign Mentors'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* FLOATING ACTION BAR FOR STAGED CHANGES */}
+      {hasPendingChanges && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-4xl bg-slate-900/95 text-white backdrop-blur-md rounded-2xl shadow-2xl border border-slate-700/60 p-3.5 px-5 flex flex-wrap items-center justify-between gap-3 animate-fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center font-bold text-xl shrink-0">
+              ⚡
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-sm tracking-wide text-white">
+                  {totalPendingCount} Staged Change{totalPendingCount > 1 ? 's' : ''} Ready
+                </span>
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                  Unsaved Draft
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-slate-300 mt-0.5 flex-wrap">
+                {pendingGuideCount > 0 && (
+                  <span className="inline-flex items-center gap-1 bg-slate-800 px-2 py-0.5 rounded text-[11px] border border-slate-700">
+                    <span className="text-amber-400 font-bold">{pendingGuideCount}</span> Guide Designation{pendingGuideCount > 1 ? 's' : ''}
+                  </span>
+                )}
+                {pendingGroupGuideCount > 0 && (
+                  <span className="inline-flex items-center gap-1 bg-slate-800 px-2 py-0.5 rounded text-[11px] border border-slate-700">
+                    <span className="text-blue-400 font-bold">{pendingGroupGuideCount}</span> Group Guide{pendingGroupGuideCount > 1 ? 's' : ''}
+                  </span>
+                )}
+                {pendingPanelCount > 0 && (
+                  <span className="inline-flex items-center gap-1 bg-slate-800 px-2 py-0.5 rounded text-[11px] border border-slate-700">
+                    <span className="text-purple-400 font-bold">{pendingPanelCount}</span> Mentor Assignment{pendingPanelCount > 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 shrink-0 ml-auto">
+            <button
+              type="button"
+              onClick={() => setShowChangesModal(true)}
+              className="px-3.5 py-2 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 transition-colors flex items-center gap-1.5"
+            >
+              <span>Review Changes</span>
+              <span className="bg-slate-700 text-amber-300 px-1.5 py-0.5 rounded font-mono text-[10px]">
+                {totalPendingCount}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={handleDiscardAllChanges}
+              disabled={applyingBatch}
+              className="px-3 py-2 text-xs font-semibold rounded-lg text-rose-300 hover:bg-rose-950/40 hover:text-rose-200 border border-rose-800/60 transition-colors"
+            >
+              Discard All
+            </button>
+            <button
+              type="button"
+              onClick={handleApplyAllChanges}
+              disabled={applyingBatch}
+              className="px-5 py-2 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/30 flex items-center gap-1.5 transition-all disabled:opacity-50"
+            >
+              {applyingBatch ? (
+                <>
+                  <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" />
+                  <span>Saving to Database...</span>
+                </>
+              ) : (
+                <span>✓ Apply Changes to Database</span>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* REVIEW STAGED CHANGES MODAL */}
+      {showChangesModal && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-rule max-w-3xl w-full shadow-2xl animate-fade-in flex flex-col max-h-[88vh]">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-5 border-b border-rule bg-slate-50/70 rounded-t-2xl">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-xl shrink-0 border border-amber-300">
+                  ⚡
+                </div>
+                <div>
+                  <h3 className="font-serif text-lg font-bold text-ink">
+                    Review Staged Governance Changes
+                  </h3>
+                  <p className="text-xs text-draft">
+                    {totalPendingCount} pending modification{totalPendingCount > 1 ? 's' : ''} across Academic Year {academicYear}. These have not yet been written to the database.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowChangesModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors"
+                title="Close"
+              >
+                {Icons.close}
+              </button>
+            </div>
+
+            {/* Modal Scrollable Body */}
+            <div className="p-5 overflow-y-auto space-y-5 text-xs flex-1">
+              {/* Section 1: Guide Designations */}
+              {pendingGuideCount > 0 && (
+                <div className="border border-rule rounded-xl overflow-hidden bg-white shadow-2xs">
+                  <div className="bg-amber-50/70 px-4 py-2.5 border-b border-amber-200/60 flex items-center justify-between">
+                    <span className="font-bold text-amber-950 flex items-center gap-1.5 uppercase text-[11px] tracking-wider">
+                      <span>⚡</span> Faculty Guide Designations ({pendingGuideCount})
+                    </span>
+                    <span className="text-[11px] text-amber-800 font-medium">Faculty Overview</span>
+                  </div>
+                  <div className="divide-y divide-rule">
+                    {Object.entries(pendingChanges.guideDesignations).map(([facId, isGuide]) => {
+                      const fac = allDepartmentFaculty.find((f) => Number(f.faculty_id || f.id) === Number(facId)) ||
+                        dashboardData?.faculty_load?.find((f) => Number(f.faculty_id) === Number(facId));
+                      return (
+                        <div key={facId} className="p-3 px-4 flex items-center justify-between gap-3 hover:bg-slate-50/60">
+                          <div className="truncate">
+                            <div className="font-bold text-ink text-sm truncate">{fac?.name || `Faculty #${facId}`}</div>
+                            <div className="text-draft text-[11px] truncate">
+                              {fac?.designation || 'Faculty'} {fac?.employee_id ? `• ID: ${fac.employee_id}` : ''}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2.5 shrink-0">
+                            <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold border ${
+                              isGuide
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                : 'bg-rose-50 text-rose-800 border-rose-300'
+                            }`}>
+                              {isGuide ? '+ Designate as Guide' : '- Remove Guide Status'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => revertGuideDesignation(Number(facId))}
+                              className="px-2 py-1 rounded text-[11px] text-slate-600 hover:text-slate-900 hover:bg-slate-200/80 font-medium border border-rule transition-colors"
+                              title="Revert this change"
+                            >
+                              Undo
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Section 2: Group Guides */}
+              {pendingGroupGuideCount > 0 && (
+                <div className="border border-rule rounded-xl overflow-hidden bg-white shadow-2xs">
+                  <div className="bg-blue-50/70 px-4 py-2.5 border-b border-blue-200/60 flex items-center justify-between">
+                    <span className="font-bold text-blue-950 flex items-center gap-1.5 uppercase text-[11px] tracking-wider">
+                      <span>⚡</span> Project Group Guide Assignments ({pendingGroupGuideCount})
+                    </span>
+                    <span className="text-[11px] text-blue-800 font-medium">Groups Table</span>
+                  </div>
+                  <div className="divide-y divide-rule">
+                    {Object.entries(pendingChanges.groupGuides).map(([grpId, data]) => {
+                      const grp = groups.find((g) => Number(g.id) === Number(grpId));
+                      return (
+                        <div key={grpId} className="p-3 px-4 flex items-center justify-between gap-3 hover:bg-slate-50/60">
+                          <div className="truncate">
+                            <div className="font-bold text-ink text-sm flex items-center gap-2 truncate">
+                              <span className="font-mono text-navy font-bold">{grp?.group_code || `Group #${grpId}`}</span>
+                              <span className="text-draft font-normal truncate">— {grp?.title || 'No Title'}</span>
+                            </div>
+                            <div className="text-draft text-[11px] mt-0.5">
+                              Previous: <span className="text-slate-700 font-medium">{grp?.guide_name || 'None'}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2.5 shrink-0">
+                            <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold border ${
+                              data.guide_id
+                                ? 'bg-blue-50 text-blue-900 border-blue-300'
+                                : 'bg-amber-50 text-amber-900 border-amber-300'
+                            }`}>
+                              {data.guide_name ? `→ ${data.guide_name}` : '→ Unassigned'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => revertGroupGuide(Number(grpId))}
+                              className="px-2 py-1 rounded text-[11px] text-slate-600 hover:text-slate-900 hover:bg-slate-200/80 font-medium border border-rule transition-colors"
+                              title="Revert this change"
+                            >
+                              Undo
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Section 3: Panel Mentors */}
+              {pendingPanelCount > 0 && (
+                <div className="border border-rule rounded-xl overflow-hidden bg-white shadow-2xs">
+                  <div className="bg-purple-50/70 px-4 py-2.5 border-b border-purple-200/60 flex items-center justify-between">
+                    <span className="font-bold text-purple-950 flex items-center gap-1.5 uppercase text-[11px] tracking-wider">
+                      <span>⚡</span> Panel Mentor Assignments ({pendingPanelCount})
+                    </span>
+                    <span className="text-[11px] text-purple-800 font-medium">Evaluation Stages</span>
+                  </div>
+                  <div className="divide-y divide-rule">
+                    {Object.entries(pendingChanges.panelAssignments).map(([key, item]) => {
+                      const grp = groups.find((g) => Number(g.id) === Number(item.group_id));
+                      const stg = stages.find((s) => Number(s.id) === Number(item.stage_id));
+                      const mentorNames = (item.panel_members || []).map((m) => m.name).join(', ');
+                      const originalMentors = (baseGroupPanelistsMap[item.group_id] || []).map((m) => m.name).join(', ');
+
+                      return (
+                        <div key={key} className="p-3 px-4 flex items-center justify-between gap-3 hover:bg-slate-50/60">
+                          <div className="truncate">
+                            <div className="font-bold text-ink text-sm flex items-center gap-2 truncate">
+                              <span className="font-mono text-purple-900 font-bold">{grp?.group_code || `Group #${item.group_id}`}</span>
+                              <span className="text-[11px] px-1.5 py-0.5 rounded bg-slate-100 border border-rule text-slate-700">
+                                {stg?.name || `Stage #${item.stage_id}`}
+                              </span>
+                            </div>
+                            <div className="text-draft text-[11px] mt-0.5 truncate">
+                              Previous: <span className="text-slate-700 font-medium">{originalMentors || 'None'}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2.5 shrink-0 max-w-[45%]">
+                            <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold border truncate ${
+                              item.panel_member_ids?.length > 0
+                                ? 'bg-purple-50 text-purple-900 border-purple-300'
+                                : 'bg-rose-50 text-rose-800 border-rose-300'
+                            }`}>
+                              {mentorNames ? `→ ${mentorNames}` : '→ Unassigned'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => revertPanelAssignment(key)}
+                              className="px-2 py-1 rounded text-[11px] text-slate-600 hover:text-slate-900 hover:bg-slate-200/80 font-medium border border-rule transition-colors shrink-0"
+                              title="Revert this change"
+                            >
+                              Undo
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between p-4 px-5 border-t border-rule bg-slate-50/70 rounded-b-2xl">
+              <button
+                type="button"
+                onClick={handleDiscardAllChanges}
+                disabled={applyingBatch}
+                className="px-3.5 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100/60 rounded-lg border border-rose-200 transition-colors"
+              >
+                Discard All Changes
+              </button>
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowChangesModal(false)}
+                  className="px-4 py-2 border border-rule rounded-lg text-xs font-semibold hover:bg-white transition-colors"
+                >
+                  Continue Editing
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApplyAllChanges}
+                  disabled={applyingBatch || totalPendingCount === 0}
+                  className="btn-primary py-2 px-5 text-xs font-bold shadow-sm flex items-center gap-1.5"
+                >
+                  {applyingBatch ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" />
+                      <span>Saving to Database...</span>
+                    </>
+                  ) : (
+                    <span>✓ Apply Changes to Database</span>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>,
         document.body

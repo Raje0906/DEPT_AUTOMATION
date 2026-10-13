@@ -643,7 +643,7 @@ export default function FacultyDashboard() {
 
                   <div className="flex items-center justify-end flex-shrink-0 pt-1">
                     <Link
-                      to="/faculty/project-eval?tab=evaluations"
+                      to="/faculty/project-eval"
                       className={`inline-flex items-center gap-1 px-3.5 py-1.5 text-xs font-semibold rounded transition-all ${
                         allSubmitted
                           ? 'border border-rule text-ink hover:bg-paper'
