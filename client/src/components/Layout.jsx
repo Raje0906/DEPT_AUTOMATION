@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useMagazine } from '../contexts/MagazineContext';
+import { isAuthorizedFeedbackCoordinator } from '../utils/feedbackPermissions';
 
 const Icons = {
   dashboard: (
@@ -106,6 +107,7 @@ const roleNav = {
         { to: '/student/cgpa',        label: 'CGPA Overview',         icon: Icons.cgpa },
         { to: '/student/project',     label: 'BE Project',            icon: Icons.project },
         { to: '/student/seminar',     label: 'TE Seminar Registration', icon: Icons.seminar },
+        { to: '/student/feedback',    label: 'TE Mid-Sem Feedback',   icon: Icons.results },
       ],
     },
     {
@@ -177,6 +179,7 @@ const roleNav = {
       group: 'Department Administration',
       items: [
         { to: '/hod/magazine-approvals', label: 'Magazine Approvals',   icon: Icons.magazines },
+        { to: '/hod/feedback',        label: 'TE Feedback Reports',     icon: Icons.results },
         { to: '/faculty/class-namelist', label: 'Namelist Segregator',   icon: Icons.results },
         { to: '/hod/rollover',        label: 'Term Rollover',           icon: Icons.rollover },
       ],
@@ -194,6 +197,7 @@ const PAGE_TITLES = {
   '/student/seminar': 'TE Seminar Registration',
   '/student/clubs': 'Student Technical Clubs',
   '/student/magazine': 'Department Magazine',
+  '/student/feedback': 'TE Mid-Sem Feedback Form',
   '/faculty': 'Faculty Portal & Overview',
   '/faculty/subjects': 'Result Generation & Evaluation',
   '/faculty/remedial': 'Remedial Classes & Action Plan',
@@ -203,6 +207,8 @@ const PAGE_TITLES = {
   '/faculty/clubs': 'Manage Student Clubs',
   '/faculty/project-eval': 'BE Project Evaluation',
   '/faculty/project-coordination': 'BE Project Governance',
+  '/faculty/magazines': 'Department Magazine',
+  '/faculty/feedback': 'TE Mid-Sem Feedback Management',
   '/faculty/seminar': 'TE Seminar Coordinator Portal',
   '/faculty/seminar/import-assign': 'Import Responses & Assign Guides',
   '/faculty/seminar/schedule': 'Schedule Seminar Presentation',
@@ -213,6 +219,7 @@ const PAGE_TITLES = {
   '/hod/coordinators': 'Academic Coordinator Assignment',
   '/hod/projects': 'BE Project Groups & Review',
   '/hod/seminar-approvals': 'TE Seminar Approval Desk',
+  '/hod/feedback': 'TE Mid-Sem Feedback Reports',
   '/hod/approval': 'Mark Submission Approvals',
   '/hod/remedial': 'Remedial Action Plans Review',
   '/hod/marksheet/insem-cce': 'In-Semester Marksheets & Analysis',
@@ -283,6 +290,21 @@ export default function Layout({ children }) {
                 ? { ...item, label: isClubHead ? 'Assign Club Faculty' : 'Handle Club' }
                 : item
             )
+          };
+        }
+        return group;
+      });
+    }
+
+    if (isAuthorizedFeedbackCoordinator(user)) {
+      navGroups = navGroups.map(group => {
+        if (group.group === 'Department Administration') {
+          return {
+            ...group,
+            items: [
+              ...group.items,
+              { to: '/faculty/feedback', label: 'TE Mid-Sem Feedback', icon: Icons.results }
+            ]
           };
         }
         return group;
