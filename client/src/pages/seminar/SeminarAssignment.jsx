@@ -80,23 +80,25 @@ export default function SeminarAssignment() {
   const guideCounts = useMemo(() => {
     const counts = {};
     groups.forEach(g => {
-      if (g.guide_id) {
-        counts[g.guide_id] = (counts[g.guide_id] || 0) + 1;
+      const gid = g.seminar_guide_id || g.guide_id;
+      if (gid) {
+        counts[gid] = (counts[gid] || 0) + 1;
       }
     });
     return counts;
   }, [groups]);
 
   const totalQuota = guides.reduce((s, g) => s + (g.quota || 0), 0);
-  const assignedGroupsCount = groups.filter(g => g.guide_id).length;
+  const assignedGroupsCount = groups.filter(g => g.seminar_guide_id || g.guide_id).length;
   const unassigned = groups.length - assignedGroupsCount;
   const percentAssigned = groups.length > 0 ? Math.round((assignedGroupsCount / groups.length) * 100) : 0;
 
   // Filter groups
   const filteredGroups = useMemo(() => {
     return groups.filter(g => {
-      if (filterTab === 'unassigned' && g.guide_id) return false;
-      if (filterTab === 'assigned' && !g.guide_id) return false;
+      const isAssignedGroup = Boolean(g.seminar_guide_id || g.guide_id);
+      if (filterTab === 'unassigned' && isAssignedGroup) return false;
+      if (filterTab === 'assigned' && !isAssignedGroup) return false;
 
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase();
@@ -169,7 +171,7 @@ export default function SeminarAssignment() {
 
   // Auto-assign
   const handleAutoAssign = async () => {
-    const hasAssignments = groups.some(g => g.guide_id);
+    const hasAssignments = groups.some(g => g.seminar_guide_id || g.guide_id);
     if (hasAssignments) {
       if (!window.confirm('Groups already have assignments. Overwrite with auto-assign?')) return;
     }
@@ -186,13 +188,15 @@ export default function SeminarAssignment() {
   const handleReassign = async (groupId, guideId) => {
     try {
       const res = await api.patch(`/seminar/sessions/${id}/assignments/${groupId}`, { guide_id: guideId || null });
+      const parsedGuideId = guideId ? parseInt(guideId, 10) : null;
+      const guide = parsedGuideId ? guides.find(x => x.id === parsedGuideId) : null;
       setGroups(prev => prev.map(g => {
         if (g.id !== groupId) return g;
-        const guide = guides.find(x => x.id === parseInt(guideId, 10));
         return {
           ...g,
-          seminar_guide_id: guideId ? parseInt(guideId, 10) : null,
-          guide_id: guide?.faculty_id || (guideId ? parseInt(guideId, 10) : null),
+          seminar_guide_id: parsedGuideId,
+          guide_id: parsedGuideId,
+          faculty_id: guide?.faculty_id || null,
           guide_name: guide?.faculty_name || res.data?.guide_name || null,
         };
       }));
@@ -202,7 +206,7 @@ export default function SeminarAssignment() {
 
   // Submit to HOD
   const handleSubmitToHOD = async () => {
-    const groupsToSubmit = groups.filter(g => g.guide_id && g.status === 'PENDING_GUIDE_ASSIGNMENT');
+    const groupsToSubmit = groups.filter(g => (g.seminar_guide_id || g.guide_id) && g.status === 'PENDING_GUIDE_ASSIGNMENT');
     if (groupsToSubmit.length === 0) return toast.error('No new assignments to submit');
     if (!window.confirm(`Submit ${groupsToSubmit.length} assignment(s) for HOD approval?`)) return;
     
@@ -269,7 +273,6 @@ export default function SeminarAssignment() {
             disabled={autoRunning || guides.length === 0}
             className="px-3.5 py-2 text-xs font-semibold border border-[var(--navy)] text-[var(--navy)] rounded-md hover:bg-[var(--navy)] hover:text-white disabled:opacity-50 transition-colors shadow-2xs flex items-center gap-1.5"
           >
-            <span>⚡</span>
             <span>{autoRunning ? 'Assigning…' : 'Sequential Auto-Assign'}</span>
           </button>
           <button
@@ -585,7 +588,7 @@ export default function SeminarAssignment() {
               <tbody className="divide-y divide-[var(--rule)]">
                 {filteredGroups.map(g => {
                   const members = g.members || [];
-                  const isAssigned = Boolean(g.guide_id);
+                  const isAssigned = Boolean(g.seminar_guide_id || g.guide_id);
                   const leader = members.find(m => m.is_leader) || members[0];
 
                   return (
@@ -639,31 +642,14 @@ export default function SeminarAssignment() {
                       {/* Student Seminar Topics */}
                       <td className="p-3 align-top">
                         {viewMode === 'compact' ? (
-                          <div className="space-y-1.5">
-                            {/* Primary Choice Topic Preview */}
-                            {leader?.topic1 ? (
-                              <div className="p-1.5 bg-amber-50/60 border border-amber-200/70 rounded text-[11px]">
-                                <div className="text-[10px] text-amber-900 font-bold flex items-center gap-1">
-                                  <span>⭐ Primary Topic ({leader.name || leader.student_name}):</span>
-                                </div>
-                                <div className="text-slate-800 truncate mt-0.5 font-medium" title={leader.topic1}>
-                                  {leader.topic1}
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="text-slate-400 italic text-[11px]">No primary topic recorded</div>
-                            )}
-
-                            {/* View All Topics Button */}
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => setSelectedTopicsGroup(g)}
-                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--navy)] bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded transition-colors"
-                              >
-                                <span>📖 View All Topics ({members.length} Students)</span>
-                              </button>
-                            </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedTopicsGroup(g)}
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--navy)] bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2.5 py-1 rounded transition-colors"
+                            >
+                              <span>View All Topics ({members.length} Students)</span>
+                            </button>
                           </div>
                         ) : (
                           /* Detailed View: Render individual cards inline */
@@ -698,7 +684,7 @@ export default function SeminarAssignment() {
                       {/* Guide Selector */}
                       <td className="p-3 align-top text-right">
                         <select
-                          value={g.seminar_guide_id || (guides.find(x => x.faculty_id === g.guide_id)?.id) || ''}
+                          value={g.seminar_guide_id || g.guide_id || ''}
                           onChange={e => handleReassign(g.id, e.target.value)}
                           className={`w-full border rounded-md px-2.5 py-1.5 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-[var(--navy)]/30 ${
                             !isAssigned
@@ -773,7 +759,7 @@ export default function SeminarAssignment() {
 
                     <div className="space-y-2">
                       <div className="p-2 bg-amber-50/70 border border-amber-200 rounded text-[11px]">
-                        <span className="font-bold text-amber-900 block text-[10px]">Choice 1 (Primary Topic):</span>
+                        <span className="font-bold text-amber-900 block text-[10px]">Choice 1:</span>
                         <p className="text-slate-800 font-medium mt-0.5">{m.topic1 || '—'}</p>
                       </div>
 

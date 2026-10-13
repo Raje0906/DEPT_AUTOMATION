@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation, Link } from 'react-router-dom';
+import api from '../api/axios';
 import { useAuth } from '../contexts/AuthContext';
 import { useMagazine } from '../contexts/MagazineContext';
 import { isAuthorizedFeedbackCoordinator } from '../utils/feedbackPermissions';
@@ -114,7 +115,7 @@ const roleNav = {
       group: 'Clubs & Co-Curricular',
       items: [
         { to: '/student/clubs',       label: 'Club Activities',       icon: Icons.clubs },
-        { to: '/student/magazine',    label: 'Magazine',              icon: Icons.magazines },
+        { to: '/student/magazine',    label: 'Newsletter',            icon: Icons.magazines },
       ],
     },
   ],
@@ -137,9 +138,6 @@ const roleNav = {
         { to: '/faculty/project-eval',    label: 'BE Project Evaluation', icon: Icons.project },
         { to: '/faculty/magazines',       label: 'Magazine',              icon: Icons.magazines },
         { to: '/faculty/seminar',         label: 'TE Seminar Governance', icon: Icons.seminar },
-        { to: '/faculty/seminar/import-assign', label: 'Import and assign guides', icon: Icons.seminar },
-        { to: '/faculty/seminar/schedule',      label: 'Schedule presentation',    icon: Icons.results },
-        { to: '/faculty/seminar/my-groups', label: 'Seminar Assigned Groups', icon: Icons.teachers },
       ],
     },
   ],
@@ -178,7 +176,7 @@ const roleNav = {
     {
       group: 'Department Administration',
       items: [
-        { to: '/hod/magazine-approvals', label: 'Magazine Approvals',   icon: Icons.magazines },
+        { to: '/hod/magazine-approvals', label: 'Newsletter Approvals', icon: Icons.magazines },
         { to: '/hod/feedback',        label: 'TE Feedback Reports',     icon: Icons.results },
         { to: '/faculty/class-namelist', label: 'Namelist Segregator',   icon: Icons.results },
         { to: '/hod/rollover',        label: 'Term Rollover',           icon: Icons.rollover },
@@ -196,7 +194,7 @@ const PAGE_TITLES = {
   '/student/project': 'BE Final Year Project',
   '/student/seminar': 'TE Seminar Registration',
   '/student/clubs': 'Student Technical Clubs',
-  '/student/magazine': 'Department Magazine',
+  '/student/magazine': 'Department Newsletter',
   '/student/feedback': 'TE Mid-Sem Feedback Form',
   '/faculty': 'Faculty Portal & Overview',
   '/faculty/subjects': 'Result Generation & Evaluation',
@@ -204,14 +202,15 @@ const PAGE_TITLES = {
   '/faculty/marksheet/insem-cce': 'In-Sem (CCE) Marksheet & Analysis',
   '/faculty/marksheet/end-term-internal': 'End-Term Internal Evaluation Ledger',
   '/faculty/reports': 'Class Academic Reports',
+  '/faculty/magazines': 'Department Newsletter',
+  '/faculty/magazines/create': 'Create New Newsletter',
   '/faculty/clubs': 'Manage Student Clubs',
   '/faculty/project-eval': 'BE Project Evaluation',
   '/faculty/project-coordination': 'BE Project Governance',
-  '/faculty/magazines': 'Department Magazine',
   '/faculty/feedback': 'TE Mid-Sem Feedback Management',
-  '/faculty/seminar': 'TE Seminar Coordinator Portal',
+  '/faculty/seminar': 'TE Seminar Governance',
   '/faculty/seminar/import-assign': 'Import Responses & Assign Guides',
-  '/faculty/seminar/schedule': 'Schedule Seminar Presentation',
+  '/faculty/seminar/schedule': 'Schedule Presentation',
   '/faculty/seminar/my-groups': 'Assigned Seminar Groups',
   '/faculty/class-namelist': 'University Namelist Segregator',
   '/hod': 'HOD Executive Dashboard',
@@ -224,7 +223,7 @@ const PAGE_TITLES = {
   '/hod/remedial': 'Remedial Action Plans Review',
   '/hod/marksheet/insem-cce': 'In-Semester Marksheets & Analysis',
   '/hod/marksheet/end-term-internal': 'End-Term Internal Evaluation Ledgers',
-  '/hod/magazine-approvals': 'Department Magazine Approval',
+  '/hod/magazine-approvals': 'Department Newsletter Approval',
   '/hod/publish': 'Publish Academic Results',
   '/hod/rollover': 'Academic Term Rollover',
   '/hod/analytics': 'Department Academic Analytics',
@@ -255,7 +254,7 @@ export default function Layout({ children }) {
     if (!user?.is_seminar_coordinator) {
       navGroups = navGroups.map(group => ({
         ...group,
-        items: group.items.filter(item => !item.to.startsWith('/faculty/seminar') || item.to === '/faculty/seminar/my-groups')
+        items: group.items.filter(item => !item.to.startsWith('/faculty/seminar'))
       }));
     }
     if (user?.is_project_coordinator) {
@@ -404,13 +403,16 @@ export default function Layout({ children }) {
                   key={item.to}
                   to={item.to}
                   end={item.to === '/student' || item.to === '/faculty' || item.to === '/hod'}
-                  className={({ isActive }) =>
-                    `group flex items-center gap-3 px-3 py-2 text-xs font-medium rounded transition-all duration-150 ${
-                      isActive
+                  className={({ isActive }) => {
+                    const isCustomActive = item.to === '/faculty/seminar'
+                      ? location.pathname.startsWith('/faculty/seminar')
+                      : isActive;
+                    return `group flex items-center gap-3 px-3 py-2 text-xs font-medium rounded transition-all duration-150 ${
+                      isCustomActive
                         ? 'bg-white/12 text-white font-semibold border-l-2 border-[#E5A93C] shadow-sm'
                         : 'text-blue-200/90 hover:text-white hover:bg-white/6'
-                    }`
-                  }
+                    }`;
+                  }}
                   onClick={() => setMobileOpen(false)}
                 >
                   <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center">

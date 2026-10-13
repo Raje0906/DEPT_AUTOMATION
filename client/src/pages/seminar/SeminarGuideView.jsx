@@ -130,8 +130,7 @@ export default function SeminarGuideView() {
                             <div className="flex items-center gap-2 mb-1">
                               <span className="font-mono font-bold text-[var(--navy)] text-sm">Group #{g.group_no}</span>
                               {/* Approval Status */}
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${approvalBadge.bg} ${approvalBadge.border} ${approvalBadge.text} border`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${approvalBadge.dot}`} />
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${approvalBadge.bg} ${approvalBadge.border} ${approvalBadge.text} border`}>
                                 {approvalBadge.label}
                               </span>
                             </div>

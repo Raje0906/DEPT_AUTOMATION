@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { useMagazine, normalizeToppersData } from '../../contexts/MagazineContext';
-import { groupToppersByClassAndDivision, formatClassLabel, sortToppers } from '../../utils/toppersUtils';
+import { useMagazine } from '../../contexts/MagazineContext';
 import { getTemplate } from '../../utils/magazineTemplates';
+import { generateMagazinePages } from '../../utils/magazinePages';
+export { generateMagazinePages };
 
 // ── Template Components ──────────────────────────────────────────────────────
 
@@ -142,42 +143,42 @@ I congratulate the editorial team for thoughtfully compiling this reflection of 
             <div className="bg-[#FFEE58] border border-amber-400 px-2 py-0.5 text-center font-bold text-black text-[11px] uppercase tracking-wide">
               Inside this issue:
             </div>
-            <div className="bg-white/75 p-2 text-[10px] font-bold text-slate-900 space-y-1 border border-slate-300/60 leading-tight">
-              <div className="flex justify-between items-baseline">
+            <div className="bg-white/85 p-2 text-[10px] font-bold text-slate-900 space-y-1.5 border border-slate-300/60 leading-normal">
+              <div className="flex justify-between items-center">
                 <span>Class Toppers</span>
-                <span className="font-mono text-[10px]">2,3,4</span>
+                <span className="font-mono text-[10px]">2, 3, 4</span>
               </div>
-              <div className="flex justify-between items-baseline">
-                <span className="truncate pr-1">Dept. Events Days</span>
+              <div className="flex justify-between items-center">
+                <span>Dept. Events Days</span>
                 <span className="font-mono text-[10px]">5, 6</span>
               </div>
-              <div className="flex justify-between items-baseline">
-                <span className="truncate pr-1">Student Workshops</span>
+              <div className="flex justify-between items-center">
+                <span>Student Workshops</span>
                 <span className="font-mono text-[10px]">7, 8</span>
               </div>
-              <div className="flex justify-between items-baseline">
-                <span className="truncate pr-1">Guest Lectures</span>
+              <div className="flex justify-between items-center">
+                <span>Guest Lectures</span>
                 <span className="font-mono text-[10px]">9</span>
               </div>
-              <div className="flex justify-between items-baseline">
-                <span className="truncate pr-1">Students Achievements</span>
-                <span className="font-mono text-[10px]">9,10</span>
+              <div className="flex justify-between items-center">
+                <span>Students Achievements</span>
+                <span className="font-mono text-[10px]">9, 10</span>
               </div>
-              <div className="flex justify-between items-baseline">
-                <span className="truncate pr-1">Center of Excellence</span>
+              <div className="flex justify-between items-center">
+                <span>Center of Excellence</span>
                 <span className="font-mono text-[10px]">10</span>
               </div>
-              <div className="flex justify-between items-baseline">
-                <span className="truncate pr-1">Staff Achievements</span>
+              <div className="flex justify-between items-center">
+                <span>Staff Achievements</span>
                 <span className="font-mono text-[10px]">11</span>
               </div>
-              <div className="flex justify-between items-baseline">
-                <span className="truncate pr-1">Staff Workshops/FDP</span>
-                <span className="font-mono text-[10px]">12,13,14</span>
+              <div className="flex justify-between items-center">
+                <span>Staff Workshops/FDP</span>
+                <span className="font-mono text-[10px]">12, 13, 14</span>
               </div>
-              <div className="flex justify-between items-baseline">
-                <span className="truncate pr-1">Staff Publications</span>
-                <span className="font-mono text-[10px]">15,16</span>
+              <div className="flex justify-between items-center">
+                <span>Staff Publications</span>
+                <span className="font-mono text-[10px]">15, 16</span>
               </div>
             </div>
           </div>
@@ -511,22 +512,23 @@ function TablePage({ data, theme = getTemplate('modern-academic'), isClassicFram
   const isClassic = theme.id === 'reflection-classic' || isClassicFrame;
 
   if (isClassic) {
+    const rowPad = rows.length <= 5 ? 'py-3.5' : rows.length <= 8 ? 'py-2.5' : 'py-1.5';
     return (
       <div className="w-full h-full flex flex-col justify-start px-3 py-1 overflow-hidden select-none">
         <div className="overflow-hidden border-2 border-black shadow-2xs">
           <table className="w-full text-xs border border-black border-collapse">
             <thead>
               <tr className="bg-white">
-                <th className="border border-black px-2 py-1.5 text-center font-serif italic font-bold text-black text-[11px] w-12">
+                <th className="border border-black px-2 py-2 text-center font-serif italic font-bold text-black text-[11px] w-12">
                   Sr. No.
                 </th>
-                <th className="border border-black px-3 py-1.5 text-center font-serif italic font-bold text-black text-[11px] w-36">
+                <th className="border border-black px-3 py-2 text-center font-serif italic font-bold text-black text-[11px] w-36">
                   Name of Faculty
                 </th>
-                <th className="border border-black px-4 py-1.5 text-center font-serif italic font-bold text-black text-[11px]">
+                <th className="border border-black px-4 py-2 text-center font-serif italic font-bold text-black text-[11px]">
                   Activity name
                 </th>
-                <th className="border border-black px-2 py-1.5 text-center font-serif italic font-bold text-black text-[11px] w-28">
+                <th className="border border-black px-2 py-2 text-center font-serif italic font-bold text-black text-[11px] w-28">
                   Conduction
                 </th>
               </tr>
@@ -540,16 +542,16 @@ function TablePage({ data, theme = getTemplate('modern-academic'), isClassicFram
 
                 return (
                   <tr key={i} className="bg-white">
-                    <td className="border border-black px-2 py-2 text-center text-[11px] font-sans text-black align-middle">
+                    <td className={`border border-black px-2 ${rowPad} text-center text-[11px] font-sans text-black align-middle`}>
                       {srVal}.
                     </td>
-                    <td className="border border-black px-3 py-2 text-left text-[11.5px] font-serif font-bold text-black align-middle">
+                    <td className={`border border-black px-3 ${rowPad} text-left text-[11.5px] font-serif font-bold text-black align-middle`}>
                       {facultyVal}
                     </td>
-                    <td className="border border-black px-3 py-2 text-left text-[11px] leading-snug text-black align-middle font-sans">
+                    <td className={`border border-black px-3 ${rowPad} text-left text-[11px] leading-snug text-black align-middle font-sans`}>
                       {activityVal}
                     </td>
-                    <td className="border border-black px-2 py-2 text-center text-[11px] font-serif text-black align-middle">
+                    <td className={`border border-black px-2 ${rowPad} text-center text-[11px] font-serif text-black align-middle`}>
                       {conductionVal}
                     </td>
                   </tr>
@@ -633,12 +635,15 @@ function EventsPage({ data, theme = getTemplate('modern-academic'), isClassicFra
 
   if (isClassic) {
     return (
-      <div className="w-full h-full p-2 flex flex-col justify-around gap-3 overflow-hidden select-none font-sans">
+      <div className="w-full h-full p-2 flex flex-col gap-4 overflow-hidden select-none font-sans">
         {events.map((ev, idx) => {
           const photoUrl = typeof ev.photos?.[0] === 'string' ? ev.photos[0] : ev.photos?.[0]?.url;
           return (
-            <div key={ev.id || idx} className="p-3 bg-white border border-slate-300 flex flex-col gap-2 rounded-xs shadow-2xs">
-              <div className="flex items-start justify-between gap-2 flex-wrap">
+            <div
+              key={ev.id || idx}
+              className="flex-1 min-h-0 p-4 bg-white border border-slate-300 flex flex-col justify-between rounded-xs shadow-2xs"
+            >
+              <div className="flex items-start justify-between gap-2 flex-wrap pb-2 border-b border-slate-200 flex-shrink-0">
                 <h3 className="font-serif font-bold text-base text-[#D32F2F] leading-snug">
                   {ev.title}
                 </h3>
@@ -647,13 +652,13 @@ function EventsPage({ data, theme = getTemplate('modern-academic'), isClassicFra
                   {ev.venue && <span>📍 {ev.venue}</span>}
                 </div>
               </div>
-              <div className="flex gap-3 items-center">
+              <div className="flex gap-4 items-center flex-1 min-h-0 py-2">
                 {photoUrl && (
-                  <div className="w-36 h-26 flex-shrink-0 overflow-hidden border border-slate-300 rounded-xs shadow-2xs bg-slate-50">
+                  <div className="w-64 h-full max-h-56 flex-shrink-0 overflow-hidden border border-slate-300 rounded-xs shadow-2xs bg-slate-50">
                     <img src={photoUrl} alt={ev.title} className="w-full h-full object-cover" />
                   </div>
                 )}
-                <p className="flex-1 text-[12.5px] text-black leading-relaxed text-justify">
+                <p className="flex-1 text-[13px] text-black leading-relaxed text-justify overflow-hidden">
                   {ev.description}
                 </p>
               </div>
@@ -739,12 +744,15 @@ function WorkshopsPage({ data, theme = getTemplate('modern-academic'), isClassic
 
   if (isClassic) {
     return (
-      <div className="w-full h-full p-2 flex flex-col justify-around gap-3 overflow-hidden select-none font-sans">
+      <div className="w-full h-full p-2 flex flex-col gap-4 overflow-hidden select-none font-sans">
         {workshops.map((w, idx) => {
           const photoUrl = typeof w.photos?.[0] === 'string' ? w.photos[0] : w.photos?.[0]?.url;
           return (
-            <div key={w.id || idx} className="p-3 bg-white border border-slate-300 flex flex-col gap-2 rounded-xs shadow-2xs">
-              <div className="flex items-start justify-between gap-2 flex-wrap">
+            <div
+              key={w.id || idx}
+              className="flex-1 min-h-0 p-4 bg-white border border-slate-300 flex flex-col justify-between rounded-xs shadow-2xs"
+            >
+              <div className="flex items-start justify-between gap-2 flex-wrap pb-2 border-b border-slate-200 flex-shrink-0">
                 <h3 className="font-serif font-bold text-base text-[#D32F2F] leading-snug">
                   {w.title}
                 </h3>
@@ -753,13 +761,13 @@ function WorkshopsPage({ data, theme = getTemplate('modern-academic'), isClassic
                   {w.speaker && <span>Speaker: {w.speaker}</span>}
                 </div>
               </div>
-              <div className="flex gap-3 items-center">
+              <div className="flex gap-4 items-center flex-1 min-h-0 py-2">
                 {photoUrl && (
-                  <div className="w-36 h-26 flex-shrink-0 overflow-hidden border border-slate-300 rounded-xs shadow-2xs bg-slate-50">
+                  <div className="w-64 h-full max-h-56 flex-shrink-0 overflow-hidden border border-slate-300 rounded-xs shadow-2xs bg-slate-50">
                     <img src={photoUrl} alt={w.title} className="w-full h-full object-cover" />
                   </div>
                 )}
-                <p className="flex-1 text-[12.5px] text-black leading-relaxed text-justify">
+                <p className="flex-1 text-[13px] text-black leading-relaxed text-justify overflow-hidden">
                   {w.description}
                 </p>
               </div>
@@ -839,12 +847,15 @@ function LecturesPage({ data, theme = getTemplate('modern-academic'), isClassicF
 
   if (isClassic) {
     return (
-      <div className="w-full h-full p-2 flex flex-col justify-around gap-3 overflow-hidden select-none font-sans">
+      <div className="w-full h-full p-2 flex flex-col gap-4 overflow-hidden select-none font-sans">
         {lectures.map((lec, idx) => {
           const photoUrl = typeof lec.photos?.[0] === 'string' ? lec.photos[0] : lec.photos?.[0]?.url;
           return (
-            <div key={lec.id || idx} className="p-3 bg-white border border-slate-300 flex flex-col gap-2 rounded-xs shadow-2xs">
-              <div className="flex items-start justify-between gap-2 flex-wrap">
+            <div
+              key={lec.id || idx}
+              className="flex-1 min-h-0 p-4 bg-white border border-slate-300 flex flex-col justify-between rounded-xs shadow-2xs"
+            >
+              <div className="flex items-start justify-between gap-2 flex-wrap pb-2 border-b border-slate-200 flex-shrink-0">
                 <h3 className="font-serif font-bold text-base text-[#D32F2F] leading-snug">
                   {lec.topic || lec.title}
                 </h3>
@@ -853,13 +864,13 @@ function LecturesPage({ data, theme = getTemplate('modern-academic'), isClassicF
                   {lec.speaker && <span>Speaker: {lec.speaker}</span>}
                 </div>
               </div>
-              <div className="flex gap-3 items-center">
+              <div className="flex gap-4 items-center flex-1 min-h-0 py-2">
                 {photoUrl && (
-                  <div className="w-36 h-26 flex-shrink-0 overflow-hidden border border-slate-300 rounded-xs shadow-2xs bg-slate-50">
+                  <div className="w-64 h-full max-h-56 flex-shrink-0 overflow-hidden border border-slate-300 rounded-xs shadow-2xs bg-slate-50">
                     <img src={photoUrl} alt={lec.speaker || ''} className="w-full h-full object-cover" />
                   </div>
                 )}
-                <p className="flex-1 text-[12.5px] text-black leading-relaxed text-justify">
+                <p className="flex-1 text-[13px] text-black leading-relaxed text-justify overflow-hidden">
                   {lec.description}
                 </p>
               </div>
@@ -939,23 +950,23 @@ function AchievementsPage({ data, theme = getTemplate('modern-academic'), isClas
 
   if (isClassic) {
     return (
-      <div className="w-full h-full p-2 flex flex-col justify-around gap-2.5 overflow-hidden select-none font-sans">
+      <div className="w-full h-full p-2 flex flex-col gap-3 overflow-hidden select-none font-sans">
         {achievements.map((a, idx) => {
           const photoUrl = a.photo;
           return (
-            <div key={a.id || idx} className="p-3 bg-white border border-slate-300 flex items-center gap-3.5 rounded-xs shadow-2xs">
+            <div key={a.id || idx} className="flex-1 min-h-0 p-3.5 bg-white border border-slate-300 flex items-center gap-4 rounded-xs shadow-2xs">
               {photoUrl ? (
-                <div className="w-14 h-14 rounded-full overflow-hidden flex-shrink-0 border border-slate-400 bg-white shadow-2xs">
+                <div className="w-16 h-16 rounded-full overflow-hidden flex-shrink-0 border border-slate-400 bg-white shadow-2xs">
                   <img src={photoUrl} alt={a.name} className="w-full h-full object-cover" />
                 </div>
               ) : (
-                <div className="w-12 h-12 rounded-full bg-red-50 text-red-600 flex items-center justify-center text-lg flex-shrink-0 font-bold">
+                <div className="w-14 h-14 rounded-full bg-red-50 text-red-600 flex items-center justify-center text-xl flex-shrink-0 font-bold">
                   ★
                 </div>
               )}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <span className="text-sm font-bold text-black truncate font-serif">
+                  <span className="text-[13.5px] font-bold text-black truncate font-serif">
                     {a.name} <span className="text-xs text-slate-600 font-sans">({a.class})</span>
                   </span>
                   {a.prize && (
@@ -1229,26 +1240,47 @@ function StaffAchievementsPage({ data, theme = getTemplate('modern-academic'), i
           />
         </div>
 
-        {/* Right Achievements List */}
+        {/* Right Achievements List with authentic PDF structuring */}
         <div className="flex-1 flex flex-col justify-around py-1 gap-2.5 overflow-hidden font-sans">
           {staff.map((s, idx) => {
-            const ach = s.achievements?.[0] || {};
+            const achList = Array.isArray(s.achievements)
+              ? s.achievements
+              : s.achievements
+              ? [s.achievements]
+              : [];
             return (
               <div key={s.id || idx} className="space-y-0.5">
                 <h4 className="font-serif font-bold text-[12.5px] text-black leading-snug">
-                  {s.facultyName}{s.designation ? ` (${s.designation})` : ''}
+                  {s.facultyName}{s.designation ? ` -` : ' -'}
                 </h4>
-                <div className="pl-3 text-[11px] text-slate-900 leading-snug">
-                  <p>
-                    <span className="font-bold">1. </span>
-                    {ach.title ? `${ach.title}. ` : ''}
-                    {ach.organization ? `${ach.organization}. ` : ''}
-                    {ach.description || ''}
-                  </p>
+                <div className="pl-3 text-[11px] text-slate-900 leading-snug space-y-1">
+                  {achList.map((ach, aIdx) => {
+                    const title = typeof ach === 'string' ? ach : ach?.title;
+                    const org = typeof ach === 'object' ? ach?.organization : null;
+                    const desc = typeof ach === 'object' ? ach?.description : null;
+                    const date = typeof ach === 'object' ? ach?.date : null;
+
+                    return (
+                      <p key={aIdx} className="text-justify leading-snug">
+                        <span className="font-bold">{aIdx + 1}. </span>
+                        {title ? `${title}. ` : ''}
+                        {org ? `${org}. ` : ''}
+                        {desc ? `${desc} ` : ''}
+                        {date ? `(${date})` : ''}
+                      </p>
+                    );
+                  })}
                 </div>
               </div>
             );
           })}
+
+          {/* Optional bottom photo matching ceremony photo on Page 11 of Issue 32 PDF */}
+          {data?.photo && (
+            <div className="mt-2 rounded border border-slate-300 overflow-hidden shadow-2xs h-32 flex-shrink-0">
+              <img src={data.photo} alt="Faculty Recognition Ceremony" className="w-full h-full object-cover" />
+            </div>
+          )}
         </div>
       </div>
     );
@@ -1356,6 +1388,7 @@ function renderPublicationText(pub) {
 function PublicationsPage({ data, theme = getTemplate('modern-academic'), pageNumber, currentMagazine, isClassicFrame }) {
   const rawList = data?.publications || [];
   const rawGroups = data?.facultyGroups;
+  const isClassic = theme.id === 'reflection-classic' || isClassicFrame;
 
   // Group by faculty if not already grouped
   const facultyGroups = useMemo(() => {
@@ -1376,9 +1409,125 @@ function PublicationsPage({ data, theme = getTemplate('modern-academic'), pageNu
     }));
   }, [rawGroups, rawList]);
 
+  // Flat list of publications for table rendering
+  const flatPubs = useMemo(() => {
+    if (Array.isArray(data?.publications) && data.publications.length > 0) {
+      return data.publications;
+    }
+    if (Array.isArray(rawGroups) && rawGroups.length > 0) {
+      return rawGroups.flatMap(g => (g.items || []).map(it => ({
+        ...it,
+        facultyName: it.facultyName || g.facultyName,
+      })));
+    }
+    return rawList;
+  }, [data?.publications, rawGroups, rawList]);
+
+  const startSr = data?.startSr || data?.startNumber || 1;
   const isFinalPage = data?.isFinalPage !== undefined ? data.isFinalPage : (data?.part === 2 || facultyGroups.length <= 4);
   const issueNum = data?.issueNumber || currentMagazine?.issueNumber || '33';
   const startNumber = data?.startNumber || (data?.part === 2 ? 4 : 1);
+
+  // Classic Table View matching the FDP/STTP Table Style and Issue 32 Institutional Standard
+  if (isClassic) {
+    const pubCount = flatPubs.length;
+    const rowPad = pubCount <= 5 ? 'py-3.5' : pubCount <= 7 ? 'py-2.5' : 'py-1.5';
+    return (
+      <div className="w-full h-full flex flex-col justify-between px-2 py-1 overflow-hidden select-none font-sans">
+        <div className="overflow-hidden border-2 border-black shadow-2xs">
+          <table className="w-full text-xs border border-black border-collapse">
+            <thead>
+              <tr className="bg-white">
+                <th className="border border-black px-2 py-2 text-center font-serif italic font-bold text-black text-[11px] w-12">
+                  Sr. No.
+                </th>
+                <th className="border border-black px-3 py-2 text-center font-serif italic font-bold text-black text-[11px] w-36">
+                  Name of Faculty
+                </th>
+                <th className="border border-black px-3 py-2 text-center font-serif italic font-bold text-black text-[11px]">
+                  Title of Paper / Patent / Work
+                </th>
+                <th className="border border-black px-3 py-2 text-center font-serif italic font-bold text-black text-[11px] w-48">
+                  Journal / Conference / Publisher
+                </th>
+                <th className="border border-black px-2 py-2 text-center font-serif italic font-bold text-black text-[11px] w-28">
+                  Conduction / Date
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {flatPubs.map((pub, idx) => {
+                const isPatent = pub.type === 'Patent' || (pub.title && pub.title.toLowerCase().includes('patent'));
+                return (
+                  <tr key={pub.id || idx} className="bg-white">
+                    <td className={`border border-black px-2 ${rowPad} text-center text-[11px] font-sans text-black align-middle font-medium`}>
+                      {startSr + idx}.
+                    </td>
+                    <td className={`border border-black px-3 ${rowPad} text-left text-[11.5px] font-serif font-bold text-black align-middle`}>
+                      {pub.facultyName || 'Faculty Member'}
+                    </td>
+                    <td className={`border border-black px-3 ${rowPad} text-left text-[11px] leading-snug text-black align-middle font-sans`}>
+                      <span className="font-semibold">"{pub.title}"</span>
+                      {pub.patentNo && <span className="block text-[10px] text-slate-700 font-mono mt-0.5">Patent No: {pub.patentNo}</span>}
+                      {pub.doi && <span className="block text-[10px] text-blue-700 font-mono mt-0.5">DOI: {pub.doi}</span>}
+                      {pub.description && !pub.journal?.includes(pub.description) && (
+                        <span className="block text-[10px] text-slate-600 mt-0.5 italic">{pub.description}</span>
+                      )}
+                    </td>
+                    <td className={`border border-black px-3 ${rowPad} text-left text-[11px] leading-snug font-serif text-black align-middle`}>
+                      {pub.journal || pub.conference || pub.publisher || (isPatent ? 'Patent Office of India' : 'Department Research Publication')}
+                      {pub.type && <span className="block text-[10px] font-sans italic text-slate-600">[{pub.type}]</span>}
+                    </td>
+                    <td className={`border border-black px-2 ${rowPad} text-center text-[11px] font-serif text-black align-middle`}>
+                      <div>{pub.date || 'Academic Year'}</div>
+                      {pub.indexing && (
+                        <span className="inline-block mt-0.5 text-[9.5px] font-sans font-bold text-slate-700 bg-slate-100 px-1 py-0.2 rounded border border-slate-300">
+                          {pub.indexing}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* On Final Page: College Address Box + The Reflection Team */}
+        {isFinalPage && (
+          <div className="mt-auto grid grid-cols-2 gap-4 items-center pt-2.5 border-t border-slate-300 flex-shrink-0">
+            <div className="bg-[#DDEBF7] border border-[#9DC3E6] rounded-xs p-3 text-center shadow-2xs">
+              <p className="font-bold text-[10.5px] uppercase tracking-wider text-[#1E2D5A] leading-snug font-sans">
+                MODERN EDUCATION SOCIETY'S WADIA COLLEGE OF ENGINEERING, PUNE
+              </p>
+              <div className="mt-1 text-[10px] text-slate-700 leading-snug">
+                <p className="font-semibold text-slate-800">Address: Wadia College Campus,</p>
+                <p>19, Late Prin. V. K. Joag Path, Pune - 411001</p>
+              </div>
+              <div className="mt-1.5 inline-block bg-white border border-slate-300 rounded px-2 py-0.5 shadow-2xs">
+                <p className="text-[9.5px] font-bold text-navy font-mono">College website: www.mescoe.mespune.org</p>
+              </div>
+            </div>
+
+            <div className="flex flex-col items-center justify-center">
+              <div className="h-24 w-full rounded border border-slate-300 overflow-hidden shadow-2xs mb-1.5 bg-paper">
+                <img
+                  src="/images/event-symposium.jpg"
+                  alt="The Reflection Team"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="text-center py-1 px-2 bg-white border border-slate-200 rounded-xs shadow-2xs w-full">
+                <p className="text-[10px] font-bold text-navy font-sans truncate">
+                  <span className="text-[#D32F2F]">The Reflection Team:</span> Dr. (Mrs.) N. F. Shaikh · Dr(Mrs) S. S. Raskar · Prof. J. A. Kalbhor
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // Distribution into columns
   const [col1, col2] = useMemo(() => {
@@ -1623,7 +1772,7 @@ function ToppersPage({ data, theme = getTemplate('modern-academic'), isClassicFr
             <p className="text-xs font-semibold text-slate-500">No topper records added for {classYear}</p>
           </div>
         ) : (
-          <div className="flex-1 flex flex-col justify-start gap-3 overflow-visible">
+          <div className="flex-1 flex flex-col justify-around py-2 gap-3 overflow-visible">
             {divisions.map((div) => {
               const divNameClean = div.name.replace(/division\s*/i, '').trim();
               const divTitle = divNameClean.startsWith(classYear) ? divNameClean : `${classYear} ${divNameClean}`;
@@ -1808,24 +1957,24 @@ export function MagazinePageSheet({ page, pageNumber, totalPages, currentMagazin
         />
 
         {/* Top Header Bar matching reference PDF: [ ISSUE XX ]  Section Title  [ Page - XX ] */}
-        <div className="flex items-center justify-between pt-6 px-9 pb-2 pl-12 flex-shrink-0 z-20">
+        <div className="flex items-center justify-between pt-7 px-9 pb-3 pl-12 flex-shrink-0 z-20">
           {/* Left: Red outline box with ISSUE */}
           <div className="border-2 border-[#D32F2F] px-4 py-1 min-w-[125px] flex-shrink-0 text-center shadow-2xs">
-            <span className="text-sm font-bold font-serif text-[#D32F2F] tracking-wider uppercase">
+            <span className="text-sm font-bold font-serif text-[#D32F2F] tracking-wider uppercase leading-normal">
               ISSUE {issueNum}
             </span>
           </div>
 
           {/* Center: Red Title */}
           <div className="text-center flex-1 mx-4 min-w-0">
-            <h2 className="text-xl md:text-2xl font-serif font-bold text-[#D32F2F] tracking-wide truncate">
+            <h2 className="text-xl md:text-2xl font-serif font-bold text-[#D32F2F] tracking-wide leading-normal">
               {classicTitle}
             </h2>
           </div>
 
           {/* Right: Red outline box with Page - X */}
           <div className="border-2 border-[#D32F2F] px-4 py-1 min-w-[105px] flex-shrink-0 text-center shadow-2xs">
-            <span className="text-sm font-bold font-serif text-[#D32F2F] tracking-wider">
+            <span className="text-sm font-bold font-serif text-[#D32F2F] tracking-wider leading-normal">
               Page - {pageNumber}
             </span>
           </div>
@@ -1893,10 +2042,6 @@ export function MagazinePageSheet({ page, pageNumber, totalPages, currentMagazin
     </div>
   );
 }
-
-// ── Dynamic Page Generator ───────────────────────────────────────────────────
-export { generateMagazinePages } from '../../utils/magazinePages';
-import { generateMagazinePages } from '../../utils/magazinePages';
 
 // ── Main PagePreview Component ────────────────────────────────────────────────
 

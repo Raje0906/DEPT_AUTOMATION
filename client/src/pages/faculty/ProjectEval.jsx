@@ -44,9 +44,10 @@ export default function ProjectEval() {
 
   const handleOpenEvaluationModal = async (ass) => {
     try {
-      const res = await api.get(`/projects/evaluations/${ass.assignment_id}`);
+      const assignmentIdToFetch = ass.assignment_id || ass.active_assignment_id;
+      const res = await api.get(`/projects/evaluations/${assignmentIdToFetch}`);
       setFormData(res.data);
-      setSelectedAssignment(ass);
+      setSelectedAssignment({ ...ass, assignment_id: assignmentIdToFetch });
       
       // Initialize scores map per student member
       const initialMap = {};
@@ -127,8 +128,8 @@ export default function ProjectEval() {
   }
 
   // Calculate stats
-  const pendingAssignments = assignments.filter((a) => a.assignment_status !== 'COMPLETED').length;
-  const completedAssignments = assignments.filter((a) => a.assignment_status === 'COMPLETED').length;
+  const pendingAssignments = assignments.filter((a) => a.assignment_status !== 'COMPLETED' && !a.locked_by_other).length;
+  const completedAssignments = assignments.filter((a) => a.assignment_status === 'COMPLETED' || a.locked_by_other).length;
 
   return (
     <div className="p-8 lg:p-10 w-full max-w-7xl mx-auto space-y-8">
@@ -137,7 +138,7 @@ export default function ProjectEval() {
         <div>
           <h1 className="font-serif text-3xl font-bold text-ink">Project Evaluation Portal</h1>
           <p className="text-base text-draft mt-1 font-medium">
-            Academic Year 2026-27
+            Academic Year 2026-27 · Continuous Assessment
           </p>
         </div>
       </div>
@@ -162,7 +163,7 @@ export default function ProjectEval() {
         <div className="p-4 bg-white border border-rule rounded">
           <p className="text-xs uppercase tracking-wider text-draft font-semibold">Evaluations Completed</p>
           <p className="font-serif text-3xl font-bold text-emerald-700 mt-1">{completedAssignments}</p>
-          <p className="text-xs text-emerald-700 mt-1 font-medium">Submitted</p>
+          <p className="text-xs text-emerald-700 mt-1 font-medium">Submitted / Locked</p>
         </div>
       </div>
 
@@ -224,7 +225,7 @@ export default function ProjectEval() {
               <div className="p-8 text-center text-draft">You are currently not guiding any active project groups.</div>
             ) : (
               guidedGroups.map((g) => (
-                <div key={g.id} className="p-6 space-y-3">
+                <div key={g.id} className="p-6 space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <span className="font-mono text-sm font-bold text-navy bg-blue-50 border border-blue-200 px-2.5 py-1 rounded">
@@ -239,13 +240,150 @@ export default function ProjectEval() {
                   <p className="text-xs text-draft font-medium">Domain: <span className="text-ink font-semibold">{g.domain}</span></p>
                   <p className="text-xs text-ink">{g.abstract}</p>
 
-                  <div className="pt-2 flex items-center gap-4 text-xs text-draft">
+                  <div className="pt-1 flex flex-wrap items-center gap-3 text-xs text-draft">
                     <span className="font-bold text-navy">Roster ({g.members.length}):</span>
                     {g.members.map((m, idx) => (
                       <span key={idx} className="bg-paper border border-rule px-2 py-0.5 rounded font-mono">
                         {m.name} ({m.roll_no}) {m.is_leader && '★'}
                       </span>
                     ))}
+                  </div>
+
+                  {/* Evaluation Stages & Continuous Assessment */}
+                  <div className="pt-3 border-t border-rule space-y-2.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                      <p className="text-xs font-mono font-bold uppercase tracking-wider text-slate-600">
+                        Continuous Assessment Evaluation Stages
+                      </p>
+                      <span className="text-[11px] text-draft">
+                        Either Guide or Panel Mentor can evaluate. Only 1 can assign scores per stage.
+                      </span>
+                    </div>
+
+                    {(!g.stages || g.stages.length === 0) ? (
+                      <p className="text-xs text-draft italic">No evaluation stages configured for {g.academic_year}.</p>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                        {g.stages.map((st) => (
+                          <div
+                            key={st.stage_id}
+                            className={`p-3.5 rounded border transition-all ${
+                              st.is_scored_by_guide
+                                ? 'bg-emerald-50/50 border-emerald-200 shadow-2xs'
+                                : st.is_locked_by_mentor
+                                ? 'bg-purple-50/50 border-purple-200 shadow-2xs'
+                                : st.guide_eval_status === 'DRAFT'
+                                ? 'bg-amber-50/50 border-amber-200 shadow-2xs'
+                                : 'bg-paper border-rule'
+                            } flex flex-col justify-between gap-3`}
+                          >
+                            <div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-mono text-xs font-bold text-navy">
+                                  Stage {st.sequence_order}
+                                </span>
+                                <span className="text-[11px] font-mono font-semibold text-draft">
+                                  Max: {st.max_marks_total} Marks
+                                </span>
+                              </div>
+                              <h4 className="text-xs font-bold text-ink mt-1 line-clamp-1" title={st.stage_name}>
+                                {st.stage_name}
+                              </h4>
+
+                              {/* Status Badge */}
+                              <div className="mt-2.5">
+                                {st.is_scored_by_guide ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                    Scored by You (Guide)
+                                  </span>
+                                ) : st.is_locked_by_mentor ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-100 text-purple-800 border border-purple-300">
+                                    <span>🔒</span>
+                                    Scored by Mentor ({st.mentor_evaluator_name})
+                                  </span>
+                                ) : st.guide_eval_status === 'DRAFT' ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-300">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                    Draft Saved
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                    Pending Evaluation
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Action Button */}
+                            <div className="pt-1">
+                              {st.is_scored_by_guide ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleOpenEvaluationModal({
+                                      assignment_id: st.assignment_id,
+                                      group_code: g.group_code,
+                                      title: g.title,
+                                      stage_name: st.stage_name,
+                                    })
+                                  }
+                                  className="w-full py-1.5 px-2.5 bg-white hover:bg-slate-50 text-emerald-800 border border-emerald-300 rounded text-xs font-bold shadow-2xs transition-colors"
+                                >
+                                  View Your Evaluation
+                                </button>
+                              ) : st.is_locked_by_mentor ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleOpenEvaluationModal({
+                                      assignment_id: st.active_assignment_id,
+                                      group_code: g.group_code,
+                                      title: g.title,
+                                      stage_name: st.stage_name,
+                                    })
+                                  }
+                                  className="w-full py-1.5 px-2.5 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-300 rounded text-xs font-bold flex items-center justify-center gap-1 transition-colors"
+                                >
+                                  <span>👁️</span> View Mentor Evaluation (Read-Only)
+                                </button>
+                              ) : st.guide_eval_status === 'DRAFT' ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleOpenEvaluationModal({
+                                      assignment_id: st.assignment_id,
+                                      group_code: g.group_code,
+                                      title: g.title,
+                                      stage_name: st.stage_name,
+                                    })
+                                  }
+                                  className="w-full btn-primary py-1.5 px-2.5 text-xs font-bold"
+                                >
+                                  Continue Scoring (Draft) →
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleOpenEvaluationModal({
+                                      assignment_id: st.assignment_id,
+                                      group_code: g.group_code,
+                                      title: g.title,
+                                      stage_name: st.stage_name,
+                                    })
+                                  }
+                                  className="w-full btn-primary py-1.5 px-2.5 text-xs font-bold"
+                                >
+                                  Score Students as Guide →
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))
@@ -258,7 +396,12 @@ export default function ProjectEval() {
       {activeTab === 'evaluations' && (
         <div className="panel">
           <div className="panel-header flex items-center justify-between">
-            <h2 className="font-serif text-xl font-semibold">Panel Evaluator Assignments</h2>
+            <div>
+              <h2 className="font-serif text-xl font-semibold">Panel Evaluator Assignments</h2>
+              <p className="text-xs text-draft mt-0.5">
+                Mutually exclusive continuous assessment: If Guide scores first, panel is locked; vice versa.
+              </p>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="result-table">
@@ -296,7 +439,12 @@ export default function ProjectEval() {
                       <td className="font-medium text-xs text-ink">{ass.guide_name || 'Unassigned'}</td>
                       <td className="font-mono text-xs text-navy font-semibold">{ass.stage_name}</td>
                       <td>
-                        {ass.evaluation_status === 'SUBMITTED' || ass.evaluation_status === 'LOCKED' ? (
+                        {ass.locked_by_other ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-semibold bg-purple-50 text-purple-800 border border-purple-200">
+                            <span>🔒</span>
+                            Scored by {ass.other_is_guide ? 'Guide' : 'Mentor'} ({ass.other_evaluator_name})
+                          </span>
+                        ) : ass.evaluation_status === 'SUBMITTED' || ass.evaluation_status === 'LOCKED' ? (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                             Submitted
@@ -314,12 +462,25 @@ export default function ProjectEval() {
                         )}
                       </td>
                       <td className="text-right">
-                        <button
-                          onClick={() => handleOpenEvaluationModal(ass)}
-                          className="btn-primary py-1.5 px-3 text-xs"
-                        >
-                          {ass.evaluation_status === 'SUBMITTED' ? 'View Evaluation' : 'Score Students →'}
-                        </button>
+                        {ass.locked_by_other ? (
+                          <button
+                            onClick={() => handleOpenEvaluationModal({ ...ass, assignment_id: ass.other_assignment_id })}
+                            className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 rounded text-xs font-semibold inline-flex items-center gap-1"
+                          >
+                            <span>👁️</span> View Evaluation (Read-Only)
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleOpenEvaluationModal(ass)}
+                            className="btn-primary py-1.5 px-3 text-xs"
+                          >
+                            {ass.evaluation_status === 'SUBMITTED'
+                              ? 'View Evaluation'
+                              : ass.evaluation_status === 'DRAFT'
+                              ? 'Continue Scoring →'
+                              : 'Score Students →'}
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -343,9 +504,15 @@ export default function ProjectEval() {
                   <span className="text-xs font-mono font-bold text-navy uppercase tracking-wider">
                     {formData.assignment.group_code} · {formData.assignment.stage_name}
                   </span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800 border border-emerald-300">
-                    Individual Student Marks Entry
-                  </span>
+                  {formData.isReadOnly ? (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-100 text-amber-800 border border-amber-300">
+                      Read-Only Mode
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800 border border-emerald-300">
+                      Individual Student Marks Entry
+                    </span>
+                  )}
                 </div>
                 <h3 className="font-serif text-lg font-bold text-ink mt-0.5 leading-snug">
                   {formData.assignment.title}
@@ -362,25 +529,49 @@ export default function ProjectEval() {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                handleSaveEvaluation('SUBMITTED');
+                if (!formData.isReadOnly) {
+                  handleSaveEvaluation('SUBMITTED');
+                }
               }}
               className="space-y-6"
             >
+              {/* Mutual Exclusion / Read-Only Banner */}
+              {formData.isReadOnly && (
+                <div className="p-3.5 bg-amber-50 border border-amber-300 rounded text-xs text-amber-900 flex items-center gap-2.5">
+                  <svg className="w-4 h-4 text-amber-700 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                  </svg>
+                  <p className="font-bold">
+                    {formData.lockedByOther
+                      ? `Scores for this stage were assigned by ${formData.otherRole || 'another evaluator'} (${formData.otherEvaluator || 'Evaluator'}).`
+                      : 'This evaluation has been submitted and locked.'}
+                  </p>
+                </div>
+              )}
+
               {/* Quick Actions & Guide Info */}
               <div className="p-3 bg-paper border border-rule rounded text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <span className="text-draft font-bold">Project Guide: </span>
                   <span className="text-navy font-semibold">{formData.assignment.guide_name || 'Unassigned'}</span>
-                  <span className="text-draft ml-3">· Evaluator assigns marks <strong>individually</strong> to each student member.</span>
+                  {formData.isReadOnly ? (
+                    <span className="text-draft ml-3">
+                      · Evaluated by: <strong className="text-navy">{formData.otherEvaluator || formData.assignment.evaluator_name || 'Assigned Evaluator'}</strong> ({formData.otherRole || 'Evaluator'})
+                    </span>
+                  ) : (
+                    <span className="text-draft ml-3">· Evaluator assigns marks <strong>individually</strong> to each student member.</span>
+                  )}
                 </div>
-                <button
-                  type="button"
-                  onClick={handleCopyFirstStudentScores}
-                  className="px-3 py-1 bg-blue-50 hover:bg-blue-100 text-navy border border-blue-200 text-xs font-bold rounded flex items-center gap-1 shrink-0"
-                  title="Copy Student 1 marks to all team members"
-                >
-                  <span>⚡</span> Copy Student-1 Scores to All
-                </button>
+                {!formData.isReadOnly && (
+                  <button
+                    type="button"
+                    onClick={handleCopyFirstStudentScores}
+                    className="px-3 py-1 bg-blue-50 hover:bg-blue-100 text-navy border border-blue-200 text-xs font-bold rounded flex items-center gap-1 shrink-0"
+                    title="Copy Student 1 marks to all team members"
+                  >
+                    <span>⚡</span> Copy Student-1 Scores to All
+                  </button>
+                )}
               </div>
 
               {/* INDIVIDUAL STUDENT RUBRIC SCORING SECTIONS */}
@@ -437,9 +628,11 @@ export default function ProjectEval() {
                                   min="0"
                                   max={crit.max_marks}
                                   step="0.5"
+                                  disabled={formData.isReadOnly}
                                   value={curr.marks_awarded}
-                                  onFocus={(e) => e.target.select()}
+                                  onFocus={(e) => !formData.isReadOnly && e.target.select()}
                                   onChange={(e) =>
+                                    !formData.isReadOnly &&
                                     setScoresInput({
                                       ...scoresInput,
                                       [member.id]: {
@@ -448,7 +641,9 @@ export default function ProjectEval() {
                                       },
                                     })
                                   }
-                                  className="input-field font-mono font-bold text-navy text-right focus:bg-blue-50 focus:ring-2 focus:ring-navy"
+                                  className={`input-field font-mono font-bold text-navy text-right ${
+                                    formData.isReadOnly ? 'bg-slate-100 cursor-not-allowed opacity-90' : 'focus:bg-blue-50 focus:ring-2 focus:ring-navy'
+                                  }`}
                                   required
                                 />
                               </div>
@@ -461,38 +656,53 @@ export default function ProjectEval() {
                 })}
               </div>
 
-              {/* Overall Mentor Remarks */}
+              {/* Overall Remarks */}
               <div>
-                <label className="input-label font-bold text-ink">Overall Mentor Remarks &amp; Observations</label>
+                <label className="input-label font-bold text-ink">
+                  {formData.assignment.is_guide_evaluator ? 'Overall Guide Remarks & Observations' : 'Overall Mentor Remarks & Observations'}
+                </label>
                 <textarea
                   rows={3}
-                  placeholder="Record overall team performance remarks, demonstration feedback, or Viva notes..."
+                  disabled={formData.isReadOnly}
+                  placeholder={formData.isReadOnly ? 'No overall remarks entered' : 'Record overall team performance remarks, demonstration feedback, or Viva notes...'}
                   value={overallRemarks}
-                  onChange={(e) => setOverallRemarks(e.target.value)}
-                  className="input-field text-sm"
+                  onChange={(e) => !formData.isReadOnly && setOverallRemarks(e.target.value)}
+                  className={`input-field text-sm ${formData.isReadOnly ? 'bg-slate-100 cursor-not-allowed opacity-90' : ''}`}
                 />
               </div>
 
               {/* Form Actions */}
               <div className="flex justify-end gap-3 pt-3 border-t border-rule">
-                <button
-                  type="button"
-                  onClick={() => setSelectedAssignment(null)}
-                  className="px-4 py-2 border border-rule rounded text-xs font-medium text-draft hover:bg-paper"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={() => handleSaveEvaluation('DRAFT')}
-                  className="px-4 py-2 border border-navy text-navy hover:bg-blue-50 rounded text-xs font-semibold"
-                >
-                  Save Draft
-                </button>
-                <button type="submit" disabled={saving} className="btn-primary py-2 px-6 font-bold">
-                  {saving ? 'Saving Scores...' : 'Submit Evaluation →'}
-                </button>
+                {formData.isReadOnly ? (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAssignment(null)}
+                    className="btn-primary py-2 px-6 font-bold"
+                  >
+                    Close Form
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAssignment(null)}
+                      className="px-4 py-2 border border-rule rounded text-xs font-medium text-draft hover:bg-paper"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => handleSaveEvaluation('DRAFT')}
+                      className="px-4 py-2 border border-navy text-navy hover:bg-blue-50 rounded text-xs font-semibold"
+                    >
+                      Save Draft
+                    </button>
+                    <button type="submit" disabled={saving} className="btn-primary py-2 px-6 font-bold">
+                      {saving ? 'Saving Scores...' : 'Submit Evaluation →'}
+                    </button>
+                  </>
+                )}
               </div>
             </form>
           </div>

@@ -311,9 +311,9 @@ export default function TemplateSelectorModal({ isOpen, onClose, selectedTemplat
         {/* Modal Header */}
         <div className="flex items-start justify-between border-b border-rule pb-4 mb-4 flex-shrink-0">
           <div>
-            <h2 className="font-serif text-2xl font-bold text-ink">Choose Magazine Design</h2>
+            <h2 className="font-serif text-2xl font-bold text-ink">Choose Newsletter Design</h2>
             <p className="text-xs text-draft mt-1">
-              Select a design theme for your magazine. You can change it later. Your content, students, and events remain intact.
+              Select a design theme for your newsletter. You can change it later. Your content, students, and events remain intact.
             </p>
           </div>
           <button

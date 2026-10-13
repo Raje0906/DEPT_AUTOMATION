@@ -2,8 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import api from '../../api/axios';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 
 export default function ClassTeacherNamelist() {
   const { user } = useAuth();
@@ -27,6 +25,7 @@ export default function ClassTeacherNamelist() {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState('seat_no'); // 'seat_no' | 'student_name' | 'sr_no'
   const [sortAsc, setSortAsc] = useState(true);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   // Fetch Class Teacher assignments
   useEffect(() => {
@@ -168,13 +167,25 @@ export default function ClassTeacherNamelist() {
   };
 
   // Generate and Download Official Segregated PDF
-  const handleDownloadPdf = () => {
+  const handleDownloadPdf = async () => {
     if (!segregatedResult || !segregatedResult.students?.length) {
       toast.error('No segregated students to generate PDF for.');
       return;
     }
 
+    setDownloadingPdf(true);
+    const toastId = toast.loading('Preparing official PDF ledger...');
+
     try {
+      // Dynamic lazy import to optimize bundle size and speed up initial page load
+      const [jspdfModule, autoTableModule] = await Promise.all([
+        import('jspdf'),
+        import('jspdf-autotable')
+      ]);
+
+      const jsPDF = jspdfModule.jsPDF || jspdfModule.default;
+      const autoTable = autoTableModule.default || autoTableModule.autoTable || autoTableModule;
+
       const doc = new jsPDF({
         orientation: 'portrait',
         unit: 'pt',
@@ -342,10 +353,12 @@ export default function ClassTeacherNamelist() {
       // Save PDF
       const cleanFileName = `Segregated_Namelist_${targetClassName.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
       doc.save(cleanFileName);
-      toast.success(`Downloaded: ${cleanFileName}`);
+      toast.success(`Downloaded: ${cleanFileName}`, { id: toastId });
     } catch (pdfErr) {
       console.error('Error generating PDF:', pdfErr);
-      toast.error('Failed to generate PDF: ' + pdfErr.message);
+      toast.error('Failed to generate PDF: ' + (pdfErr.message || 'Unknown error'), { id: toastId });
+    } finally {
+      setDownloadingPdf(false);
     }
   };
 
@@ -748,12 +761,25 @@ export default function ClassTeacherNamelist() {
                 <button
                   type="button"
                   onClick={handleDownloadPdf}
-                  className="inline-flex items-center gap-2 px-4 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition-all shadow-xs"
+                  disabled={downloadingPdf}
+                  className="inline-flex items-center gap-2 px-4 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs font-bold transition-all shadow-xs"
                 >
-                  <svg className="w-4 h-4 text-emerald-200" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-                  </svg>
-                  Download Segregated PDF
+                  {downloadingPdf ? (
+                    <>
+                      <svg className="animate-spin w-4 h-4 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                      </svg>
+                      <span>Generating PDF...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4 text-emerald-200" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                      <span>Download Segregated PDF</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>
