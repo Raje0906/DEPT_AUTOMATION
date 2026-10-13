@@ -177,9 +177,10 @@ export default function HODSeminarMgmt() {
       );
 
     if (!matchesSearch) return false;
-    if (groupStatusFilter === 'AWAITING') return g.status === 'AWAITING_HOD_APPROVAL';
-    if (groupStatusFilter === 'APPROVED') return g.status === 'APPROVED';
-    if (groupStatusFilter === 'PENDING') return g.status !== 'APPROVED' && g.status !== 'AWAITING_HOD_APPROVAL';
+    const hasGuide = Boolean(g.guide_name && g.guide_name !== 'Unassigned');
+    if (groupStatusFilter === 'AWAITING') return hasGuide && g.status === 'AWAITING_HOD_APPROVAL';
+    if (groupStatusFilter === 'APPROVED') return hasGuide && g.status === 'APPROVED';
+    if (groupStatusFilter === 'PENDING') return !hasGuide || (g.status !== 'APPROVED' && g.status !== 'AWAITING_HOD_APPROVAL');
     return true;
   });
 
@@ -199,8 +200,8 @@ export default function HODSeminarMgmt() {
   });
 
   // Summary Counts
-  const pendingApprovalsCount = groups.filter((g) => g.status === 'AWAITING_HOD_APPROVAL').length;
-  const approvedGroupsCount = groups.filter((g) => g.status === 'APPROVED').length;
+  const pendingApprovalsCount = groups.filter((g) => g.guide_name && g.guide_name !== 'Unassigned' && g.status === 'AWAITING_HOD_APPROVAL').length;
+  const approvedGroupsCount = groups.filter((g) => g.guide_name && g.guide_name !== 'Unassigned' && g.status === 'APPROVED').length;
   const unassignedGroupsCount = groups.filter((g) => !g.guide_name || g.guide_name === 'Unassigned').length;
 
   const submittedMarksCount = marksData.filter((m) => m.marks_status === 'SUBMITTED' || m.marks_status === 'FINALIZED').length;
@@ -415,19 +416,21 @@ export default function HODSeminarMgmt() {
                       </td>
 
                       <td className="text-center">
-                        {grp.status === 'APPROVED' && (
+                        {grp.guide_name && grp.guide_name !== 'Unassigned' && grp.status === 'APPROVED' ? (
                           <span className="badge status-approved text-[10px] font-semibold">
-                            ✓ Approved
+                            Approved
                           </span>
-                        )}
-                        {grp.status === 'AWAITING_HOD_APPROVAL' && (
-                          <span className="badge bg-amber-100 text-amber-800 border border-amber-300 text-[10px] font-bold animate-pulse">
-                            ⏳ Awaiting HOD Approval
+                        ) : grp.guide_name && grp.guide_name !== 'Unassigned' && grp.status === 'AWAITING_HOD_APPROVAL' ? (
+                          <span className="badge bg-amber-100 text-amber-800 border border-amber-300 text-[10px] font-bold">
+                            Awaiting HOD Approval
                           </span>
-                        )}
-                        {grp.status !== 'APPROVED' && grp.status !== 'AWAITING_HOD_APPROVAL' && (
+                        ) : grp.guide_name && grp.guide_name !== 'Unassigned' ? (
                           <span className="badge status-draft text-[10px]">
-                            Pending Guide
+                            Pending Submission
+                          </span>
+                        ) : (
+                          <span className="badge bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-medium">
+                            Unassigned
                           </span>
                         )}
                       </td>

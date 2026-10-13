@@ -138,6 +138,7 @@ const roleNav = {
         { to: '/faculty/project-eval',    label: 'BE Project Evaluation', icon: Icons.project },
         { to: '/faculty/magazines',       label: 'Newsletter',            icon: Icons.magazines },
         { to: '/faculty/seminar',         label: 'TE Seminar Governance', icon: Icons.seminar },
+        { to: '/faculty/seminar/my-groups', label: 'My Assigned Groups',  icon: Icons.teachers },
       ],
     },
   ],
@@ -211,7 +212,7 @@ const PAGE_TITLES = {
   '/faculty/seminar': 'TE Seminar Governance',
   '/faculty/seminar/import-assign': 'Import Responses & Assign Guides',
   '/faculty/seminar/schedule': 'Schedule Presentation',
-  '/faculty/seminar/my-groups': 'Assigned Seminar Groups',
+  '/faculty/seminar/my-groups': 'My Assigned Groups',
   '/faculty/class-namelist': 'University Namelist Segregator',
   '/hod': 'HOD Executive Dashboard',
   '/hod/teachers': 'Faculty Teaching Allocation',
@@ -254,7 +255,7 @@ export default function Layout({ children }) {
     if (!user?.is_seminar_coordinator) {
       navGroups = navGroups.map(group => ({
         ...group,
-        items: group.items.filter(item => !item.to.startsWith('/faculty/seminar'))
+        items: group.items.filter(item => !item.to.startsWith('/faculty/seminar') || item.to === '/faculty/seminar/my-groups')
       }));
     }
     if (user?.is_project_coordinator) {
@@ -405,7 +406,7 @@ export default function Layout({ children }) {
                   end={item.to === '/student' || item.to === '/faculty' || item.to === '/hod'}
                   className={({ isActive }) => {
                     const isCustomActive = item.to === '/faculty/seminar'
-                      ? location.pathname.startsWith('/faculty/seminar')
+                      ? location.pathname.startsWith('/faculty/seminar') && !location.pathname.startsWith('/faculty/seminar/my-groups')
                       : isActive;
                     return `group flex items-center gap-3 px-3 py-2 text-xs font-medium rounded transition-all duration-150 ${
                       isCustomActive
