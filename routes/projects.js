@@ -697,6 +697,78 @@ router.get('/guide/my-groups', verifyToken, requireRole('faculty','hod'), async 
         [group.id]
       );
       group.members = membersRes.rows;
+
+      // Fetch active continuous assessment evaluation stages for this academic year
+      const stagesRes = await pool.query(
+        `SELECT s.id as stage_id, s.name as stage_name, s.sequence_order, s.max_marks_total,
+                s.scheduled_date_from, s.scheduled_date_to
+         FROM project_evaluation_stages s
+         WHERE s.academic_year = $1
+         ORDER BY s.sequence_order ASC`,
+        [group.academic_year || '2026-27']
+      );
+
+      group.stages = [];
+      for (const st of stagesRes.rows) {
+        // Ensure a panel assignment row exists for the Guide so Guide can evaluate
+        let guideAssignRes = await pool.query(
+          `SELECT id, status FROM project_panel_assignments
+           WHERE stage_id = $1 AND group_id = $2 AND panel_member_id = $3`,
+          [st.stage_id, group.id, facultyId]
+        );
+
+        let guideAssignId;
+        if (guideAssignRes.rows.length === 0) {
+          const newAssign = await pool.query(
+            `INSERT INTO project_panel_assignments (stage_id, group_id, panel_member_id, assigned_by, status)
+             VALUES ($1, $2, $3, $4, 'ASSIGNED')
+             RETURNING id, status`,
+            [st.stage_id, group.id, facultyId, req.user.id]
+          );
+          guideAssignId = newAssign.rows[0].id;
+        } else {
+          guideAssignId = guideAssignRes.rows[0].id;
+        }
+
+        // Check if Guide has an evaluation (draft or submitted)
+        const guideEvalRes = await pool.query(
+          `SELECT pe.id, pe.status, pe.submitted_at, pe.overall_remarks
+           FROM project_evaluations pe
+           WHERE pe.panel_assignment_id = $1`,
+          [guideAssignId]
+        );
+        const guideEval = guideEvalRes.rows[0] || null;
+
+        // Check if ANY Panel Mentor has submitted an evaluation for this stage & group
+        const mentorEvalRes = await pool.query(
+          `SELECT pe.id, pe.status, pe.submitted_at, pe.overall_remarks,
+                  pa.id as mentor_assignment_id, u.name as mentor_name
+           FROM project_panel_assignments pa
+           JOIN project_evaluations pe ON pa.id = pe.panel_assignment_id
+           JOIN faculty f ON pa.panel_member_id = f.id
+           JOIN users u ON f.user_id = u.id
+           WHERE pa.group_id = $1 AND pa.stage_id = $2 AND pa.panel_member_id != $3
+             AND pe.status IN ('SUBMITTED', 'LOCKED')
+           ORDER BY pe.submitted_at DESC NULLS LAST
+           LIMIT 1`,
+          [group.id, st.stage_id, facultyId]
+        );
+        const mentorEval = mentorEvalRes.rows[0] || null;
+
+        group.stages.push({
+          stage_id: st.stage_id,
+          stage_name: st.stage_name,
+          sequence_order: st.sequence_order,
+          max_marks_total: st.max_marks_total,
+          assignment_id: guideAssignId,
+          guide_eval_status: guideEval ? guideEval.status : null,
+          is_scored_by_guide: guideEval && ['SUBMITTED', 'LOCKED'].includes(guideEval.status),
+          is_locked_by_mentor: !!mentorEval,
+          mentor_evaluator_name: mentorEval ? mentorEval.mentor_name : null,
+          mentor_assignment_id: mentorEval ? mentorEval.mentor_assignment_id : null,
+          active_assignment_id: mentorEval ? mentorEval.mentor_assignment_id : guideAssignId
+        });
+      }
     }
 
     res.json(groupsRes.rows);
@@ -746,6 +818,35 @@ router.get('/evaluator/assignments', verifyToken, requireRole('faculty','hod'), 
         [row.group_id]
       );
       row.members = membersRes.rows;
+
+      // Check if ANOTHER evaluator (Guide or other Mentor) has submitted for this (group_id, stage_id)
+      const otherEvalRes = await pool.query(
+        `SELECT pe.id as other_eval_id, pe.status as other_status, pe.submitted_at,
+                u.name as other_evaluator_name,
+                pa.id as other_assignment_id,
+                (pa.panel_member_id = g.guide_id) as other_is_guide
+         FROM project_panel_assignments pa
+         JOIN project_evaluations pe ON pa.id = pe.panel_assignment_id
+         JOIN project_groups g ON pa.group_id = g.id
+         JOIN faculty f ON pa.panel_member_id = f.id
+         JOIN users u ON f.user_id = u.id
+         WHERE pa.group_id = $1 AND pa.stage_id = $2 AND pa.id != $3
+           AND pe.status IN ('SUBMITTED', 'LOCKED')
+         ORDER BY pe.submitted_at DESC NULLS LAST
+         LIMIT 1`,
+        [row.group_id, row.stage_id, row.assignment_id]
+      );
+
+      if (otherEvalRes.rows.length > 0) {
+        const other = otherEvalRes.rows[0];
+        row.locked_by_other = true;
+        row.other_is_guide = other.other_is_guide;
+        row.other_evaluator_name = other.other_evaluator_name;
+        row.other_assignment_id = other.other_assignment_id;
+        row.other_status = other.other_status;
+      } else {
+        row.locked_by_other = false;
+      }
     }
 
     res.json(assignmentsRes.rows);
@@ -768,12 +869,16 @@ router.get('/evaluations/:assignmentId', verifyToken, requireRole('faculty','hod
       `SELECT pa.id as assignment_id, pa.panel_member_id, pa.status as assignment_status,
               s.id as stage_id, s.name as stage_name, s.max_marks_total,
               g.id as group_id, g.group_code, g.title, g.domain, g.guide_id,
-              gu.name as guide_name
+              gu.name as guide_name,
+              pu.name as evaluator_name,
+              (pa.panel_member_id = g.guide_id) as is_guide_evaluator
        FROM project_panel_assignments pa
        JOIN project_evaluation_stages s ON pa.stage_id = s.id
        JOIN project_groups g ON pa.group_id = g.id
        LEFT JOIN faculty gf ON g.guide_id = gf.id
        LEFT JOIN users gu ON gf.user_id = gu.id
+       LEFT JOIN faculty pf ON pa.panel_member_id = pf.id
+       LEFT JOIN users pu ON pf.user_id = pu.id
        WHERE pa.id = $1`,
       [assignmentId]
     );
@@ -783,8 +888,18 @@ router.get('/evaluations/:assignmentId', verifyToken, requireRole('faculty','hod
     }
     const assign = assignRes.rows[0];
 
-    // Conflict of interest check
+    // Authorization check
     const isGuide = assign.guide_id === facultyId;
+    const isAssigned = assign.panel_member_id === facultyId;
+    const panelCheck = await pool.query(
+      `SELECT id FROM project_panel_assignments WHERE group_id = $1 AND stage_id = $2 AND panel_member_id = $3`,
+      [assign.group_id, assign.stage_id, facultyId]
+    );
+    const isPanelistForGroup = panelCheck.rows.length > 0;
+
+    if (!isGuide && !isAssigned && !isPanelistForGroup && req.user.role !== 'hod') {
+      return res.status(403).json({ error: 'You are not authorized to view this evaluation' });
+    }
 
     // Fetch criteria for this stage
     const criteriaRes = await pool.query(
@@ -827,9 +942,55 @@ router.get('/evaluations/:assignmentId', verifyToken, requireRole('faculty','hod
       }
     }
 
+    // Check if ANOTHER evaluator has submitted scores for this stage and group
+    const otherEvalRes = await pool.query(
+      `SELECT pe.id, pe.status, pe.submitted_at, u.name as evaluator_name,
+              pa.id as other_assignment_id,
+              (pa.panel_member_id = g.guide_id) as other_is_guide
+       FROM project_panel_assignments pa
+       JOIN project_evaluations pe ON pa.id = pe.panel_assignment_id
+       JOIN project_groups g ON pa.group_id = g.id
+       JOIN faculty f ON pa.panel_member_id = f.id
+       JOIN users u ON f.user_id = u.id
+       WHERE pa.group_id = $1 AND pa.stage_id = $2 AND pa.id != $3
+         AND pe.status IN ('SUBMITTED', 'LOCKED')
+       ORDER BY pe.submitted_at DESC NULLS LAST
+       LIMIT 1`,
+      [assign.group_id, assign.stage_id, assignmentId]
+    );
+    const otherEval = otherEvalRes.rows[0] || null;
+
+    // Determine read-only lock state
+    let isReadOnly = false;
+    let lockedByOther = false;
+    let otherEvaluator = null;
+    let otherRole = null;
+
+    if (req.user.role === 'hod') {
+      isReadOnly = evaluation?.status === 'SUBMITTED' && !evaluation?.is_unlocked;
+    } else if (assign.panel_member_id !== facultyId) {
+      // User is viewing someone else's assignment evaluation (e.g. guide viewing mentor's submission or vice-versa)
+      isReadOnly = true;
+      lockedByOther = true;
+      otherEvaluator = assign.evaluator_name;
+      otherRole = assign.is_guide_evaluator ? 'Project Guide' : 'Panel Mentor';
+    } else if (otherEval) {
+      // Someone else has already submitted and locked the score for this group & stage!
+      isReadOnly = true;
+      lockedByOther = true;
+      otherEvaluator = otherEval.evaluator_name;
+      otherRole = otherEval.other_is_guide ? 'Project Guide' : 'Panel Mentor';
+    } else if (evaluation && ['SUBMITTED', 'LOCKED'].includes(evaluation.status)) {
+      isReadOnly = !evaluation.is_unlocked;
+    }
+
     res.json({
       assignment: assign,
       isGuide,
+      isReadOnly,
+      lockedByOther,
+      otherEvaluator,
+      otherRole,
       members: membersRes.rows,
       criteria: criteriaRes.rows,
       evaluation,
@@ -845,6 +1006,7 @@ router.get('/evaluations/:assignmentId', verifyToken, requireRole('faculty','hod
 /**
  * POST /api/projects/evaluations
  * Save draft or submit evaluation for an assigned panel group with individual student scoring.
+ * Enforces Mutually Exclusive Evaluation: Only 1 can assign (either Guide or Mentor).
  */
 router.post('/evaluations', verifyToken, requireRole('faculty','hod'), async (req, res) => {
   try {
@@ -874,8 +1036,33 @@ router.post('/evaluations', verifyToken, requireRole('faculty','hod'), async (re
     }
     const assign = assignRes.rows[0];
 
-    if (assign.panel_member_id !== facultyId && req.user.role !== 'hod') {
-      return res.status(403).json({ error: 'You are not assigned to evaluate this group' });
+    const isAssigned = (assign.panel_member_id === facultyId);
+    const isGuide = (assign.guide_id === facultyId);
+
+    if (!isAssigned && !isGuide && req.user.role !== 'hod') {
+      return res.status(403).json({ error: 'You are not assigned or authorized to evaluate this group' });
+    }
+
+    // Mutually Exclusive Check: Only 1 can assign (either Guide or Mentor)
+    const conflictRes = await pool.query(
+      `SELECT pe.id, pe.status, pe.submitted_at, u.name as evaluator_name,
+              (pa.panel_member_id = g.guide_id) as is_guide
+       FROM project_panel_assignments pa
+       JOIN project_evaluations pe ON pa.id = pe.panel_assignment_id
+       JOIN project_groups g ON pa.group_id = g.id
+       JOIN faculty f ON pa.panel_member_id = f.id
+       JOIN users u ON f.user_id = u.id
+       WHERE pa.group_id = $1 AND pa.stage_id = $2 AND pa.id != $3
+         AND pe.status IN ('SUBMITTED', 'LOCKED')`,
+      [assign.group_id, assign.stage_id, assignment_id]
+    );
+
+    if (conflictRes.rows.length > 0 && req.user.role !== 'hod') {
+      const conf = conflictRes.rows[0];
+      const roleName = conf.is_guide ? 'Project Guide' : 'Panel Mentor';
+      return res.status(409).json({
+        error: `Scores for this stage have already been submitted by ${roleName} (${conf.evaluator_name}). Only 1 evaluator (either Guide or Mentor) can assign scores.`
+      });
     }
 
     // Fetch group members
@@ -991,11 +1178,11 @@ router.post('/evaluations', verifyToken, requireRole('faculty','hod'), async (re
         );
       }
 
-      // Update assignment status to COMPLETED if submitted
+      // Update all panel assignments for this stage & group to COMPLETED if submitted
       if (status === 'SUBMITTED') {
         await client.query(
-          `UPDATE project_panel_assignments SET status = 'COMPLETED' WHERE id = $1`,
-          [assignment_id]
+          `UPDATE project_panel_assignments SET status = 'COMPLETED' WHERE stage_id = $1 AND group_id = $2`,
+          [assign.stage_id, assign.group_id]
         );
       }
 
@@ -1345,6 +1532,7 @@ router.get('/hod/students/search', verifyToken, requireProjectCoordinatorOrHOD, 
     const results = await pool.query(
       `SELECT s.id as student_id, s.user_id, s.roll_no, s.enrollment_no, s.division, s.batch,
               u.name, u.email,
+              (SELECT gm2.mobile_no FROM project_group_members gm2 WHERE (gm2.student_id = s.id OR gm2.roll_no = s.enrollment_no OR gm2.roll_no = s.roll_no) AND gm2.mobile_no IS NOT NULL AND gm2.mobile_no != '' LIMIT 1) as mobile_no,
               gm.group_id as current_group_id, g.group_code as current_group_code
        FROM students s
        JOIN users u ON s.user_id = u.id
@@ -1356,11 +1544,35 @@ router.get('/hod/students/search', verifyToken, requireProjectCoordinatorOrHOD, 
          OR s.enrollment_no ILIKE $2
          OR u.email ILIKE $2
        )
+       ORDER BY 
+         CASE 
+           WHEN UPPER(s.enrollment_no) = UPPER($3) THEN 1
+           WHEN UPPER(s.roll_no) = UPPER($3) THEN 2
+           WHEN UPPER(u.name) = UPPER($3) THEN 3
+           WHEN s.enrollment_no ILIKE $4 THEN 4
+           ELSE 5
+         END, u.name ASC
        LIMIT 15`,
-      [acadYear, `%${q}%`]
+      [acadYear, `%${q}%`, q, `${q}%`]
     );
 
-    res.json(results.rows);
+    let rows = results.rows;
+    if (rows.length === 0) {
+      const fallback = await pool.query(
+        `SELECT DISTINCT ON (gm.roll_no)
+                gm.student_id, NULL as user_id, gm.roll_no, gm.roll_no as enrollment_no,
+                gm.division, NULL as batch, gm.student_name as name, gm.email, gm.mobile_no,
+                gm.group_id as current_group_id, g.group_code as current_group_code
+         FROM project_group_members gm
+         JOIN project_groups g ON gm.group_id = g.id AND g.academic_year = $1 AND g.status != 'WITHDRAWN'
+         WHERE (gm.student_name ILIKE $2 OR gm.roll_no ILIKE $2 OR gm.email ILIKE $2)
+         LIMIT 10`,
+        [acadYear, `%${q}%`]
+      );
+      rows = fallback.rows;
+    }
+
+    res.json(rows);
   } catch (err) {
     console.error('[Search Students Error]', err);
     res.status(500).json({ error: 'Failed to search students' });
@@ -1626,7 +1838,7 @@ router.post('/hod/groups/:groupId/members', verifyToken, requireProjectCoordinat
 
     // Check if student already enrolled in another group in the same academic year
     const existingRes = await pool.query(
-      `SELECT g.id, g.group_code, gm.student_name, gm.roll_no
+      `SELECT g.id, g.group_code, gm.student_name, gm.roll_no, gm.id as member_id
        FROM project_group_members gm
        JOIN project_groups g ON gm.group_id = g.id
        WHERE g.academic_year = $1 AND g.status != 'WITHDRAWN'
@@ -1636,17 +1848,25 @@ router.post('/hod/groups/:groupId/members', verifyToken, requireProjectCoordinat
          ) LIMIT 1`,
       [group.academic_year, rollNo, studentEmail]
     );
+
+    let transferNotice = '';
     if (existingRes.rows.length > 0) {
-      return res.status(400).json({
-        error: `Student with PRN "${rollNo}" is already enrolled in group ${existingRes.rows[0].group_code}. Use "Transfer Student" to move them.`
-      });
+      const prevMember = existingRes.rows[0];
+      if (Number(prevMember.id) === Number(groupId)) {
+        return res.status(400).json({
+          error: `Student with PRN "${rollNo}" is already a member of this group (${group.group_code}).`
+        });
+      }
+      // Reassign / move student from previous group to this group
+      await pool.query('DELETE FROM project_group_members WHERE id = $1', [prevMember.member_id]);
+      transferNotice = ` (transferred from ${prevMember.group_code})`;
     }
 
-    // Capacity check (max 5 members)
+    // Capacity check (strictly max 4 members)
     const countRes = await pool.query('SELECT COUNT(*) FROM project_group_members WHERE group_id = $1', [groupId]);
     const curCount = parseInt(countRes.rows[0].count, 10);
-    if (curCount >= 5) {
-      return res.status(400).json({ error: `Group ${group.group_code} already has maximum capacity of 5 members.` });
+    if (curCount >= 4) {
+      return res.status(400).json({ error: `Group ${group.group_code} already has maximum capacity of 4 members.` });
     }
 
     // Match student_id from students/users table if present
@@ -1694,12 +1914,12 @@ router.post('/hod/groups/:groupId/members', verifyToken, requireProjectCoordinat
         groupId,
         req.user.id,
         'PROJECT_STUDENT_ADDED',
-        `Student ${studentName} (${rollNo}) manually added to group ${group.group_code} by ${req.user.name || 'Coordinator'}`
+        `Student ${studentName} (${rollNo}) manually added to group ${group.group_code}${transferNotice} by ${req.user.name || 'Coordinator'}`
       ]
     ).catch(() => {});
 
     res.status(201).json({
-      message: `Student "${studentName}" added to group ${group.group_code} successfully!`,
+      message: `Student "${studentName}" added to group ${group.group_code}${transferNotice} successfully!`,
       member: {
         ...insertRes.rows[0],
         name: insertRes.rows[0].student_name
@@ -1888,8 +2108,8 @@ router.post('/hod/groups/:groupId/members/:memberId/transfer', verifyToken, requ
 
     const targetCountRes = await pool.query('SELECT COUNT(*) FROM project_group_members WHERE group_id = $1', [targetGroupId]);
     const targetCount = parseInt(targetCountRes.rows[0].count, 10);
-    if (targetCount >= 5) {
-      return res.status(400).json({ error: `Target group ${targetGroup.group_code} already has maximum capacity of 5 members.` });
+    if (targetCount >= 4) {
+      return res.status(400).json({ error: `Target group ${targetGroup.group_code} already has maximum capacity of 4 members.` });
     }
 
     const makeLeader = Boolean(is_leader) || targetCount === 0;
@@ -2112,14 +2332,20 @@ router.post('/hod/panel-assignments', verifyToken, requireProjectCoordinatorOrHO
       await client.query('BEGIN');
 
       await client.query(
-        `DELETE FROM project_panel_assignments WHERE stage_id = $1 AND group_id = $2`,
+        `DELETE FROM project_panel_assignments
+         WHERE stage_id = $1 AND group_id = $2
+           AND panel_member_id != (SELECT COALESCE(guide_id, -1) FROM project_groups WHERE id = $2)
+           AND id NOT IN (SELECT panel_assignment_id FROM project_evaluations WHERE status IN ('SUBMITTED','LOCKED'))`,
         [stage_id, group_id]
       );
 
       for (const facId of panel_member_ids) {
         await client.query(
           `INSERT INTO project_panel_assignments (stage_id, group_id, panel_member_id, assigned_by, status)
-           VALUES ($1, $2, $3, $4, 'ASSIGNED')`,
+           SELECT $1, $2, $3, $4, 'ASSIGNED'
+           WHERE NOT EXISTS (
+             SELECT 1 FROM project_panel_assignments WHERE stage_id = $1 AND group_id = $2 AND panel_member_id = $3
+           )`,
           [stage_id, group_id, facId, req.user.id]
         );
       }
@@ -2190,9 +2416,12 @@ router.post('/hod/panel-range-assign', verifyToken, requireProjectCoordinatorOrH
           }
         }
 
-        // Delete existing panel assignments for this stage and group
+        // Delete existing panel assignments for this stage and group (preserving guide assignment & submitted evals)
         await client.query(
-          `DELETE FROM project_panel_assignments WHERE stage_id = $1 AND group_id = $2`,
+          `DELETE FROM project_panel_assignments
+           WHERE stage_id = $1 AND group_id = $2
+             AND panel_member_id != (SELECT COALESCE(guide_id, -1) FROM project_groups WHERE id = $2)
+             AND id NOT IN (SELECT panel_assignment_id FROM project_evaluations WHERE status IN ('SUBMITTED','LOCKED'))`,
           [stage_id, grp.id]
         );
 
@@ -2200,7 +2429,10 @@ router.post('/hod/panel-range-assign', verifyToken, requireProjectCoordinatorOrH
         for (const facId of effectivePanelists) {
           await client.query(
             `INSERT INTO project_panel_assignments (stage_id, group_id, panel_member_id, assigned_by, status)
-             VALUES ($1, $2, $3, $4, 'ASSIGNED')`,
+             SELECT $1, $2, $3, $4, 'ASSIGNED'
+             WHERE NOT EXISTS (
+               SELECT 1 FROM project_panel_assignments WHERE stage_id = $1 AND group_id = $2 AND panel_member_id = $3
+             )`,
             [stage_id, grp.id, facId, req.user.id]
           );
         }

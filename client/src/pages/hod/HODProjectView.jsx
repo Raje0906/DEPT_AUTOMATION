@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
 
@@ -12,6 +12,22 @@ export default function HODProjectView() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDivision, setSelectedDivision] = useState('ALL');
   const [guideFilter, setGuideFilter] = useState('ALL'); // 'ALL' | 'ASSIGNED' | 'UNASSIGNED'
+
+  // Guide Assignments Export Dropdown & PDF State
+  const [guideExportOpen, setGuideExportOpen] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const guideExportRef = useRef(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (guideExportRef.current && !guideExportRef.current.contains(event.target)) {
+        setGuideExportOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Fetch groups
   const fetchData = async () => {
@@ -145,6 +161,290 @@ export default function HODProjectView() {
     }
   };
 
+  // Generate and Download Official Guide Assignments PDF (Matrix layout mirroring Excel)
+  const handleExportGuideAssignmentsPdf = async () => {
+    const targetGroups = (selectedDivision && selectedDivision !== 'ALL') ? filteredGroups : groups;
+    if (!targetGroups || targetGroups.length === 0) {
+      toast.error('No project groups available to export.');
+      return;
+    }
+
+    setExportingPdf(true);
+    const toastId = toast.loading('Generating Guide Assignments PDF...');
+
+    try {
+      const [jspdfModule, autoTableModule] = await Promise.all([
+        import('jspdf'),
+        import('jspdf-autotable')
+      ]);
+
+      const jsPDF = jspdfModule.jsPDF || jspdfModule.default;
+      const autoTable = autoTableModule.default || autoTableModule.autoTable || autoTableModule;
+
+      const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'pt',
+        format: 'a4'
+      });
+
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 28; // Compact printable margin (785.89 pt usable)
+
+      // Institutional Header
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(13);
+      doc.setTextColor(20, 28, 56);
+      doc.text('MES WADIA COLLEGE OF ENGINEERING, PUNE - 411001', pageWidth / 2, 34, { align: 'center' });
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.setTextColor(70, 80, 95);
+      doc.text('(Affiliated to Savitribai Phule Pune University • Approved by AICTE)', pageWidth / 2, 46, { align: 'center' });
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(20, 28, 56);
+      doc.text('DEPARTMENT OF COMPUTER ENGINEERING', pageWidth / 2, 60, { align: 'center' });
+
+      // Title Bar
+      doc.setDrawColor(27, 94, 32);
+      doc.setLineWidth(1);
+      doc.line(margin, 68, pageWidth - margin, 68);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10.5);
+      doc.setTextColor(27, 94, 32); // Institutional Forest Green matching Excel
+      doc.text('FINAL YEAR B.E. PROJECT — GUIDE ALLOCATION & TOPIC ASSIGNMENT', pageWidth / 2, 81, { align: 'center' });
+
+      // Metadata info row
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(60, 60, 60);
+
+      const dateStr = new Date().toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      });
+
+      const divLabel = selectedDivision && selectedDivision !== 'ALL' ? selectedDivision : 'All Divisions';
+      doc.text(`Academic Year: AY ${academicYear}`, margin, 94);
+      doc.text(`Division: ${divLabel}`, margin + 175, 94);
+      doc.text(`Total Project Groups: ${targetGroups.length}`, pageWidth / 2 + 50, 94);
+      doc.text(`Date: ${dateStr}`, pageWidth - margin, 94, { align: 'right' });
+
+      // Prepare Matrix Table Rows matching Excel layout with merged cells
+      const tableData = [];
+
+      targetGroups.forEach((g, gIdx) => {
+        const members = g.members || [];
+        const maxRows = Math.max(members.length, 3);
+        const groupNum = g.group_code ? (parseInt(g.group_code.split('-').pop(), 10) || (gIdx + 1)) : (gIdx + 1);
+        const groupDiv = members[0]?.division || g.batch || 'BE-1';
+        const domainName = g.domain || '—';
+        const guideName = g.guide_name || g.proposed_guide_name || 'Unassigned';
+
+        for (let r = 0; r < maxRows; r++) {
+          const m = members[r] || null;
+          let topicText = '';
+          if (r === 0 && g.title) topicText = `1. ${g.title}`;
+          else if (r === 1 && g.title_2) topicText = `2. ${g.title_2}`;
+          else if (r === 2 && g.title_3) topicText = `3. ${g.title_3}`;
+
+          const studentDisplayName = m ? ((m.name || m.student_name || '—') + (m.is_leader ? ' [Leader]' : '')) : '';
+          const studentPRN = m ? (m.roll_no || m.prn || '') : '';
+          const studentDiv = m ? (m.division || groupDiv) : '';
+
+          if (r === 0) {
+            tableData.push([
+              {
+                content: String(groupNum),
+                rowSpan: maxRows,
+                styles: { halign: 'center', valign: 'middle', fontStyle: 'bold' }
+              },
+              {
+                content: studentDisplayName,
+                styles: { halign: 'left', valign: 'middle', fontStyle: m?.is_leader ? 'bold' : 'normal' }
+              },
+              {
+                content: studentPRN,
+                styles: { halign: 'center', valign: 'middle' }
+              },
+              {
+                content: studentDiv,
+                styles: { halign: 'center', valign: 'middle' }
+              },
+              {
+                content: domainName,
+                rowSpan: maxRows,
+                styles: { halign: 'center', valign: 'middle' }
+              },
+              {
+                content: guideName,
+                rowSpan: maxRows,
+                styles: { halign: 'center', valign: 'middle', fontStyle: 'bold' }
+              },
+              {
+                content: topicText,
+                styles: { halign: 'left', valign: 'middle' }
+              }
+            ]);
+          } else {
+            tableData.push([
+              {
+                content: studentDisplayName,
+                styles: { halign: 'left', valign: 'middle', fontStyle: m?.is_leader ? 'bold' : 'normal' }
+              },
+              {
+                content: studentPRN,
+                styles: { halign: 'center', valign: 'middle' }
+              },
+              {
+                content: studentDiv,
+                styles: { halign: 'center', valign: 'middle' }
+              },
+              {
+                content: topicText,
+                styles: { halign: 'left', valign: 'middle' }
+              }
+            ]);
+          }
+        }
+
+        // Blank separator row matching Excel's emptyRow
+        if (gIdx < targetGroups.length - 1) {
+          tableData.push([
+            {
+              content: '',
+              colSpan: 7,
+              styles: {
+                minCellHeight: 4,
+                cellPadding: 0,
+                fillColor: [255, 255, 255],
+                lineColor: [225, 230, 238],
+                lineWidth: 0.5
+              }
+            }
+          ]);
+        }
+      });
+
+      autoTable(doc, {
+        head: [['Group No', 'Name of Student', 'College PRN', 'Division', 'Domain Name', 'Guide Name', '3 Project Topics']],
+        body: tableData,
+        startY: 104,
+        margin: { top: 32, left: margin, right: margin, bottom: 45 },
+        theme: 'grid',
+        rowPageBreak: 'avoid',
+        headStyles: {
+          fillColor: [232, 245, 233], // Excel Light Green #E8F5E9
+          textColor: [27, 94, 32],    // Excel Dark Green #1B5E20
+          fontSize: 8.5,
+          fontStyle: 'bold',
+          halign: 'center',
+          valign: 'middle',
+          lineColor: [165, 214, 167], // #A5D6A7
+          lineWidth: 0.75,
+          minCellHeight: 22,
+          cellPadding: 4
+        },
+        bodyStyles: {
+          fontSize: 7.5,
+          textColor: [30, 30, 30],
+          cellPadding: { top: 3.5, bottom: 3.5, left: 4.5, right: 4.5 },
+          valign: 'middle',
+          lineColor: [210, 215, 225],
+          lineWidth: 0.5
+        },
+        columnStyles: {
+          0: { cellWidth: 46, halign: 'center' },
+          1: { cellWidth: 136, halign: 'left' },
+          2: { cellWidth: 68, halign: 'center' },
+          3: { cellWidth: 44, halign: 'center' },
+          4: { cellWidth: 106, halign: 'center' },
+          5: { cellWidth: 110, halign: 'center' },
+          6: { cellWidth: 275.89, halign: 'left' }
+        }
+      });
+
+      // Signature Block on final page
+      const finalY = doc.lastAutoTable.finalY || 450;
+      let signY = finalY + 36;
+
+      if (signY > pageHeight - 65) {
+        doc.addPage();
+        signY = 70;
+      }
+
+      doc.setDrawColor(180, 180, 180);
+      doc.setLineWidth(0.5);
+
+      const col1X = margin + 35;
+      doc.line(col1X, signY, col1X + 130, signY);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.setTextColor(40, 40, 40);
+      doc.text('Project Coordinator', col1X + 65, signY + 14, { align: 'center' });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.text('Dept. of Computer Engg.', col1X + 65, signY + 25, { align: 'center' });
+
+      const col2X = pageWidth / 2 - 65;
+      doc.line(col2X, signY, col2X + 130, signY);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.text('Academic Coordinator', col2X + 65, signY + 14, { align: 'center' });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.text('MES WCOE Pune', col2X + 65, signY + 25, { align: 'center' });
+
+      const col3X = pageWidth - margin - 165;
+      doc.line(col3X, signY, col3X + 130, signY);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.text('Head of Department', col3X + 65, signY + 14, { align: 'center' });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.text('Dept. of Computer Engg.', col3X + 65, signY + 25, { align: 'center' });
+
+      // Clean footer stamped across all pages
+      const totalPages = doc.internal.getNumberOfPages();
+      for (let p = 1; p <= totalPages; p++) {
+        doc.setPage(p);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(120, 120, 120);
+        doc.text(
+          `Page ${p} of ${totalPages}`,
+          pageWidth / 2,
+          pageHeight - 16,
+          { align: 'center' }
+        );
+        doc.text(
+          'Department of Computer Engineering • MES WCOE Pune',
+          margin,
+          pageHeight - 16
+        );
+        doc.text(
+          `Academic Year: AY ${academicYear}`,
+          pageWidth - margin,
+          pageHeight - 16,
+          { align: 'right' }
+        );
+      }
+
+      const cleanFileName = `BE_Project_Guide_Assignments_${academicYear.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
+      doc.save(cleanFileName);
+      toast.success(`Downloaded: ${cleanFileName}`, { id: toastId });
+    } catch (pdfErr) {
+      console.error('Error generating Guide Assignments PDF:', pdfErr);
+      toast.error('Failed to generate PDF: ' + (pdfErr.message || 'Unknown error'), { id: toastId });
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-10 max-w-7xl mx-auto flex items-center justify-center min-h-[420px]">
@@ -180,13 +480,73 @@ export default function HODProjectView() {
             <span>📥</span> Form Responses (Excel)
           </button>
 
-          <button
-            type="button"
-            onClick={handleExportGuideAssignments}
-            className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-md shadow-xs transition-colors flex items-center gap-1.5"
-          >
-            <span>📥</span> Guide Assignments (Excel)
-          </button>
+          {/* Guide Assignments Export Dropdown (Excel / PDF) */}
+          <div className="relative inline-block" ref={guideExportRef}>
+            <button
+              type="button"
+              onClick={() => setGuideExportOpen((prev) => !prev)}
+              className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-md text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
+              title="Export Guide Assignments as Excel or PDF"
+              aria-expanded={guideExportOpen}
+            >
+              <span>📥</span>
+              <span>Guide Assignments</span>
+              <svg
+                className={`w-3.5 h-3.5 ml-0.5 transition-transform duration-200 ${guideExportOpen ? 'rotate-180' : ''}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {guideExportOpen && (
+              <div className="absolute right-0 mt-1.5 w-60 bg-white rounded-lg border border-slate-200 shadow-xl z-50 py-1 text-xs animate-fade-in">
+                <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 flex items-center justify-between">
+                  <span>Export Format</span>
+                  <span className="text-[9px] font-normal text-slate-400">AY {academicYear}</span>
+                </div>
+
+                {/* Option 1: Excel */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGuideExportOpen(false);
+                    handleExportGuideAssignments();
+                  }}
+                  className="w-full text-left px-3 py-2 flex items-center gap-2.5 hover:bg-emerald-50 text-slate-700 hover:text-emerald-900 transition-colors"
+                >
+                  <span className="w-7 h-7 rounded bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs shrink-0">
+                    📊
+                  </span>
+                  <div className="flex flex-col min-w-0">
+                    <span className="font-bold text-slate-800 text-xs">Excel Spreadsheet</span>
+                    <span className="text-[10px] text-slate-500">Official matrix layout (.xlsx)</span>
+                  </div>
+                </button>
+
+                {/* Option 2: PDF */}
+                <button
+                  type="button"
+                  disabled={exportingPdf}
+                  onClick={() => {
+                    setGuideExportOpen(false);
+                    handleExportGuideAssignmentsPdf();
+                  }}
+                  className="w-full text-left px-3 py-2 flex items-center gap-2.5 hover:bg-rose-50 text-slate-700 hover:text-rose-900 transition-colors border-t border-slate-100"
+                >
+                  <span className="w-7 h-7 rounded bg-rose-100 text-rose-800 flex items-center justify-center font-bold text-xs shrink-0">
+                    📄
+                  </span>
+                  <div className="flex flex-col min-w-0">
+                    <span className="font-bold text-slate-800 text-xs">PDF Document</span>
+                    <span className="text-[10px] text-slate-500">Official printable format (.pdf)</span>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
 
           <div className="flex items-center gap-2 border-l border-rule pl-2.5 ml-1">
             <label className="text-xs font-semibold text-draft hidden sm:inline">AY:</label>
