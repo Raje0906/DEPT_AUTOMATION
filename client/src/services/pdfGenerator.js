@@ -1,5 +1,4 @@
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
+
 
 /**
  * Preload all images within a container element to guarantee no blank or broken
@@ -64,6 +63,13 @@ export async function generateMagazinePDF({
   if (pageElements.length === 0) {
     throw new Error('No magazine pages found to render.');
   }
+
+  // Dynamically load heavy PDF/canvas libraries on-demand to keep initial bundle lean
+  const [{ jsPDF: jsPDFNamed, default: jsPDFDefault }, { default: html2canvas }] = await Promise.all([
+    import('jspdf'),
+    import('html2canvas')
+  ]);
+  const jsPDF = jsPDFNamed || jsPDFDefault;
 
   const pdf = new jsPDF({
     orientation: 'portrait',
