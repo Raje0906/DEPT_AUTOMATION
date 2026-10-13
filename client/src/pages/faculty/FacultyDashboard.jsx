@@ -127,7 +127,7 @@ export default function FacultyDashboard() {
               </span>
             </div>
             <Link
-              to="/faculty/project-eval?tab=evaluations"
+              to="/faculty/project-eval"
               className="text-xs font-semibold text-purple-900 hover:text-purple-950 hover:underline flex-shrink-0"
             >
               Evaluate in Portal →
@@ -437,7 +437,7 @@ export default function FacultyDashboard() {
 
                   <div className="flex items-center justify-end flex-shrink-0">
                     <Link
-                      to="/faculty/project-eval?tab=evaluations"
+                      to="/faculty/project-eval"
                       className={`inline-flex items-center gap-1 px-3.5 py-1.5 text-xs font-semibold rounded transition-all ${
                         isSubmitted
                           ? 'border border-rule text-ink hover:bg-paper'

@@ -106,6 +106,25 @@ router.get('/student/my-group', verifyToken, requireRole('student'), async (req,
       [group.id]
     );
 
+    // Fetch assigned panel mentor(s) for this group (excluding the project guide)
+    const mentorsRes = await pool.query(
+      `SELECT DISTINCT pa.panel_member_id as faculty_id, u.name as mentor_name, f.designation
+       FROM project_panel_assignments pa
+       JOIN faculty f ON pa.panel_member_id = f.id
+       JOIN users u ON f.user_id = u.id
+       WHERE pa.group_id = $1
+         AND pa.panel_member_id != COALESCE($2, -1)
+       ORDER BY u.name ASC`,
+      [group.id, group.guide_id || group.guide_faculty_id || -1]
+    );
+
+    group.mentors = mentorsRes.rows;
+    if (mentorsRes.rows.length > 0) {
+      group.mentor_name = mentorsRes.rows[0].mentor_name;
+      group.mentor_designation = mentorsRes.rows[0].designation;
+      group.mentor_faculty_id = mentorsRes.rows[0].faculty_id;
+    }
+
     // Guide requests are deprecated (HOD directly assigns guides)
     const guideReqRes = { rows: [] };
 
@@ -154,29 +173,92 @@ router.get('/student/my-group', verifyToken, requireRole('student'), async (req,
 
         for (const ev of evalsRes.rows) {
           const scoresRes = await pool.query(
-            `SELECT pes.criterion_id, pes.marks_awarded, pes.remark, sc.name as criterion_name, sc.max_marks
+            `SELECT pes.id, pes.criterion_id, pes.member_id, pes.student_id, pes.marks_awarded, pes.remark,
+                    sc.name as criterion_name, sc.max_marks, sc.display_order,
+                    COALESCE(u.name, pgm.student_name, 'Student') as student_name,
+                    COALESCE(s.enrollment_no, pgm.roll_no) as roll_no,
+                    pgm.is_leader
              FROM project_evaluation_scores pes
              JOIN project_stage_criteria sc ON pes.criterion_id = sc.id
-             WHERE pes.evaluation_id = $1`,
+             LEFT JOIN project_group_members pgm ON pes.member_id = pgm.id
+             LEFT JOIN students s ON (pes.student_id = s.id OR pgm.student_id = s.id)
+             LEFT JOIN users u ON s.user_id = u.id
+             WHERE pes.evaluation_id = $1
+             ORDER BY pgm.is_leader DESC, pgm.id ASC, sc.display_order ASC`,
             [ev.evaluation_id]
           );
+
           ev.scores = scoresRes.rows;
 
-          const totalEvalScore = ev.scores.reduce((sum, s) => sum + Number(s.marks_awarded), 0);
-          ev.total_score = totalEvalScore;
+          // Group scores by student member
+          const memberScoresMap = {};
+          for (const row of scoresRes.rows) {
+            const key = row.member_id || row.student_id || row.student_name;
+            if (!memberScoresMap[key]) {
+              memberScoresMap[key] = {
+                member_id: row.member_id,
+                student_id: row.student_id,
+                student_name: row.student_name,
+                roll_no: row.roll_no,
+                is_leader: Boolean(row.is_leader),
+                scores: [],
+                total_score: 0
+              };
+            }
+            memberScoresMap[key].scores.push({
+              id: row.id,
+              criterion_id: row.criterion_id,
+              criterion_name: row.criterion_name,
+              max_marks: Number(row.max_marks),
+              marks_awarded: Number(row.marks_awarded),
+              remark: row.remark
+            });
+            memberScoresMap[key].total_score += Number(row.marks_awarded);
+          }
+
+          const memberScoresList = Object.values(memberScoresMap);
+          memberScoresList.forEach(m => {
+            m.total_score = Number(m.total_score.toFixed(2));
+          });
+          ev.member_scores = memberScoresList;
+
+          // Identify individual score for the logged-in student
+          const myScoreRecord = memberScoresList.find(m =>
+            (student && m.student_id === student.id) ||
+            (m.roll_no && student && (
+              m.roll_no.trim().toLowerCase() === (student.roll_no || '').trim().toLowerCase() ||
+              m.roll_no.trim().toLowerCase() === (student.enrollment_no || '').trim().toLowerCase()
+            ))
+          );
+
+          ev.my_score = myScoreRecord ? myScoreRecord.total_score : null;
+          ev.my_scores = myScoreRecord ? myScoreRecord.scores : null;
+
+          if (memberScoresList.length > 0) {
+            const avg = memberScoresList.reduce((sum, m) => sum + m.total_score, 0) / memberScoresList.length;
+            ev.average_score = Number(avg.toFixed(2));
+            ev.total_score = ev.my_score !== null ? ev.my_score : ev.average_score;
+          } else {
+            ev.average_score = 0;
+            ev.total_score = 0;
+          }
         }
 
         evaluations = evalsRes.rows;
 
         if (evaluations.length > 0) {
-          const totals = evaluations.map(e => e.total_score);
-          if (stage.aggregation_rule === 'SUM') {
-            aggregatedScore = totals.reduce((a, b) => a + b, 0);
-          } else if (stage.aggregation_rule === 'MAX') {
-            aggregatedScore = Math.max(...totals);
+          const myTotals = evaluations.map(e => e.my_score).filter(s => s !== null);
+          if (myTotals.length > 0) {
+            if (stage.aggregation_rule === 'SUM') {
+              aggregatedScore = myTotals.reduce((a, b) => a + b, 0).toFixed(2);
+            } else if (stage.aggregation_rule === 'MAX') {
+              aggregatedScore = Math.max(...myTotals).toFixed(2);
+            } else {
+              aggregatedScore = (myTotals.reduce((a, b) => a + b, 0) / myTotals.length).toFixed(2);
+            }
           } else {
-            // AVERAGE
-            aggregatedScore = (totals.reduce((a, b) => a + b, 0) / totals.length).toFixed(2);
+            const avgTotals = evaluations.map(e => e.average_score);
+            aggregatedScore = (avgTotals.reduce((a, b) => a + b, 0) / avgTotals.length).toFixed(2);
           }
         }
       }
@@ -203,6 +285,12 @@ router.get('/student/my-group', verifyToken, requireRole('student'), async (req,
       hasGroup: true,
       group,
       members: membersRes.rows,
+      mentors: mentorsRes.rows,
+      current_student: {
+        id: student.id,
+        roll_no: student.roll_no,
+        enrollment_no: student.enrollment_no
+      },
       guideRequests: guideReqRes.rows,
       stages: stagesWithScores,
       isLeader
@@ -463,7 +551,8 @@ router.get('/student/available-guides', verifyToken, async (req, res) => {
           SELECT pa.panel_member_id, COUNT(*) as p_count
           FROM project_panel_assignments pa
           JOIN project_evaluation_stages s ON pa.stage_id = s.id
-          WHERE s.academic_year = $1
+          JOIN project_groups g ON pa.group_id = g.id
+          WHERE s.academic_year = $1 AND pa.panel_member_id != COALESCE(g.guide_id, -1)
           GROUP BY pa.panel_member_id
         ) mentors ON mentors.panel_member_id = f.id
         WHERE COALESCE(mentors.p_count, 0) = 0
@@ -483,7 +572,8 @@ router.get('/student/available-guides', verifyToken, async (req, res) => {
           SELECT pa.panel_member_id, COUNT(*) as p_count
           FROM project_panel_assignments pa
           JOIN project_evaluation_stages s ON pa.stage_id = s.id
-          WHERE s.academic_year = $1
+          JOIN project_groups g ON pa.group_id = g.id
+          WHERE s.academic_year = $1 AND pa.panel_member_id != COALESCE(g.guide_id, -1)
           GROUP BY pa.panel_member_id
         ) mentors ON mentors.panel_member_id = f.id
         WHERE COALESCE(mentors.p_count, 0) = 0
@@ -676,16 +766,27 @@ router.get('/guide/my-groups', verifyToken, requireRole('faculty','hod'), async 
 
     const groupsRes = await pool.query(
       `SELECT g.*,
-              COUNT(gm.id) as member_count
+              gu.name as guide_name,
+              COUNT(DISTINCT gm.id) as member_count,
+              (g.guide_id = $1) as is_guide,
+              EXISTS (
+                SELECT 1 FROM project_panel_assignments pa
+                WHERE pa.group_id = g.id AND pa.panel_member_id = $1
+              ) as is_mentor
        FROM project_groups g
+       LEFT JOIN faculty gf ON g.guide_id = gf.id
+       LEFT JOIN users gu ON gf.user_id = gu.id
        LEFT JOIN project_group_members gm ON g.id = gm.group_id
-       WHERE g.guide_id = $1 AND g.status != 'WITHDRAWN'
-       GROUP BY g.id
+       WHERE (g.guide_id = $1 OR g.id IN (SELECT pa.group_id FROM project_panel_assignments pa WHERE pa.panel_member_id = $1))
+         AND g.status != 'WITHDRAWN'
+       GROUP BY g.id, gu.name
        ORDER BY g.group_code ASC`,
       [facultyId]
     );
 
     for (const group of groupsRes.rows) {
+      group.faculty_role = group.is_guide ? 'Guide' : 'Panel Mentor';
+
       const membersRes = await pool.query(
         `SELECT gm.roll_no, gm.is_leader, gm.division, gm.mobile_no,
                 COALESCE(u.name, gm.student_name, 'Student') as name,
@@ -710,71 +811,105 @@ router.get('/guide/my-groups', verifyToken, requireRole('faculty','hod'), async 
 
       group.stages = [];
       for (const st of stagesRes.rows) {
-        // Ensure a panel assignment row exists for the Guide so Guide can evaluate
-        let guideAssignRes = await pool.query(
+        // Ensure an assignment row exists for this faculty member on this stage & group
+        let myAssignRes = await pool.query(
           `SELECT id, status FROM project_panel_assignments
            WHERE stage_id = $1 AND group_id = $2 AND panel_member_id = $3`,
           [st.stage_id, group.id, facultyId]
         );
 
-        let guideAssignId;
-        if (guideAssignRes.rows.length === 0) {
+        let myAssignId;
+        if (myAssignRes.rows.length === 0) {
           const newAssign = await pool.query(
             `INSERT INTO project_panel_assignments (stage_id, group_id, panel_member_id, assigned_by, status)
              VALUES ($1, $2, $3, $4, 'ASSIGNED')
              RETURNING id, status`,
             [st.stage_id, group.id, facultyId, req.user.id]
           );
-          guideAssignId = newAssign.rows[0].id;
+          myAssignId = newAssign.rows[0].id;
         } else {
-          guideAssignId = guideAssignRes.rows[0].id;
+          myAssignId = myAssignRes.rows[0].id;
         }
 
-        // Check if Guide has an evaluation (draft or submitted)
-        const guideEvalRes = await pool.query(
+        // Check if this faculty member has an evaluation (draft or submitted)
+        const myEvalRes = await pool.query(
           `SELECT pe.id, pe.status, pe.submitted_at, pe.overall_remarks
            FROM project_evaluations pe
            WHERE pe.panel_assignment_id = $1`,
-          [guideAssignId]
+          [myAssignId]
         );
-        const guideEval = guideEvalRes.rows[0] || null;
+        const myEval = myEvalRes.rows[0] || null;
 
-        // Check if ANY Panel Mentor has submitted an evaluation for this stage & group
-        const mentorEvalRes = await pool.query(
+        // Check if ANOTHER evaluator (e.g. Mentor if Guide, or Guide if Mentor) has submitted
+        const otherEvalRes = await pool.query(
           `SELECT pe.id, pe.status, pe.submitted_at, pe.overall_remarks,
-                  pa.id as mentor_assignment_id, u.name as mentor_name
+                  pa.id as other_assignment_id, u.name as other_evaluator_name,
+                  (pa.panel_member_id = g.guide_id) as other_is_guide
            FROM project_panel_assignments pa
            JOIN project_evaluations pe ON pa.id = pe.panel_assignment_id
            JOIN faculty f ON pa.panel_member_id = f.id
            JOIN users u ON f.user_id = u.id
+           JOIN project_groups g ON pa.group_id = g.id
            WHERE pa.group_id = $1 AND pa.stage_id = $2 AND pa.panel_member_id != $3
              AND pe.status IN ('SUBMITTED', 'LOCKED')
            ORDER BY pe.submitted_at DESC NULLS LAST
            LIMIT 1`,
           [group.id, st.stage_id, facultyId]
         );
-        const mentorEval = mentorEvalRes.rows[0] || null;
+        const otherEval = otherEvalRes.rows[0] || null;
+
+        const isScoredByMe = !!(myEval && ['SUBMITTED', 'LOCKED'].includes(myEval.status));
+        const isLockedByOther = !isScoredByMe && !!otherEval;
+
+        const activeEvalId = isScoredByMe
+          ? myEval.id
+          : (otherEval ? otherEval.id : (myEval ? myEval.id : null));
+
+        let stageScore = null;
+        if (activeEvalId) {
+          const scoreCalcRes = await pool.query(
+            `SELECT ROUND(AVG(mem_total), 1) as avg_score
+             FROM (
+               SELECT SUM(marks_awarded) as mem_total
+               FROM project_evaluation_scores
+               WHERE evaluation_id = $1
+               GROUP BY member_id
+             ) sub`,
+            [activeEvalId]
+          );
+          if (scoreCalcRes.rows[0] && scoreCalcRes.rows[0].avg_score !== null) {
+            stageScore = Number(scoreCalcRes.rows[0].avg_score);
+          }
+        }
 
         group.stages.push({
           stage_id: st.stage_id,
           stage_name: st.stage_name,
           sequence_order: st.sequence_order,
-          max_marks_total: st.max_marks_total,
-          assignment_id: guideAssignId,
-          guide_eval_status: guideEval ? guideEval.status : null,
-          is_scored_by_guide: guideEval && ['SUBMITTED', 'LOCKED'].includes(guideEval.status),
-          is_locked_by_mentor: !!mentorEval,
-          mentor_evaluator_name: mentorEval ? mentorEval.mentor_name : null,
-          mentor_assignment_id: mentorEval ? mentorEval.mentor_assignment_id : null,
-          active_assignment_id: mentorEval ? mentorEval.mentor_assignment_id : guideAssignId
+          max_marks_total: Number(st.max_marks_total),
+          assignment_id: myAssignId,
+          my_eval_status: myEval ? myEval.status : null,
+          is_scored_by_me: isScoredByMe,
+          is_locked_by_other: isLockedByOther,
+          other_evaluator_name: otherEval ? otherEval.other_evaluator_name : null,
+          other_role: otherEval ? (otherEval.other_is_guide ? 'Guide' : 'Mentor') : null,
+          other_assignment_id: otherEval ? otherEval.other_assignment_id : null,
+          active_assignment_id: isLockedByOther ? otherEval.other_assignment_id : myAssignId,
+          score: stageScore,
+
+          // Backward-compatibility aliases:
+          guide_eval_status: myEval ? myEval.status : null,
+          is_scored_by_guide: isScoredByMe,
+          is_locked_by_mentor: isLockedByOther,
+          mentor_evaluator_name: otherEval ? otherEval.other_evaluator_name : null,
         });
       }
     }
 
     res.json(groupsRes.rows);
   } catch (err) {
-    console.error('[My Guided Groups Error]', err);
-    res.status(500).json({ error: 'Failed to fetch guided groups' });
+    console.error('[Project Groups Error]', err);
+    res.status(500).json({ error: 'Failed to fetch project groups' });
   }
 });
 
@@ -887,6 +1022,7 @@ router.get('/evaluations/:assignmentId', verifyToken, requireRole('faculty','hod
       return res.status(404).json({ error: 'Assignment not found' });
     }
     const assign = assignRes.rows[0];
+    assign.max_marks_total = Number(assign.max_marks_total);
 
     // Authorization check
     const isGuide = assign.guide_id === facultyId;
@@ -906,6 +1042,9 @@ router.get('/evaluations/:assignmentId', verifyToken, requireRole('faculty','hod
       `SELECT * FROM project_stage_criteria WHERE stage_id = $1 ORDER BY display_order ASC`,
       [assign.stage_id]
     );
+    for (const c of criteriaRes.rows) {
+      c.max_marks = Number(c.max_marks);
+    }
 
     // Fetch team members
     const membersRes = await pool.query(
@@ -934,10 +1073,11 @@ router.get('/evaluations/:assignmentId', verifyToken, requireRole('faculty','hod
         [evaluation.id]
       );
       for (const s of scoresRes.rows) {
-        scoresMap[s.criterion_id] = { marks_awarded: s.marks_awarded, remark: s.remark };
+        const marksNum = s.marks_awarded !== null ? Number(s.marks_awarded) : 0;
+        scoresMap[s.criterion_id] = { marks_awarded: marksNum, remark: s.remark };
         if (s.member_id) {
           if (!studentScoresMap[s.member_id]) studentScoresMap[s.member_id] = {};
-          studentScoresMap[s.member_id][s.criterion_id] = { marks_awarded: s.marks_awarded, remark: s.remark };
+          studentScoresMap[s.member_id][s.criterion_id] = { marks_awarded: marksNum, remark: s.remark };
         }
       }
     }
@@ -1244,7 +1384,8 @@ router.get('/hod/dashboard', verifyToken, requireProjectCoordinatorOrHOD, async 
            SELECT pa2.id, pa2.panel_member_id
            FROM project_panel_assignments pa2
            JOIN project_evaluation_stages s2 ON pa2.stage_id = s2.id
-           WHERE s2.academic_year = $1
+           JOIN project_groups g2 ON pa2.group_id = g2.id
+           WHERE s2.academic_year = $1 AND pa2.panel_member_id != COALESCE(g2.guide_id, -1)
          ) pa ON pa.panel_member_id = f.id
          LEFT JOIN project_designated_guides dg ON dg.faculty_id = f.id AND dg.academic_year = $1
          GROUP BY f.id, u.name, u.email, f.designation, f.employee_id, dg.id
@@ -1336,7 +1477,9 @@ router.post('/hod/designated-guides/toggle', verifyToken, requireProjectCoordina
       const mentorCheck = await pool.query(
         `SELECT COUNT(*) FROM project_panel_assignments pa
          JOIN project_evaluation_stages s ON pa.stage_id = s.id
-         WHERE pa.panel_member_id = $1 AND s.academic_year = $2`,
+         JOIN project_groups g ON pa.group_id = g.id
+         WHERE pa.panel_member_id = $1 AND s.academic_year = $2
+           AND pa.panel_member_id != COALESCE(g.guide_id, -1)`,
         [faculty_id, acadYear]
       );
       if (parseInt(mentorCheck.rows[0].count, 10) > 0) {
@@ -1398,7 +1541,8 @@ router.post('/hod/designated-guides/batch-assign-all', verifyToken, requireProje
          SELECT pa.panel_member_id, COUNT(*) as p_count
          FROM project_panel_assignments pa
          JOIN project_evaluation_stages s ON pa.stage_id = s.id
-         WHERE s.academic_year = $1
+         JOIN project_groups g ON pa.group_id = g.id
+         WHERE s.academic_year = $1 AND pa.panel_member_id != COALESCE(g.guide_id, -1)
          GROUP BY pa.panel_member_id
        ) mentors ON mentors.panel_member_id = f.id
        WHERE COALESCE(mentors.p_count, 0) = 0
@@ -1414,6 +1558,147 @@ router.post('/hod/designated-guides/batch-assign-all', verifyToken, requireProje
   } catch (err) {
     console.error('[Batch Assign Guides Error]', err);
     res.status(500).json({ error: 'Failed to batch assign guides' });
+  }
+});
+
+/**
+ * POST /api/projects/hod/governance/batch-apply
+ * Atomically apply staged project governance changes (guide designations, group guide assignments, panel mentor assignments).
+ */
+router.post('/hod/governance/batch-apply', verifyToken, requireProjectCoordinatorOrHOD, async (req, res) => {
+  const { academic_year, guide_designations = [], group_guides = [], panel_assignments = [] } = req.body;
+  const acadYear = academic_year || '2026-27';
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1. Process Guide Designations
+    for (const item of guide_designations) {
+      const facId = Number(item.faculty_id);
+      if (!facId) continue;
+      if (item.is_guide) {
+        await client.query(
+          `INSERT INTO project_designated_guides (academic_year, faculty_id, designated_by)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (academic_year, faculty_id) DO NOTHING`,
+          [acadYear, facId, req.user?.id || null]
+        );
+      } else {
+        await client.query(
+          `DELETE FROM project_designated_guides
+           WHERE academic_year = $1 AND faculty_id = $2`,
+          [acadYear, facId]
+        );
+      }
+    }
+
+    // 2. Process Group Guide Assignments
+    for (const item of group_guides) {
+      const grpId = Number(item.group_id);
+      if (!grpId) continue;
+      const guideId = item.guide_id ? Number(item.guide_id) : null;
+
+      if (guideId) {
+        const guideRes = await client.query(
+          `SELECT f.id, u.name FROM faculty f JOIN users u ON f.user_id = u.id WHERE f.id = $1`,
+          [guideId]
+        );
+        const guideName = guideRes.rows[0]?.name || 'Faculty';
+
+        const updateRes = await client.query(
+          `UPDATE project_groups
+           SET guide_id = $1, proposed_guide_id = $1, guide_approval_status = 'APPROVED',
+               guide_requested_by = $2, guide_decided_at = NOW(), status = 'ACTIVE'
+           WHERE id = $3
+           RETURNING group_code`,
+          [guideId, req.user?.id || null, grpId]
+        );
+        const groupCode = updateRes.rows[0]?.group_code || `Group #${grpId}`;
+
+        await client.query(
+          `INSERT INTO audit_logs (entity_type, entity_id, user_id, action, details)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [
+            'project_groups',
+            grpId,
+            req.user?.id || null,
+            'PROJECT_GUIDE_ASSIGNED',
+            `Guide ${guideName} assigned directly to group ${groupCode} by ${req.user?.name || 'Coordinator'} (batch apply)`
+          ]
+        ).catch(() => {});
+      } else {
+        const updateRes = await client.query(
+          `UPDATE project_groups
+           SET guide_id = NULL, proposed_guide_id = NULL, guide_approval_status = 'NONE',
+               guide_requested_by = $1, guide_decided_at = NOW(), status = 'DRAFT'
+           WHERE id = $2
+           RETURNING group_code`,
+          [req.user?.id || null, grpId]
+        );
+        const groupCode = updateRes.rows[0]?.group_code || `Group #${grpId}`;
+
+        await client.query(
+          `INSERT INTO audit_logs (entity_type, entity_id, user_id, action, details)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [
+            'project_groups',
+            grpId,
+            req.user?.id || null,
+            'PROJECT_GUIDE_UNASSIGNED',
+            `Guide unassigned from group ${groupCode} by ${req.user?.name || 'Coordinator'} (batch apply)`
+          ]
+        ).catch(() => {});
+      }
+    }
+
+    // 3. Process Panel Mentor Assignments
+    for (const item of panel_assignments) {
+      const stageId = Number(item.stage_id);
+      const grpId = Number(item.group_id);
+      const panelMemberIds = Array.isArray(item.panel_member_ids) ? item.panel_member_ids.map(Number) : [];
+      if (!stageId || !grpId) continue;
+
+      // Delete existing panel assignments for this stage & group (keeping submitted evaluations intact)
+      await client.query(
+        `DELETE FROM project_panel_assignments
+         WHERE stage_id = $1 AND group_id = $2
+           AND panel_member_id != (SELECT COALESCE(guide_id, -1) FROM project_groups WHERE id = $2)
+           AND id NOT IN (SELECT panel_assignment_id FROM project_evaluations WHERE status IN ('SUBMITTED','LOCKED'))`,
+        [stageId, grpId]
+      );
+
+      // Insert new panel assignments
+      for (const facId of panelMemberIds) {
+        await client.query(
+          `INSERT INTO project_panel_assignments (stage_id, group_id, panel_member_id, assigned_by, status)
+           SELECT $1, $2, $3, $4, 'ASSIGNED'
+           WHERE NOT EXISTS (
+             SELECT 1 FROM project_panel_assignments WHERE stage_id = $1 AND group_id = $2 AND panel_member_id = $3
+           )`,
+          [stageId, grpId, facId, req.user?.id || null]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+
+    const totalApplied = guide_designations.length + group_guides.length + panel_assignments.length;
+    res.json({
+      success: true,
+      message: `Successfully applied ${totalApplied} change(s) to the database!`,
+      applied_counts: {
+        guide_designations: guide_designations.length,
+        group_guides: group_guides.length,
+        panel_assignments: panel_assignments.length
+      }
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[Batch Apply Governance Error]', err);
+    res.status(500).json({ error: 'Failed to apply governance changes to database' });
+  } finally {
+    client.release();
   }
 });
 
@@ -1474,7 +1759,9 @@ router.get('/hod/groups', verifyToken, requireProjectCoordinatorOrHOD, async (re
            JOIN faculty f ON pa.panel_member_id = f.id
            JOIN users u ON f.user_id = u.id
            JOIN project_evaluation_stages s ON pa.stage_id = s.id
+           JOIN project_groups g ON pa.group_id = g.id
            WHERE pa.group_id = ANY($1) AND s.academic_year = $2
+             AND pa.panel_member_id != COALESCE(g.guide_id, -1)
            ORDER BY u.name ASC`,
           [groupIds, acadYear]
         )
@@ -1508,7 +1795,13 @@ router.get('/hod/groups', verifyToken, requireProjectCoordinatorOrHOD, async (re
       for (const g of groupsRes.rows) {
         g.members = membersByGroup[g.id] || [];
         g.stage_evaluations = evalsByGroup[g.id] || [];
-        g.mentors = mentorsByGroup[g.id] || [];
+        const groupGuideId = g.guide_id || g.guide_faculty_id;
+        const groupGuideName = (g.guide_name || '').trim().toLowerCase();
+        g.mentors = (mentorsByGroup[g.id] || []).filter((m) => {
+          if (groupGuideId && Number(m.faculty_id) === Number(groupGuideId)) return false;
+          if (groupGuideName && (m.name || m.mentor_name || '').trim().toLowerCase() === groupGuideName) return false;
+          return true;
+        });
       }
     }
 
@@ -1796,6 +2089,11 @@ router.post('/hod/groups/clear-guides', verifyToken, requireProjectCoordinatorOr
     );
 
     await pool.query(
+      `DELETE FROM project_designated_guides WHERE academic_year = $1`,
+      [acadYear]
+    );
+
+    await pool.query(
       `INSERT INTO audit_logs (entity_type, entity_id, user_id, action, details)
        VALUES ($1, $2, $3, $4, $5)`,
       [
@@ -1811,6 +2109,40 @@ router.post('/hod/groups/clear-guides', verifyToken, requireProjectCoordinatorOr
   } catch (err) {
     console.error('[Clear Guides Error]', err);
     res.status(500).json({ error: 'Failed to clear guide assignments' });
+  }
+});
+
+/**
+ * POST /api/projects/hod/groups/clear-mentors
+ * Bulk unassign/remove panel mentors across project groups for an academic year (and optional stage).
+ */
+router.post('/hod/groups/clear-mentors', verifyToken, requireProjectCoordinatorOrHOD, async (req, res) => {
+  try {
+    const { academic_year, stage_id } = req.body;
+    const acadYear = academic_year || '2026-27';
+
+    let result;
+    if (stage_id && stage_id !== 'ALL') {
+      result = await pool.query(
+        `DELETE FROM project_panel_assignments
+         WHERE stage_id = $1`,
+        [Number(stage_id)]
+      );
+    } else {
+      result = await pool.query(
+        `DELETE FROM project_panel_assignments
+         WHERE stage_id IN (SELECT id FROM project_evaluation_stages WHERE academic_year = $1)`,
+        [acadYear]
+      );
+    }
+
+    res.json({
+      message: `Successfully unassigned panel mentors (${result.rowCount} assignments removed)!`,
+      cleared_count: result.rowCount,
+    });
+  } catch (err) {
+    console.error('[Clear Mentors Error]', err);
+    res.status(500).json({ error: 'Failed to unassign panel mentors' });
   }
 });
 
@@ -2331,6 +2663,24 @@ router.post('/hod/panel-assignments', verifyToken, requireProjectCoordinatorOrHO
     try {
       await client.query('BEGIN');
 
+      const grpRes = await client.query('SELECT guide_id, proposed_guide_id, academic_year FROM project_groups WHERE id = $1', [group_id]);
+      const grpGuideId = grpRes.rows[0]?.guide_id || grpRes.rows[0]?.proposed_guide_id;
+      const grpAcadYear = grpRes.rows[0]?.academic_year || '2026-27';
+
+      // Disallow any guide (designated guide or active group guide) from being assigned as panel mentor
+      const guidesRes = await client.query(
+        `SELECT DISTINCT f.id FROM faculty f
+         WHERE f.id IN (SELECT faculty_id FROM project_designated_guides WHERE academic_year = $1)
+            OR f.id IN (SELECT guide_id FROM project_groups WHERE academic_year = $1 AND guide_id IS NOT NULL)`,
+        [grpAcadYear]
+      );
+      const allGuidesSet = new Set(guidesRes.rows.map((r) => Number(r.id)));
+      if (grpGuideId) allGuidesSet.add(Number(grpGuideId));
+
+      const cleanPanelMemberIds = panel_member_ids
+        .map(Number)
+        .filter((id) => !allGuidesSet.has(Number(id)));
+
       await client.query(
         `DELETE FROM project_panel_assignments
          WHERE stage_id = $1 AND group_id = $2
@@ -2339,7 +2689,7 @@ router.post('/hod/panel-assignments', verifyToken, requireProjectCoordinatorOrHO
         [stage_id, group_id]
       );
 
-      for (const facId of panel_member_ids) {
+      for (const facId of cleanPanelMemberIds) {
         await client.query(
           `INSERT INTO project_panel_assignments (stage_id, group_id, panel_member_id, assigned_by, status)
            SELECT $1, $2, $3, $4, 'ASSIGNED'
@@ -2403,18 +2753,23 @@ router.post('/hod/panel-range-assign', verifyToken, requireProjectCoordinatorOrH
     try {
       await client.query('BEGIN');
 
+      // Fetch all designated guides and active group guides for this academic year
+      const allGuidesRes = await client.query(
+        `SELECT DISTINCT f.id FROM faculty f
+         JOIN project_evaluation_stages s ON s.id = $1
+         WHERE f.id IN (SELECT faculty_id FROM project_designated_guides WHERE academic_year = s.academic_year)
+            OR f.id IN (SELECT guide_id FROM project_groups WHERE academic_year = s.academic_year AND guide_id IS NOT NULL)`,
+        [stage_id]
+      );
+      const globalGuideIds = new Set(allGuidesRes.rows.map((r) => Number(r.id)));
+
       for (const grp of groupsRes.rows) {
         const guideId = grp.guide_id || grp.proposed_guide_id;
 
-        // Filter out guide if skip_guide_conflict is active
-        let effectivePanelists = panel_member_ids.map(Number);
-        if (skip_guide_conflict && guideId) {
-          const hadConflict = effectivePanelists.includes(guideId);
-          if (hadConflict) {
-            effectivePanelists = effectivePanelists.filter((id) => id !== guideId);
-            coiWarnings.push(`Group ${grp.group_code}: Guide (${grp.guide_name || 'Guide'}) was excluded as mentor due to Conflict of Interest.`);
-          }
-        }
+        // Filter out ANY guide (both department guides and group guide)
+        let effectivePanelists = panel_member_ids
+          .map(Number)
+          .filter((id) => !globalGuideIds.has(id) && (!guideId || id !== Number(guideId)));
 
         // Delete existing panel assignments for this stage and group (preserving guide assignment & submitted evals)
         await client.query(
@@ -2485,7 +2840,9 @@ router.get('/hod/panel-matrix', verifyToken, requireProjectCoordinatorOrHOD, asy
          FROM project_panel_assignments pa
          JOIN faculty f ON pa.panel_member_id = f.id
          JOIN users u ON f.user_id = u.id
-         WHERE pa.stage_id = $1`,
+         JOIN project_groups g ON pa.group_id = g.id
+         WHERE pa.stage_id = $1
+           AND pa.panel_member_id != COALESCE(g.guide_id, -1)`,
         [stageId]
       );
 
@@ -2500,7 +2857,14 @@ router.get('/hod/panel-matrix', verifyToken, requireProjectCoordinatorOrHOD, asy
     }
 
     const matrix = groupsRes.rows.map((g) => {
-      const panelists = panelMap[g.id] || [];
+      const rawPanelists = panelMap[g.id] || [];
+      const guideId = g.guide_id;
+      const guideName = (g.guide_name || '').trim().toLowerCase();
+      const panelists = rawPanelists.filter((p) => {
+        if (guideId && Number(p.faculty_id) === Number(guideId)) return false;
+        if (guideName && (p.name || '').trim().toLowerCase() === guideName) return false;
+        return true;
+      });
       return {
         ...g,
         panelists,
@@ -2632,7 +2996,10 @@ router.post('/hod/panel-copy-stage', verifyToken, requireProjectCoordinatorOrHOD
       await client.query('BEGIN');
 
       const sourceRes = await client.query(
-        `SELECT group_id, panel_member_id FROM project_panel_assignments WHERE stage_id = $1`,
+        `SELECT pa.group_id, pa.panel_member_id
+         FROM project_panel_assignments pa
+         JOIN project_groups g ON pa.group_id = g.id
+         WHERE pa.stage_id = $1 AND pa.panel_member_id != COALESCE(g.guide_id, -1)`,
         [source_stage_id]
       );
 
@@ -3120,6 +3487,7 @@ router.get('/export/examiner-assignments', verifyToken, requireProjectCoordinato
       LEFT JOIN faculty ef ON pa.panel_member_id = ef.id
       LEFT JOIN users eu ON ef.user_id = eu.id
       WHERE g.academic_year = $1 AND g.status != 'WITHDRAWN'
+        AND pa.panel_member_id != COALESCE(g.guide_id, -1)
     `;
     const params = [acadYear];
 

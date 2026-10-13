@@ -34,7 +34,20 @@ export default function HODProjectView() {
     setLoading(true);
     try {
       const groupsRes = await api.get(`/projects/hod/groups?academic_year=${academicYear}`);
-      setGroups(groupsRes.data || []);
+      const rawGroups = groupsRes.data || [];
+      const sanitizedGroups = rawGroups.map((g) => {
+        const guideId = g.guide_faculty_id || g.guide_id;
+        const guideName = (g.guide_name || '').trim().toLowerCase();
+        return {
+          ...g,
+          mentors: (g.mentors || []).filter((m) => {
+            if (guideId && Number(m.faculty_id) === Number(guideId)) return false;
+            if (guideName && (m.name || m.mentor_name || '').trim().toLowerCase() === guideName) return false;
+            return true;
+          }),
+        };
+      });
+      setGroups(sanitizedGroups);
     } catch (err) {
       console.error('Failed to load project groups:', err);
       toast.error('Failed to load BE project groups');
@@ -471,13 +484,15 @@ export default function HODProjectView() {
 
         {/* Global Controls & Exports */}
         <div className="flex flex-wrap items-center gap-2.5">
-
           <button
             type="button"
             onClick={handleExportFormResponses}
-            className="px-3.5 py-2 bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold rounded-md shadow-xs transition-colors flex items-center gap-1.5"
+            className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-md text-xs font-semibold shadow-2xs transition-colors flex items-center gap-2"
           >
-            <span>📥</span> Form Responses (Excel)
+            <svg className="w-4 h-4 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+            </svg>
+            <span>Responses (Excel)</span>
           </button>
 
           {/* Guide Assignments Export Dropdown (Excel / PDF) */}
@@ -485,19 +500,22 @@ export default function HODProjectView() {
             <button
               type="button"
               onClick={() => setGuideExportOpen((prev) => !prev)}
-              className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-md text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
+              className="px-3.5 py-2 bg-navy hover:bg-navy/90 text-white rounded-md text-xs font-semibold flex items-center gap-2 transition-colors shadow-xs"
               title="Export Guide Assignments as Excel or PDF"
               aria-expanded={guideExportOpen}
             >
-              <span>📥</span>
-              <span>Guide Assignments</span>
+              <svg className="w-4 h-4 text-slate-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span>Export Allocations</span>
               <svg
-                className={`w-3.5 h-3.5 ml-0.5 transition-transform duration-200 ${guideExportOpen ? 'rotate-180' : ''}`}
+                className={`w-3.5 h-3.5 text-slate-300 transition-transform duration-200 ${guideExportOpen ? 'rotate-180' : ''}`}
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
+                strokeWidth={2}
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
               </svg>
             </button>
 
@@ -515,13 +533,15 @@ export default function HODProjectView() {
                     setGuideExportOpen(false);
                     handleExportGuideAssignments();
                   }}
-                  className="w-full text-left px-3 py-2 flex items-center gap-2.5 hover:bg-emerald-50 text-slate-700 hover:text-emerald-900 transition-colors"
+                  className="w-full text-left px-3 py-2 flex items-center gap-2.5 hover:bg-slate-50 text-slate-700 hover:text-slate-900 transition-colors"
                 >
-                  <span className="w-7 h-7 rounded bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs shrink-0">
-                    📊
+                  <span className="w-7 h-7 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center justify-center shrink-0">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 14h18m-9-4v8m-7 4h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
                   </span>
                   <div className="flex flex-col min-w-0">
-                    <span className="font-bold text-slate-800 text-xs">Excel Spreadsheet</span>
+                    <span className="font-semibold text-slate-800 text-xs">Excel Spreadsheet</span>
                     <span className="text-[10px] text-slate-500">Official matrix layout (.xlsx)</span>
                   </div>
                 </button>
@@ -534,13 +554,15 @@ export default function HODProjectView() {
                     setGuideExportOpen(false);
                     handleExportGuideAssignmentsPdf();
                   }}
-                  className="w-full text-left px-3 py-2 flex items-center gap-2.5 hover:bg-rose-50 text-slate-700 hover:text-rose-900 transition-colors border-t border-slate-100"
+                  className="w-full text-left px-3 py-2 flex items-center gap-2.5 hover:bg-slate-50 text-slate-700 hover:text-slate-900 transition-colors border-t border-slate-100"
                 >
-                  <span className="w-7 h-7 rounded bg-rose-100 text-rose-800 flex items-center justify-center font-bold text-xs shrink-0">
-                    📄
+                  <span className="w-7 h-7 rounded bg-rose-50 text-rose-700 border border-rose-200 flex items-center justify-center shrink-0">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
                   </span>
                   <div className="flex flex-col min-w-0">
-                    <span className="font-bold text-slate-800 text-xs">PDF Document</span>
+                    <span className="font-semibold text-slate-800 text-xs">PDF Document</span>
                     <span className="text-[10px] text-slate-500">Official printable format (.pdf)</span>
                   </div>
                 </button>
@@ -553,7 +575,7 @@ export default function HODProjectView() {
             <select
               value={academicYear}
               onChange={(e) => setAcademicYear(e.target.value)}
-              className="py-1.5 px-2 bg-white border border-rule rounded text-xs font-mono font-bold text-ink focus:outline-none focus:ring-1 focus:ring-navy"
+              className="py-1.5 px-2 bg-white border border-rule rounded text-xs font-semibold text-ink focus:outline-none focus:ring-1 focus:ring-navy"
             >
               <option value="2026-27">2026-27 (Current)</option>
               <option value="2025-26">2025-26</option>
@@ -565,92 +587,100 @@ export default function HODProjectView() {
 
       {/* 2. Overview Statistics Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="panel p-4 flex flex-col justify-between">
-          <span className="text-xs font-mono font-bold text-draft uppercase tracking-wider">Total Groups</span>
+        <div className="p-4 bg-white border border-slate-200/90 rounded-lg shadow-2xs flex flex-col justify-between">
+          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Groups</span>
           <div className="mt-2 flex items-baseline justify-between">
-            <span className="font-serif text-3xl font-bold text-navy">{stats.totalGroups}</span>
-            <span className="text-xs font-medium text-draft">AY {academicYear}</span>
+            <span className="text-2xl font-bold text-navy font-mono">{stats.totalGroups}</span>
+            <span className="text-xs text-slate-500 font-medium">AY {academicYear}</span>
           </div>
         </div>
 
-        <div className="panel p-4 flex flex-col justify-between">
-          <span className="text-xs font-mono font-bold text-draft uppercase tracking-wider">Total Students</span>
+        <div className="p-4 bg-white border border-slate-200/90 rounded-lg shadow-2xs flex flex-col justify-between">
+          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Students</span>
           <div className="mt-2 flex items-baseline justify-between">
-            <span className="font-serif text-3xl font-bold text-ink">{stats.totalStudents}</span>
-            <span className="text-xs font-medium text-draft">Across all groups</span>
+            <span className="text-2xl font-bold text-slate-900 font-mono">{stats.totalStudents}</span>
+            <span className="text-xs text-slate-500 font-medium">Across all teams</span>
           </div>
         </div>
 
-        <div className="panel p-4 flex flex-col justify-between">
-          <span className="text-xs font-mono font-bold text-draft uppercase tracking-wider">Assigned Faculty</span>
+        <div className="p-4 bg-white border border-slate-200/90 rounded-lg shadow-2xs flex flex-col justify-between">
+          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Assigned Faculty</span>
           <div className="mt-2 flex items-baseline justify-between">
-            <span className="font-serif text-3xl font-bold text-pass">{stats.assignedCount}</span>
-            <span className="text-xs font-medium text-draft">of {stats.totalGroups} groups</span>
+            <span className="text-2xl font-bold text-emerald-700 font-mono">{stats.assignedCount}</span>
+            <span className="text-xs text-slate-500 font-medium">of {stats.totalGroups} groups</span>
           </div>
         </div>
 
-        <div className="panel p-4 flex flex-col justify-between">
-          <span className="text-xs font-mono font-bold text-draft uppercase tracking-wider">Unassigned</span>
+        <div className="p-4 bg-white border border-slate-200/90 rounded-lg shadow-2xs flex flex-col justify-between">
+          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Unassigned</span>
           <div className="mt-2 flex items-baseline justify-between">
-            <span className={`font-serif text-3xl font-bold ${stats.unassignedCount > 0 ? 'text-amber-700' : 'text-draft'}`}>
+            <span className={`text-2xl font-bold font-mono ${stats.unassignedCount > 0 ? 'text-amber-700' : 'text-slate-400'}`}>
               {stats.unassignedCount}
             </span>
-            <span className="text-xs font-medium text-draft">Awaiting guide</span>
+            <span className="text-xs text-slate-500 font-medium">
+              {stats.unassignedCount > 0 ? 'Awaiting guide' : 'All assigned'}
+            </span>
           </div>
         </div>
       </div>
 
       {/* 3. Search and Filtering Bar */}
-      <div className="panel p-4 space-y-3">
+      <div className="p-3.5 bg-white border border-slate-200/90 rounded-lg shadow-2xs space-y-3">
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
           {/* Search Input */}
           <div className="relative flex-1">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-draft">
-              🔍
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+              </svg>
             </span>
             <input
               type="text"
               placeholder="Search by student name, roll no, group no, faculty guide, domain, or project topic..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-xs bg-white border border-rule rounded-md focus:outline-none focus:ring-1 focus:ring-navy"
+              className="w-full pl-9 pr-7 py-2 text-xs bg-slate-50/60 border border-slate-200 rounded-md focus:bg-white focus:outline-none focus:ring-1 focus:ring-navy focus:border-navy transition-all"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
-                className="absolute inset-y-0 right-0 flex items-center pr-3 text-xs text-draft hover:text-ink"
+                className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-xs text-slate-400 hover:text-slate-700"
               >
-                ✕
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             )}
           </div>
 
-          {/* Division Filter Buttons */}
+          {/* Division Filter Segmented Control */}
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs font-semibold text-draft mr-1">Division:</span>
-            {['ALL', 'BE-1', 'BE-2', 'BE-3', 'BE-4'].map((div) => (
-              <button
-                key={div}
-                type="button"
-                onClick={() => setSelectedDivision(div)}
-                className={`px-3 py-1 text-xs font-semibold rounded transition-colors ${selectedDivision === div
-                    ? 'bg-navy text-white shadow-xs'
-                    : 'bg-white border border-rule text-draft hover:text-ink hover:bg-slate-50'
-                  }`}
-              >
-                {div}
-              </button>
-            ))}
+            <span className="text-xs font-semibold text-slate-500 mr-1">Division:</span>
+            <div className="bg-slate-100 p-0.5 rounded-md flex items-center gap-0.5 border border-slate-200/80">
+              {['ALL', 'BE-1', 'BE-2', 'BE-3', 'BE-4'].map((div) => (
+                <button
+                  key={div}
+                  type="button"
+                  onClick={() => setSelectedDivision(div)}
+                  className={`px-2.5 py-1 text-xs font-semibold rounded transition-all ${selectedDivision === div
+                      ? 'bg-white text-navy shadow-2xs font-bold'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                    }`}
+                >
+                  {div}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Guide Status Filter */}
           <div className="flex items-center gap-1.5">
-            <span className="text-xs font-semibold text-draft mr-1">Guide:</span>
+            <span className="text-xs font-semibold text-slate-500 mr-1">Guide:</span>
             <select
               value={guideFilter}
               onChange={(e) => setGuideFilter(e.target.value)}
-              className="py-1 px-2.5 bg-white border border-rule rounded text-xs font-semibold text-ink focus:outline-none focus:ring-1 focus:ring-navy"
+              className="py-1.5 px-2.5 bg-slate-50/60 border border-slate-200 rounded-md text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-navy focus:bg-white"
             >
               <option value="ALL">All ({groups.length})</option>
               <option value="ASSIGNED">Assigned ({stats.assignedCount})</option>
@@ -660,10 +690,10 @@ export default function HODProjectView() {
         </div>
 
         {/* Status text */}
-        <div className="flex items-center justify-between text-xs text-draft pt-1 border-t border-rule/50">
+        <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">
           <div>
-            Showing <strong className="text-ink font-semibold">{filteredGroups.length}</strong> of{' '}
-            <strong className="text-ink font-semibold">{groups.length}</strong> project groups
+            Showing <strong className="text-slate-800 font-semibold">{filteredGroups.length}</strong> of{' '}
+            <strong className="text-slate-800 font-semibold">{groups.length}</strong> project groups
             {(searchQuery || selectedDivision !== 'ALL' || guideFilter !== 'ALL') && (
               <span className="ml-2 text-navy font-semibold">(Filtered)</span>
             )}
@@ -684,35 +714,37 @@ export default function HODProjectView() {
         </div>
       </div>
 
-      {/* 4. Tabular View Form */}
-      <div className="panel overflow-hidden">
-        <div className="panel-header flex items-center justify-between bg-slate-50/70 border-b border-rule px-5 py-3.5">
-          <h2 className="font-serif text-lg font-bold text-ink">
-            BE Project Groups Master Table
+      {/* 4. Tabular View Directory */}
+      <div className="bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden">
+        <div className="flex items-center justify-between bg-slate-50/80 border-b border-slate-200 px-5 py-3.5">
+          <h2 className="text-sm font-bold text-slate-900 tracking-tight">
+            BE Project Groups Directory
           </h2>
-          <span className="text-xs text-draft font-mono">
-            {filteredGroups.length} records listed
+          <span className="text-xs font-medium text-slate-500 bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-full">
+            {filteredGroups.length} records
           </span>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="result-table">
+          <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr>
-                <th className="w-32">Group No</th>
-                <th className="w-72">Student Names</th>
-                <th className="w-56">Assigned Faculty</th>
-                <th>Project Domain &amp; Topics</th>
-                <th className="w-20 text-center">Details</th>
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold text-[11px] uppercase tracking-wider">
+                <th className="py-3 px-4 w-32">Group</th>
+                <th className="py-3 px-4 w-72">Students &amp; PRN</th>
+                <th className="py-3 px-4 w-56">Faculty Allocation</th>
+                <th className="py-3 px-4">Domain &amp; Topic Preferences</th>
+                <th className="py-3 px-4 w-24 text-center">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-100">
               {filteredGroups.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="text-center py-12 text-draft">
+                  <td colSpan="5" className="text-center py-12 text-slate-500">
                     <div className="flex flex-col items-center gap-2">
-                      <span className="text-2xl">📋</span>
-                      <p className="font-semibold text-sm">No project groups matched the filters.</p>
+                      <svg className="w-8 h-8 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                      </svg>
+                      <p className="font-semibold text-sm text-slate-700">No project groups matched the filters.</p>
                       <button
                         type="button"
                         onClick={() => {
@@ -720,7 +752,7 @@ export default function HODProjectView() {
                           setSelectedDivision('ALL');
                           setGuideFilter('ALL');
                         }}
-                        className="mt-2 text-xs text-navy hover:underline font-semibold"
+                        className="mt-1 text-xs text-navy hover:underline font-semibold"
                       >
                         Clear filters and show all
                       </button>
@@ -731,21 +763,19 @@ export default function HODProjectView() {
                 filteredGroups.map((g) => {
                   const groupNum = getGroupNumber(g.group_code);
                   return (
-                    <tr key={g.id} className="hover:bg-slate-50/80 transition-colors">
+                    <tr key={g.id} className="hover:bg-slate-50/70 transition-colors">
                       {/* Column 1: Group No */}
-                      <td className="align-top py-3.5">
-                        <div className="space-y-1.5">
-                          <div className="flex items-center gap-2">
-                            <span className="font-serif text-base font-bold text-navy">
-                              Group {groupNum || g.group_code}
-                            </span>
+                      <td className="align-top py-3.5 px-4">
+                        <div className="space-y-1">
+                          <div className="font-bold text-sm text-slate-900">
+                            Group {groupNum || g.group_code}
                           </div>
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="font-mono text-xs font-semibold text-draft px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200">
+                            <span className="font-mono text-[11px] font-semibold text-slate-600 px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200">
                               {g.group_code}
                             </span>
                             {g.batch && (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
                                 {g.batch}
                               </span>
                             )}
@@ -754,33 +784,27 @@ export default function HODProjectView() {
                       </td>
 
                       {/* Column 2: Student Names */}
-                      <td className="align-top py-3.5">
+                      <td className="align-top py-3.5 px-4">
                         {g.members && g.members.length > 0 ? (
                           <div className="space-y-1.5">
                             {g.members.map((m, mIdx) => (
                               <div
                                 key={m.roll_no || mIdx}
-                                className={`text-xs p-1.5 rounded transition-colors ${m.is_leader
-                                    ? 'bg-amber-50/70 border border-amber-200/80'
-                                    : 'bg-white/80 border border-rule/50'
-                                  }`}
+                                title={m.roll_no ? `PRN / Roll No: ${m.roll_no}${m.division ? ` (${m.division})` : ''}` : undefined}
+                                className={`text-xs p-2 rounded transition-colors ${
+                                  m.is_leader
+                                    ? 'bg-amber-50/70 border border-amber-300 shadow-2xs'
+                                    : 'bg-white border border-slate-200 shadow-2xs'
+                                }`}
                               >
-                                <div className="flex items-start justify-between gap-1.5">
-                                  <div className="font-semibold text-ink flex items-center gap-1">
-                                    <span>{mIdx + 1}.</span>
+                                <div className="flex items-center justify-between gap-1.5">
+                                  <div className="font-semibold text-slate-900 flex items-center gap-1 leading-snug">
+                                    <span className="text-slate-800">{mIdx + 1}.</span>
                                     <span>{m.name}</span>
                                   </div>
                                   {m.is_leader && (
-                                    <span className="shrink-0 px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-200 text-amber-900 border border-amber-300">
-                                      👑 Leader
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="text-[11px] font-mono text-draft flex items-center gap-2 mt-0.5 pl-3.5">
-                                  <span>{m.roll_no || 'No PRN'}</span>
-                                  {m.division && (
-                                    <span className="text-[10px] text-slate-500">
-                                      ({m.division})
+                                    <span className="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-200 text-amber-900 border border-amber-300 flex items-center gap-1">
+                                      <span>👑</span> Leader
                                     </span>
                                   )}
                                 </div>
@@ -788,90 +812,92 @@ export default function HODProjectView() {
                             ))}
                           </div>
                         ) : (
-                          <span className="text-xs text-draft italic">No student members listed</span>
+                          <span className="text-xs text-slate-400 italic">No student members listed</span>
                         )}
                       </td>
 
                       {/* Column 3: Assigned Faculty */}
-                      <td className="align-top py-3.5">
-                        <div className="space-y-1.5">
+                      <td className="align-top py-3.5 px-4">
+                        <div className="space-y-2.5">
                           {/* Guide */}
                           {g.guide_name ? (
-                            <div className="p-2 rounded bg-emerald-50/60 border border-emerald-200 space-y-1">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-emerald-700 text-xs">👨‍🏫</span>
-                                <span className="font-bold text-xs text-emerald-900">
-                                  {g.guide_name}
-                                </span>
+                            <div>
+                              <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>
+                                Guide
                               </div>
-                              <div className="pt-0.5 pl-4">
-                                <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                                  ✓ Assigned Guide
-                                </span>
+                              <div className="font-semibold text-xs text-slate-900 mt-0.5">
+                                {g.guide_name}
                               </div>
                             </div>
                           ) : (
-                            <div className="p-2 rounded bg-slate-50 border border-rule/70 space-y-1">
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200">
-                                <span>⏳</span> No Guide Assigned
+                            <div>
+                              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Guide</div>
+                              <span className="inline-block mt-0.5 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                                Unassigned
                               </span>
-                              <p className="text-[11px] text-draft italic">
-                                Guide allocation pending
-                              </p>
                             </div>
                           )}
 
                           {/* Mentors */}
-                          {g.mentors && g.mentors.length > 0 && (
-                            <div className="p-2 rounded bg-purple-50/60 border border-purple-200 space-y-1.5">
-                              {g.mentors.map((m, mIdx) => (
-                                <div key={m.faculty_id || mIdx} className="space-y-0.5">
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-purple-700 text-xs">🛡️</span>
-                                    <span className="font-bold text-xs text-purple-950">
-                                      {m.name || m.mentor_name}
-                                    </span>
-                                  </div>
-                                  <div className="pt-0.5 pl-4">
-                                    <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-purple-100 text-purple-800">
-                                      Assigned Mentor
-                                    </span>
-                                  </div>
+                          {(() => {
+                            const effectiveMentors = (g.mentors || []).filter((m) => {
+                              const guideId = g.guide_faculty_id || g.guide_id;
+                              const guideName = (g.guide_name || '').trim().toLowerCase();
+                              if (guideId && Number(m.faculty_id) === Number(guideId)) return false;
+                              if (guideName && (m.name || m.mentor_name || '').trim().toLowerCase() === guideName) return false;
+                              return true;
+                            });
+                            return effectiveMentors.length > 0 ? (
+                              <div className="pt-1.5 border-t border-slate-100">
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-purple-800 flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500 inline-block"></span>
+                                  {effectiveMentors.length > 1 ? 'Panel Mentors' : 'Panel Mentor'}
                                 </div>
-                              ))}
-                            </div>
-                          )}
+                                <div className="space-y-0.5 mt-0.5">
+                                  {effectiveMentors.map((m, mIdx) => (
+                                    <div key={m.faculty_id || mIdx} className="font-semibold text-xs text-slate-800">
+                                      {m.name || m.mentor_name}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : null;
+                          })()}
                         </div>
                       </td>
 
                       {/* Column 4: Project Domain & Topics */}
-                      <td className="align-top py-3.5">
-                        <div className="space-y-2">
-                          {/* Domain Badge */}
-                          <div>
-                            <span className="inline-block px-2.5 py-0.5 rounded text-xs font-bold bg-indigo-50 text-indigo-900 border border-indigo-200 shadow-2xs">
-                              Domain: {g.domain || 'Not Specified'}
-                            </span>
-                          </div>
+                      <td className="align-top py-3.5 px-4">
+                        <div className="space-y-1.5">
+                          {/* Domain Pill */}
+                          {g.domain && (
+                            <div>
+                              <span className="inline-block px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                                {g.domain}
+                              </span>
+                            </div>
+                          )}
 
-                          {/* Primary Topic Preference */}
-                          <div className="space-y-1.5">
-                            <div className="text-[13px] sm:text-sm font-semibold text-ink leading-snug">
-                              <span className="text-slate-600 font-bold mr-1.5">Topic 1:</span>
+                          {/* Primary Topic */}
+                          <div>
+                            <div className="text-xs sm:text-[13px] font-semibold text-slate-900 leading-snug">
                               {g.title || 'Topic preference not specified'}
                             </div>
 
-                            {/* Secondary preferences */}
+                            {/* Secondary choices (neatly formatted, no giant paragraphs) */}
                             {(g.title_2 || g.title_3) && (
-                              <div className="pt-1 space-y-1 text-xs text-slate-600 pl-2.5 border-l-2 border-rule leading-relaxed">
+                              <div className="mt-1.5 space-y-1 text-xs text-slate-500 pl-2.5 border-l-2 border-slate-200">
                                 {g.title_2 && (
-                                  <div>
-                                    <strong className="text-slate-700 font-bold">Pref 2:</strong> {g.title_2}
+                                  <div className="truncate max-w-lg" title={`Choice 2: ${g.title_2}`}>
+                                    <span className="font-bold text-slate-600 text-[11px] uppercase mr-1">Opt 2:</span>
+                                    <span>{g.title_2}</span>
                                   </div>
                                 )}
                                 {g.title_3 && (
-                                  <div>
-                                    <strong className="text-slate-700 font-bold">Pref 3:</strong> {g.title_3}
+                                  <div className="truncate max-w-lg" title={`Choice 3: ${g.title_3}`}>
+                                    <span className="font-bold text-slate-600 text-[11px] uppercase mr-1">Opt 3:</span>
+                                    <span>{g.title_3}</span>
                                   </div>
                                 )}
                               </div>
@@ -880,15 +906,19 @@ export default function HODProjectView() {
                         </div>
                       </td>
 
-                      {/* Column 5: Read-only Details View */}
-                      <td className="align-top py-3.5 text-center">
+                      {/* Column 5: Actions */}
+                      <td className="align-top py-3.5 px-4 text-center">
                         <button
                           type="button"
                           onClick={() => setSelectedGroupModal(g)}
-                          className="px-2.5 py-1 text-xs font-semibold text-navy bg-navy/5 hover:bg-navy/15 rounded border border-navy/20 transition-colors"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-navy bg-white hover:bg-slate-50 rounded-md border border-slate-300 hover:border-slate-400 shadow-2xs transition-all"
                           title="View complete group information"
                         >
-                          👁️ View
+                          <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          <span>View</span>
                         </button>
                       </td>
                     </tr>
@@ -902,23 +932,23 @@ export default function HODProjectView() {
 
       {/* 5. Group Details Modal (Read-Only) */}
       {selectedGroupModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/60 backdrop-blur-xs">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-rule animate-in fade-in zoom-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-slate-200 animate-in fade-in zoom-in duration-150">
             {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-rule flex items-center justify-between bg-slate-50">
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
               <div>
-                <h3 className="font-serif text-xl font-bold text-ink">
-                  Group {getGroupNumber(selectedGroupModal.group_code)} Details
+                <h3 className="font-bold text-lg text-slate-900">
+                  Group {getGroupNumber(selectedGroupModal.group_code)} Dossier
                 </h3>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="font-mono text-xs font-bold text-navy bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                  <span className="font-mono text-xs font-bold text-navy bg-white px-2 py-0.5 rounded border border-slate-200">
                     {selectedGroupModal.group_code}
                   </span>
-                  <span className="text-xs font-semibold text-draft">
+                  <span className="text-xs font-semibold text-slate-600">
                     Division: {selectedGroupModal.batch || 'N/A'}
                   </span>
-                  <span className="text-xs text-draft">·</span>
-                  <span className="text-xs font-semibold text-draft">
+                  <span className="text-xs text-slate-400">·</span>
+                  <span className="text-xs font-semibold text-slate-600">
                     AY: {selectedGroupModal.academic_year || academicYear}
                   </span>
                 </div>
@@ -926,9 +956,12 @@ export default function HODProjectView() {
               <button
                 type="button"
                 onClick={() => setSelectedGroupModal(null)}
-                className="text-draft hover:text-ink text-xl font-bold p-1 leading-none"
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-md transition-colors"
+                title="Close modal"
               >
-                ✕
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
 
@@ -936,30 +969,30 @@ export default function HODProjectView() {
             <div className="p-6 space-y-6">
               {/* Domain & Topic Preferences */}
               <div className="space-y-2">
-                <span className="text-xs font-mono font-bold text-draft uppercase tracking-wider">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                   Project Domain &amp; Topic Preferences
                 </span>
-                <div className="p-3.5 rounded bg-slate-50 border border-rule space-y-2.5">
+                <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-3">
                   <div>
-                    <span className="text-xs font-semibold text-draft">Project Domain:</span>
-                    <p className="text-sm font-bold text-indigo-900 mt-0.5">
+                    <span className="text-xs font-semibold text-slate-500">Domain</span>
+                    <p className="text-sm font-bold text-slate-900 mt-0.5">
                       {selectedGroupModal.domain || 'Not Specified'}
                     </p>
                   </div>
-                  <div className="space-y-2 pt-1 border-t border-rule/60">
+                  <div className="space-y-2 pt-2 border-t border-slate-200">
                     <div>
-                      <span className="text-xs font-bold text-ink">1. Primary Topic:</span>
-                      <p className="text-[13px] sm:text-sm font-semibold text-ink mt-0.5 leading-snug">{selectedGroupModal.title || 'N/A'}</p>
+                      <span className="text-xs font-bold text-slate-700">1. Primary Topic</span>
+                      <p className="text-sm font-semibold text-slate-900 mt-0.5 leading-snug">{selectedGroupModal.title || 'N/A'}</p>
                     </div>
                     {selectedGroupModal.title_2 && (
                       <div>
-                        <span className="text-xs font-bold text-draft">2. Second Choice:</span>
+                        <span className="text-xs font-bold text-slate-500">2. Second Choice</span>
                         <p className="text-xs sm:text-[13px] text-slate-700 mt-0.5 leading-snug">{selectedGroupModal.title_2}</p>
                       </div>
                     )}
                     {selectedGroupModal.title_3 && (
                       <div>
-                        <span className="text-xs font-bold text-draft">3. Third Choice:</span>
+                        <span className="text-xs font-bold text-slate-500">3. Third Choice</span>
                         <p className="text-xs sm:text-[13px] text-slate-700 mt-0.5 leading-snug">{selectedGroupModal.title_3}</p>
                       </div>
                     )}
@@ -969,83 +1002,87 @@ export default function HODProjectView() {
 
               {/* Assigned Faculty Guide & Mentors */}
               <div className="space-y-2">
-                <span className="text-xs font-mono font-bold text-draft uppercase tracking-wider">
-                  Assigned Faculty (Guide &amp; Mentors)
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  Assigned Faculty
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {selectedGroupModal.guide_name ? (
-                    <div className="p-3.5 rounded bg-emerald-50/70 border border-emerald-200 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-emerald-700 text-sm">👨‍🏫</span>
-                        <div className="font-bold text-sm text-emerald-950">
+                    <div className="p-3.5 rounded-lg bg-emerald-50/50 border border-emerald-200/80 flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">Project Guide</span>
+                        <div className="font-bold text-sm text-slate-900 mt-0.5">
                           {selectedGroupModal.guide_name}
                         </div>
                       </div>
-                      <span className="px-2.5 py-1 text-xs font-bold rounded bg-emerald-200 text-emerald-900">
-                        ✓ Guide
+                      <span className="px-2 py-0.5 text-[11px] font-semibold rounded bg-emerald-100 text-emerald-800">
+                        Assigned
                       </span>
                     </div>
                   ) : (
-                    <div className="p-3.5 rounded bg-slate-50 border border-rule text-xs text-draft italic">
-                      ⏳ No guide assigned
+                    <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-500">
+                      No guide assigned
                     </div>
                   )}
 
-                  {selectedGroupModal.mentors && selectedGroupModal.mentors.length > 0 ? (
-                    <div className="p-3.5 rounded bg-purple-50/70 border border-purple-200 space-y-2">
-                      {selectedGroupModal.mentors.map((m, mIdx) => (
-                        <div key={m.faculty_id || mIdx} className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-purple-700 text-sm">🛡️</span>
-                            <div className="font-bold text-sm text-purple-950">
-                              {m.name || m.mentor_name}
-                            </div>
+                  {(() => {
+                    const effectiveMentors = (selectedGroupModal.mentors || []).filter((m) => {
+                      const guideId = selectedGroupModal.guide_faculty_id || selectedGroupModal.guide_id;
+                      const guideName = (selectedGroupModal.guide_name || '').trim().toLowerCase();
+                      if (guideId && Number(m.faculty_id) === Number(guideId)) return false;
+                      if (guideName && (m.name || m.mentor_name || '').trim().toLowerCase() === guideName) return false;
+                      return true;
+                    });
+                    return effectiveMentors.length > 0 ? (
+                      <div className="p-3.5 rounded-lg bg-purple-50/50 border border-purple-200/80 space-y-2">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-purple-800">
+                          {effectiveMentors.length > 1 ? 'Panel Mentors' : 'Panel Mentor'}
+                        </span>
+                        {effectiveMentors.map((m, mIdx) => (
+                          <div key={m.faculty_id || mIdx} className="font-bold text-sm text-slate-900">
+                            {m.name || m.mentor_name}
                           </div>
-                          <span className="px-2.5 py-1 text-xs font-bold rounded bg-purple-200 text-purple-900">
-                            Mentor
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="p-3.5 rounded bg-slate-50 border border-rule text-xs text-draft italic">
-                      ⏳ No mentor assigned
-                    </div>
-                  )}
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-500">
+                        No mentor assigned
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
               {/* Student Roster */}
               <div className="space-y-2">
-                <span className="text-xs font-mono font-bold text-draft uppercase tracking-wider">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                   Team Members ({selectedGroupModal.members?.length || 0})
                 </span>
-                <div className="border border-rule rounded overflow-hidden">
+                <div className="border border-slate-200 rounded-lg overflow-hidden">
                   <table className="w-full text-xs">
-                    <thead className="bg-slate-100 text-draft font-semibold border-b border-rule">
+                    <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
                       <tr>
-                        <th className="p-2.5 text-left">#</th>
+                        <th className="p-2.5 text-left w-10">#</th>
                         <th className="p-2.5 text-left">Student Name</th>
                         <th className="p-2.5 text-left">Roll No / PRN</th>
                         <th className="p-2.5 text-left">Division</th>
                         <th className="p-2.5 text-left">Contact</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-rule">
+                    <tbody className="divide-y divide-slate-100">
                       {(selectedGroupModal.members || []).map((m, idx) => (
-                        <tr key={idx} className={m.is_leader ? 'bg-amber-50/50' : 'bg-white'}>
-                          <td className="p-2.5 text-draft">{idx + 1}</td>
-                          <td className="p-2.5 font-semibold text-ink">
+                        <tr key={idx} className="hover:bg-slate-50/60">
+                          <td className="p-2.5 text-slate-400 font-mono">{idx + 1}</td>
+                          <td className="p-2.5 font-semibold text-slate-900">
                             {m.name}{' '}
                             {m.is_leader && (
-                              <span className="ml-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-200 text-amber-900">
+                              <span className="ml-1 px-1.5 py-0.2 rounded text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
                                 Leader
                               </span>
                             )}
                           </td>
-                          <td className="p-2.5 font-mono text-draft">{m.roll_no || '—'}</td>
+                          <td className="p-2.5 font-mono text-slate-600">{m.roll_no || '—'}</td>
                           <td className="p-2.5">{m.division || selectedGroupModal.batch || '—'}</td>
-                          <td className="p-2.5 text-draft space-y-0.5">
+                          <td className="p-2.5 text-slate-500 space-y-0.5">
                             {m.email && <div>{m.email}</div>}
                             {m.mobile_no && <div>{m.mobile_no}</div>}
                           </td>
@@ -1058,11 +1095,11 @@ export default function HODProjectView() {
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-3.5 border-t border-rule bg-slate-50 flex justify-end">
+            <div className="px-6 py-3.5 border-t border-slate-200 bg-slate-50 flex justify-end">
               <button
                 type="button"
                 onClick={() => setSelectedGroupModal(null)}
-                className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-ink text-xs font-semibold rounded"
+                className="px-4 py-1.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs font-semibold rounded shadow-2xs transition-colors"
               >
                 Close
               </button>

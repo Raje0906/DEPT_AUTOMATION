@@ -1,18 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useSearchParams } from 'react-router-dom';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
 
+// Helper: Format group code by removing 4-digit academic year (e.g., GRP-2026-01 -> GRP-01)
+const formatGroupCode = (code) => {
+  if (!code) return '';
+  return String(code).replace(/-?(?:19|20)\d{2}-?/g, (m) => (m.startsWith('-') && m.endsWith('-') ? '-' : ''));
+};
+
 export default function ProjectEval() {
-  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState(
-    searchParams.get('tab') === 'evaluations' ? 'evaluations' : 'guided'
-  ); // 'guided' | 'evaluations' | 'requests'
-  
-  // Backend data states
-  const [assignments, setAssignments] = useState([]);
   const [guidedGroups, setGuidedGroups] = useState([]);
   
   // Evaluation modal states
@@ -21,15 +19,12 @@ export default function ProjectEval() {
   const [scoresInput, setScoresInput] = useState({});
   const [overallRemarks, setOverallRemarks] = useState('');
   const [saving, setSaving] = useState(false);
+  const [expandedRubrics, setExpandedRubrics] = useState({});
 
   const fetchFacultyData = async () => {
     setLoading(true);
     try {
-      const [assRes, guidedRes] = await Promise.all([
-        api.get('/projects/evaluator/assignments'),
-        api.get('/projects/guide/my-groups'),
-      ]);
-      setAssignments(assRes.data);
+      const guidedRes = await api.get('/projects/guide/my-groups');
       setGuidedGroups(guidedRes.data);
     } catch (err) {
       toast.error('Failed to fetch faculty project data');
@@ -51,39 +46,52 @@ export default function ProjectEval() {
       
       // Initialize scores map per student member
       const initialMap = {};
+      const initialExpanded = {};
       for (const m of res.data.members) {
         initialMap[m.id] = {};
+        initialExpanded[m.id] = true;
         for (const crit of res.data.criteria) {
           const existingSt = res.data.studentScoresMap?.[m.id]?.[crit.id];
           const legacyGrp = res.data.scoresMap?.[crit.id];
           initialMap[m.id][crit.id] = {
-            marks_awarded: existingSt ? existingSt.marks_awarded : (legacyGrp ? legacyGrp.marks_awarded : 0),
+            marks_awarded: existingSt ? Number(existingSt.marks_awarded) : (legacyGrp ? Number(legacyGrp.marks_awarded) : 0),
             remark: existingSt ? existingSt.remark : (legacyGrp ? legacyGrp.remark : ''),
           };
         }
       }
       setScoresInput(initialMap);
       setOverallRemarks(res.data.evaluation ? res.data.evaluation.overall_remarks || '' : '');
+      setExpandedRubrics(initialExpanded);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to open evaluation form');
     }
   };
 
-  const handleCopyFirstStudentScores = () => {
-    if (!formData?.members || formData.members.length === 0) return;
-    const firstMemId = formData.members[0].id;
-    const firstScores = scoresInput[firstMemId] || {};
-    
-    const updated = { ...scoresInput };
-    for (const m of formData.members) {
-      updated[m.id] = { ...firstScores };
-    }
-    setScoresInput(updated);
-    toast.success('Applied Student-1 scores to all team members');
+  const toggleStudentRubric = (memberId) => {
+    setExpandedRubrics((prev) => ({
+      ...prev,
+      [memberId]: !prev[memberId],
+    }));
   };
 
   const handleSaveEvaluation = async (submitStatus) => {
     if (!selectedAssignment || !formData) return;
+
+    // Validate rubric criteria scores
+    for (const m of formData.members) {
+      for (const c of formData.criteria) {
+        const val = Number(scoresInput[m.id]?.[c.id]?.marks_awarded || 0);
+        const max = Number(c.max_marks);
+        if (isNaN(val) || val < 0) {
+          toast.error(`Marks for "${c.name}" (${m.name}) cannot be negative`);
+          return;
+        }
+        if (val > max) {
+          toast.error(`Marks for "${c.name}" (${m.name}) exceed max allowable (${max})`);
+          return;
+        }
+      }
+    }
 
     // Build per-student scores payload
     const studentScoresArray = formData.members.map((m) => ({
@@ -127,9 +135,11 @@ export default function ProjectEval() {
     );
   }
 
-  // Calculate stats
-  const pendingAssignments = assignments.filter((a) => a.assignment_status !== 'COMPLETED' && !a.locked_by_other).length;
-  const completedAssignments = assignments.filter((a) => a.assignment_status === 'COMPLETED' || a.locked_by_other).length;
+  // Calculate stats for guided groups
+  const totalStudents = guidedGroups.reduce((acc, g) => acc + (g.members?.length || 0), 0);
+  const allStages = guidedGroups.flatMap((g) => g.stages || []);
+  const completedStages = allStages.filter((st) => st.is_scored_by_guide || st.is_locked_by_mentor).length;
+  const pendingStages = allStages.length - completedStages;
 
   return (
     <div className="p-8 lg:p-10 w-full max-w-7xl mx-auto space-y-8">
@@ -146,133 +156,84 @@ export default function ProjectEval() {
       {/* Summary Stat Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="p-4 bg-white border border-rule rounded">
-          <p className="text-xs uppercase tracking-wider text-draft font-semibold">Guided Groups</p>
+          <p className="text-xs uppercase tracking-wider text-draft font-semibold">Project Groups</p>
           <p className="font-serif text-3xl font-bold text-navy mt-1">{guidedGroups.length}</p>
-          <p className="text-xs text-draft mt-1 font-medium">Under your supervision</p>
+          <p className="text-xs text-draft mt-1 font-medium">As Guide or Panel Mentor</p>
         </div>
         <div className="p-4 bg-white border border-rule rounded">
-          <p className="text-xs uppercase tracking-wider text-draft font-semibold">Assigned Panel Groups</p>
-          <p className="font-serif text-3xl font-bold text-ink mt-1">{assignments.length}</p>
-          <p className="text-xs text-draft mt-1 font-medium">Across active stages</p>
+          <p className="text-xs uppercase tracking-wider text-draft font-semibold">Students</p>
+          <p className="font-serif text-3xl font-bold text-ink mt-1">{totalStudents}</p>
+          <p className="text-xs text-draft mt-1 font-medium">Across assigned teams</p>
         </div>
         <div className="p-4 bg-white border border-rule rounded">
-          <p className="text-xs uppercase tracking-wider text-draft font-semibold">Pending Reviews</p>
-          <p className="font-serif text-3xl font-bold text-amber-700 mt-1">{pendingAssignments}</p>
+          <p className="text-xs uppercase tracking-wider text-draft font-semibold">Pending Evaluations</p>
+          <p className="font-serif text-3xl font-bold text-amber-700 mt-1">{pendingStages}</p>
           <p className="text-xs text-amber-700 mt-1 font-medium">Awaiting evaluation</p>
         </div>
         <div className="p-4 bg-white border border-rule rounded">
-          <p className="text-xs uppercase tracking-wider text-draft font-semibold">Evaluations Completed</p>
-          <p className="font-serif text-3xl font-bold text-emerald-700 mt-1">{completedAssignments}</p>
-          <p className="text-xs text-emerald-700 mt-1 font-medium">Submitted / Locked</p>
+          <p className="text-xs uppercase tracking-wider text-draft font-semibold">Stages Evaluated</p>
+          <p className="font-serif text-3xl font-bold text-emerald-700 mt-1">{completedStages}</p>
+          <p className="text-xs text-emerald-700 mt-1 font-medium">Scored / Finalized</p>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-2.5 border-b border-rule pb-3 overflow-x-auto">
-        <button
-          type="button"
-          onClick={() => setActiveTab('guided')}
-          className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-md border transition-all whitespace-nowrap ${
-            activeTab === 'guided'
-              ? 'bg-navy text-white border-navy shadow-xs'
-              : 'bg-white text-slate-700 border-rule hover:bg-slate-50 hover:text-ink hover:border-slate-300 shadow-2xs'
-          }`}
-        >
-          <span className="text-sm">👥</span>
-          <span>My Guided Groups</span>
-          <span
-            className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-              activeTab === 'guided'
-                ? 'bg-white/20 text-white'
-                : 'bg-slate-100 text-slate-600'
-            }`}
-          >
-            {guidedGroups.length}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('evaluations')}
-          className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-md border transition-all whitespace-nowrap ${
-            activeTab === 'evaluations'
-              ? 'bg-navy text-white border-navy shadow-xs'
-              : 'bg-white text-slate-700 border-rule hover:bg-slate-50 hover:text-ink hover:border-slate-300 shadow-2xs'
-          }`}
-        >
-          <span className="text-sm">🛡️</span>
-          <span>Assigned Panel Evaluations</span>
-          <span
-            className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-              activeTab === 'evaluations'
-                ? 'bg-white/20 text-white'
-                : 'bg-slate-100 text-slate-600'
-            }`}
-          >
-            {assignments.length}
-          </span>
-        </button>
-      </div>
-
-      {/* TAB 1: MY GUIDED GROUPS */}
-      {activeTab === 'guided' && (
-        <div className="panel">
-          <div className="panel-header">
-            <h2 className="font-serif text-xl font-semibold">Project Groups Guided by You</h2>
-          </div>
-          <div className="divide-y divide-rule">
+      {/* PROJECT GROUPS */}
+      <div className="panel">
+        <div className="panel-header">
+          <h2 className="font-serif text-xl font-semibold">Project Groups</h2>
+        </div>
+        <div className="divide-y divide-rule">
             {guidedGroups.length === 0 ? (
-              <div className="p-8 text-center text-draft">You are currently not guiding any active project groups.</div>
+              <div className="p-8 text-center text-draft">You are currently not assigned to any active project groups as Guide or Panel Mentor.</div>
             ) : (
               guidedGroups.map((g) => (
                 <div key={g.id} className="p-6 space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <span className="font-mono text-sm font-bold text-navy bg-blue-50 border border-blue-200 px-2.5 py-1 rounded">
-                        {g.group_code}
+                        {formatGroupCode(g.group_code)}
                       </span>
                       <h3 className="font-serif text-lg font-bold text-ink">{g.title}</h3>
+                      {g.is_guide ? (
+                        <span className="text-[11px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded">
+                          Guide
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-bold uppercase tracking-wider bg-purple-50 text-purple-800 border border-purple-300 px-2 py-0.5 rounded">
+                          Panel Mentor
+                        </span>
+                      )}
                     </div>
-                    <span className="text-xs font-mono font-medium text-draft bg-gray-100 px-2.5 py-1 rounded">
-                      {g.academic_year}
-                    </span>
                   </div>
-                  <p className="text-xs text-draft font-medium">Domain: <span className="text-ink font-semibold">{g.domain}</span></p>
-                  <p className="text-xs text-ink">{g.abstract}</p>
-
-                  <div className="pt-1 flex flex-wrap items-center gap-3 text-xs text-draft">
-                    <span className="font-bold text-navy">Roster ({g.members.length}):</span>
-                    {g.members.map((m, idx) => (
-                      <span key={idx} className="bg-paper border border-rule px-2 py-0.5 rounded font-mono">
-                        {m.name} ({m.roll_no}) {m.is_leader && '★'}
-                      </span>
-                    ))}
+                  <div className="flex items-center gap-3 text-xs text-draft font-medium">
+                    <p>Domain: <span className="text-ink font-semibold">{g.domain}</span></p>
+                    {!g.is_guide && g.guide_name && (
+                      <p>· Project Guide: <span className="text-navy font-semibold">{g.guide_name}</span></p>
+                    )}
                   </div>
+                  {g.abstract && <p className="text-xs text-ink">{g.abstract}</p>}
 
                   {/* Evaluation Stages & Continuous Assessment */}
                   <div className="pt-3 border-t border-rule space-y-2.5">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                      <p className="text-xs font-mono font-bold uppercase tracking-wider text-slate-600">
+                    <div className="flex items-center justify-between gap-1">
+                      <p className="text-xs font-mono font-bold uppercase tracking-wider text-slate-800">
                         Continuous Assessment Evaluation Stages
                       </p>
-                      <span className="text-[11px] text-draft">
-                        Either Guide or Panel Mentor can evaluate. Only 1 can assign scores per stage.
-                      </span>
                     </div>
 
                     {(!g.stages || g.stages.length === 0) ? (
-                      <p className="text-xs text-draft italic">No evaluation stages configured for {g.academic_year}.</p>
+                      <p className="text-xs text-draft italic">No evaluation stages configured.</p>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                         {g.stages.map((st) => (
                           <div
                             key={st.stage_id}
                             className={`p-3.5 rounded border transition-all ${
-                              st.is_scored_by_guide
+                              st.is_scored_by_me || st.is_scored_by_guide
                                 ? 'bg-emerald-50/50 border-emerald-200 shadow-2xs'
-                                : st.is_locked_by_mentor
+                                : st.is_locked_by_other || st.is_locked_by_mentor
                                 ? 'bg-purple-50/50 border-purple-200 shadow-2xs'
-                                : st.guide_eval_status === 'DRAFT'
+                                : (st.my_eval_status === 'DRAFT' || st.guide_eval_status === 'DRAFT')
                                 ? 'bg-amber-50/50 border-amber-200 shadow-2xs'
                                 : 'bg-paper border-rule'
                             } flex flex-col justify-between gap-3`}
@@ -282,9 +243,15 @@ export default function ProjectEval() {
                                 <span className="font-mono text-xs font-bold text-navy">
                                   Stage {st.sequence_order}
                                 </span>
-                                <span className="text-[11px] font-mono font-semibold text-draft">
-                                  Max: {st.max_marks_total} Marks
-                                </span>
+                                {st.score !== null && st.score !== undefined ? (
+                                  <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-100/80 border border-emerald-300 px-2 py-0.5 rounded">
+                                    Score: {st.score} / {Number(st.max_marks_total)}
+                                  </span>
+                                ) : (
+                                  <span className="text-xs font-mono font-semibold text-draft">
+                                    Max: {Number(st.max_marks_total)} Marks
+                                  </span>
+                                )}
                               </div>
                               <h4 className="text-xs font-bold text-ink mt-1 line-clamp-1" title={st.stage_name}>
                                 {st.stage_name}
@@ -292,17 +259,17 @@ export default function ProjectEval() {
 
                               {/* Status Badge */}
                               <div className="mt-2.5">
-                                {st.is_scored_by_guide ? (
+                                {st.is_scored_by_me || st.is_scored_by_guide ? (
                                   <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                    Scored by You (Guide)
+                                    Scored by You ({g.is_guide ? 'Guide' : 'Mentor'})
                                   </span>
-                                ) : st.is_locked_by_mentor ? (
+                                ) : st.is_locked_by_other || st.is_locked_by_mentor ? (
                                   <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-100 text-purple-800 border border-purple-300">
                                     <span>🔒</span>
-                                    Scored by Mentor ({st.mentor_evaluator_name})
+                                    Scored by {st.other_role || 'Mentor'} ({st.other_evaluator_name || st.mentor_evaluator_name})
                                   </span>
-                                ) : st.guide_eval_status === 'DRAFT' ? (
+                                ) : (st.my_eval_status === 'DRAFT' || st.guide_eval_status === 'DRAFT') ? (
                                   <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-300">
                                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
                                     Draft Saved
@@ -318,7 +285,7 @@ export default function ProjectEval() {
 
                             {/* Action Button */}
                             <div className="pt-1">
-                              {st.is_scored_by_guide ? (
+                              {st.is_scored_by_me || st.is_scored_by_guide ? (
                                 <button
                                   type="button"
                                   onClick={() =>
@@ -331,9 +298,9 @@ export default function ProjectEval() {
                                   }
                                   className="w-full py-1.5 px-2.5 bg-white hover:bg-slate-50 text-emerald-800 border border-emerald-300 rounded text-xs font-bold shadow-2xs transition-colors"
                                 >
-                                  View Your Evaluation
+                                  View Your Evaluation ({st.score !== null && st.score !== undefined ? `${st.score}/${Number(st.max_marks_total)}` : 'Submitted'})
                                 </button>
-                              ) : st.is_locked_by_mentor ? (
+                              ) : st.is_locked_by_other || st.is_locked_by_mentor ? (
                                 <button
                                   type="button"
                                   onClick={() =>
@@ -346,9 +313,9 @@ export default function ProjectEval() {
                                   }
                                   className="w-full py-1.5 px-2.5 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-300 rounded text-xs font-bold flex items-center justify-center gap-1 transition-colors"
                                 >
-                                  <span>👁️</span> View Mentor Evaluation (Read-Only)
+                                  <span>👁️</span> View {st.other_role || 'Mentor'} Evaluation (Read-Only)
                                 </button>
-                              ) : st.guide_eval_status === 'DRAFT' ? (
+                              ) : (st.my_eval_status === 'DRAFT' || st.guide_eval_status === 'DRAFT') ? (
                                 <button
                                   type="button"
                                   onClick={() =>
@@ -376,7 +343,7 @@ export default function ProjectEval() {
                                   }
                                   className="w-full btn-primary py-1.5 px-2.5 text-xs font-bold"
                                 >
-                                  Score Students as Guide →
+                                  Score Students as {g.is_guide ? 'Guide' : 'Mentor'} →
                                 </button>
                               )}
                             </div>
@@ -390,110 +357,10 @@ export default function ProjectEval() {
             )}
           </div>
         </div>
-      )}
-
-      {/* TAB 2: PANELIST ASSIGNMENTS */}
-      {activeTab === 'evaluations' && (
-        <div className="panel">
-          <div className="panel-header flex items-center justify-between">
-            <div>
-              <h2 className="font-serif text-xl font-semibold">Panel Evaluator Assignments</h2>
-              <p className="text-xs text-draft mt-0.5">
-                Mutually exclusive continuous assessment: If Guide scores first, panel is locked; vice versa.
-              </p>
-            </div>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="result-table">
-              <thead>
-                <tr>
-                  <th>Group Code</th>
-                  <th>Project Title &amp; Domain</th>
-                  <th>Team Members</th>
-                  <th>Guide</th>
-                  <th>Evaluation Stage</th>
-                  <th>Status</th>
-                  <th className="text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {assignments.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="text-center py-8 text-draft">
-                      No panel evaluation assignments found for your account.
-                    </td>
-                  </tr>
-                ) : (
-                  assignments.map((ass) => (
-                    <tr key={ass.assignment_id}>
-                      <td className="font-mono text-sm font-bold text-navy">{ass.group_code}</td>
-                      <td className="max-w-md">
-                        <div className="font-semibold text-ink text-sm leading-snug">{ass.title}</div>
-                        <div className="text-xs text-draft mt-0.5">{ass.domain}</div>
-                      </td>
-                      <td className="text-xs text-draft">
-                        {ass.members.map((m, idx) => (
-                          <div key={idx} className="truncate">{m.name} ({m.roll_no})</div>
-                        ))}
-                      </td>
-                      <td className="font-medium text-xs text-ink">{ass.guide_name || 'Unassigned'}</td>
-                      <td className="font-mono text-xs text-navy font-semibold">{ass.stage_name}</td>
-                      <td>
-                        {ass.locked_by_other ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-semibold bg-purple-50 text-purple-800 border border-purple-200">
-                            <span>🔒</span>
-                            Scored by {ass.other_is_guide ? 'Guide' : 'Mentor'} ({ass.other_evaluator_name})
-                          </span>
-                        ) : ass.evaluation_status === 'SUBMITTED' || ass.evaluation_status === 'LOCKED' ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                            Submitted
-                          </span>
-                        ) : ass.evaluation_status === 'DRAFT' ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                            Draft Saved
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                            Assigned
-                          </span>
-                        )}
-                      </td>
-                      <td className="text-right">
-                        {ass.locked_by_other ? (
-                          <button
-                            onClick={() => handleOpenEvaluationModal({ ...ass, assignment_id: ass.other_assignment_id })}
-                            className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 rounded text-xs font-semibold inline-flex items-center gap-1"
-                          >
-                            <span>👁️</span> View Evaluation (Read-Only)
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleOpenEvaluationModal(ass)}
-                            className="btn-primary py-1.5 px-3 text-xs"
-                          >
-                            {ass.evaluation_status === 'SUBMITTED'
-                              ? 'View Evaluation'
-                              : ass.evaluation_status === 'DRAFT'
-                              ? 'Continue Scoring →'
-                              : 'Score Students →'}
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
 
 
 
-      {/* RUBRIC EVALUATION MODAL (INDIVIDUAL STUDENT SCORING) */}
+      {/* RUBRIC EVALUATION MODAL (SIMPLIFIED STAGE SCORING) */}
       {selectedAssignment && formData && createPortal(
         <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded border border-rule max-w-4xl w-full p-6 shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto">
@@ -502,7 +369,7 @@ export default function ProjectEval() {
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-mono font-bold text-navy uppercase tracking-wider">
-                    {formData.assignment.group_code} · {formData.assignment.stage_name}
+                    {formatGroupCode(formData.assignment.group_code)} · {formData.assignment.stage_name}
                   </span>
                   {formData.isReadOnly ? (
                     <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-100 text-amber-800 border border-amber-300">
@@ -510,7 +377,7 @@ export default function ProjectEval() {
                     </span>
                   ) : (
                     <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800 border border-emerald-300">
-                      Individual Student Marks Entry
+                      Stage Evaluation
                     </span>
                   )}
                 </div>
@@ -549,8 +416,8 @@ export default function ProjectEval() {
                 </div>
               )}
 
-              {/* Quick Actions & Guide Info */}
-              <div className="p-3 bg-paper border border-rule rounded text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              {/* Guide Info */}
+              <div className="p-3.5 bg-paper border border-rule rounded flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-2">
                 <div>
                   <span className="text-draft font-bold">Project Guide: </span>
                   <span className="text-navy font-semibold">{formData.assignment.guide_name || 'Unassigned'}</span>
@@ -559,36 +426,27 @@ export default function ProjectEval() {
                       · Evaluated by: <strong className="text-navy">{formData.otherEvaluator || formData.assignment.evaluator_name || 'Assigned Evaluator'}</strong> ({formData.otherRole || 'Evaluator'})
                     </span>
                   ) : (
-                    <span className="text-draft ml-3">· Evaluator assigns marks <strong>individually</strong> to each student member.</span>
+                    <span className="text-draft ml-3">· Award marks for each individual rubric criterion below.</span>
                   )}
                 </div>
-                {!formData.isReadOnly && (
-                  <button
-                    type="button"
-                    onClick={handleCopyFirstStudentScores}
-                    className="px-3 py-1 bg-blue-50 hover:bg-blue-100 text-navy border border-blue-200 text-xs font-bold rounded flex items-center gap-1 shrink-0"
-                    title="Copy Student 1 marks to all team members"
-                  >
-                    <span>⚡</span> Copy Student-1 Scores to All
-                  </button>
-                )}
               </div>
 
-              {/* INDIVIDUAL STUDENT RUBRIC SCORING SECTIONS */}
-              <div className="space-y-6">
+              {/* STUDENT STAGE SCORING SECTIONS */}
+              <div className="space-y-4">
                 {formData.members.map((member, mIdx) => {
                   const mScores = scoresInput[member.id] || {};
                   const studentTotal = formData.criteria.reduce(
                     (sum, c) => sum + Number(mScores[c.id]?.marks_awarded || 0),
                     0
                   );
+                  const isExpanded = !!expandedRubrics[member.id];
 
                   return (
-                    <div key={member.id} className="border border-rule rounded p-5 bg-white shadow-xs space-y-4">
-                      {/* Student Header */}
-                      <div className="flex items-center justify-between border-b border-rule pb-2 bg-gray-50 -mx-5 -mt-5 p-4 rounded-t">
+                    <div key={member.id} className="border border-rule rounded-lg bg-white shadow-2xs overflow-hidden">
+                      {/* Student Header & Calculated Stage Score Display */}
+                      <div className="p-4 bg-slate-50/70 border-b border-rule flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
-                          <span className="w-7 h-7 rounded-full bg-navy text-white text-xs font-bold flex items-center justify-center font-mono">
+                          <span className="w-7 h-7 rounded-full bg-navy text-white text-xs font-bold flex items-center justify-center font-mono shrink-0">
                             {mIdx + 1}
                           </span>
                           <div>
@@ -604,53 +462,72 @@ export default function ProjectEval() {
                           </div>
                         </div>
 
-                        <div className="text-right">
-                          <span className="text-[11px] uppercase tracking-wider text-draft font-semibold block">Total Score</span>
-                          <span className="font-serif text-xl font-bold text-navy">
-                            {studentTotal} / {formData.assignment.max_marks_total}
-                          </span>
+                        {/* Calculated Stage Score from Rubrics */}
+                        <div className="flex items-center gap-3 self-end sm:self-auto">
+                          <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded border border-rule shadow-2xs">
+                            <span className="text-xs font-bold text-slate-700">Stage Score:</span>
+                            <span className="font-mono text-base font-bold text-navy">
+                              {studentTotal} <span className="text-xs font-semibold text-draft">/ {Number(formData.assignment.max_marks_total)}</span>
+                            </span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => toggleStudentRubric(member.id)}
+                            className="text-xs text-navy font-semibold hover:text-navy/80 px-2.5 py-1.5 rounded hover:bg-slate-100 flex items-center gap-1 transition-colors"
+                            title="Toggle rubric criteria breakdown"
+                          >
+                            <span>{isExpanded ? '▲ Hide Rubrics' : '▼ View Rubrics'}</span>
+                          </button>
                         </div>
                       </div>
 
-                      {/* Criteria Scoring Inputs for this student */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-                        {formData.criteria.map((crit) => {
-                          const curr = mScores[crit.id] || { marks_awarded: 0, remark: '' };
-                          return (
-                            <div key={crit.id} className="p-3 bg-paper border border-rule rounded flex items-center justify-between gap-3">
-                              <div className="flex-1">
-                                <label className="text-xs font-bold text-ink block">{crit.name}</label>
-                                <span className="text-[11px] font-mono text-draft font-medium">Max: {crit.max_marks} Marks</span>
-                              </div>
-                              <div className="w-28">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  max={crit.max_marks}
-                                  step="0.5"
-                                  disabled={formData.isReadOnly}
-                                  value={curr.marks_awarded}
-                                  onFocus={(e) => !formData.isReadOnly && e.target.select()}
-                                  onChange={(e) =>
-                                    !formData.isReadOnly &&
-                                    setScoresInput({
-                                      ...scoresInput,
-                                      [member.id]: {
-                                        ...mScores,
-                                        [crit.id]: { ...curr, marks_awarded: e.target.value },
-                                      },
-                                    })
-                                  }
-                                  className={`input-field font-mono font-bold text-navy text-right ${
-                                    formData.isReadOnly ? 'bg-slate-100 cursor-not-allowed opacity-90' : 'focus:bg-blue-50 focus:ring-2 focus:ring-navy'
-                                  }`}
-                                  required
-                                />
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
+                      {/* Expandable Criteria Scoring Breakdown */}
+                      {isExpanded && (
+                        <div className="p-4 bg-paper/50 border-t border-rule space-y-3">
+                          <div className="text-xs text-draft font-semibold">
+                            Detailed Rubric Breakdown ({formData.criteria.length} criteria)
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {formData.criteria.map((crit) => {
+                              const curr = mScores[crit.id] || { marks_awarded: 0, remark: '' };
+                              return (
+                                <div key={crit.id} className="p-2.5 bg-white border border-rule rounded flex items-center justify-between gap-3">
+                                  <div className="flex-1">
+                                    <label className="text-xs font-bold text-ink block">{crit.name}</label>
+                                    <span className="text-[11px] font-mono text-draft font-medium">Max: {Number(crit.max_marks)} Marks</span>
+                                  </div>
+                                  <div className="w-24">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max={crit.max_marks}
+                                      step="0.5"
+                                      disabled={formData.isReadOnly}
+                                      value={curr.marks_awarded}
+                                      onFocus={(e) => !formData.isReadOnly && e.target.select()}
+                                      onChange={(e) =>
+                                        !formData.isReadOnly &&
+                                        setScoresInput({
+                                          ...scoresInput,
+                                          [member.id]: {
+                                            ...mScores,
+                                            [crit.id]: { ...curr, marks_awarded: e.target.value },
+                                          },
+                                        })
+                                      }
+                                      className={`input-field font-mono font-bold text-navy text-right py-1 px-2 ${
+                                        formData.isReadOnly ? 'bg-slate-100 cursor-not-allowed opacity-90' : 'focus:bg-blue-50 focus:ring-2 focus:ring-navy'
+                                      }`}
+                                      required
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
