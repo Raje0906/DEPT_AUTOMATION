@@ -468,7 +468,7 @@ async function runMigrations() {
       ALTER TABLE seminar_sessions ADD COLUMN IF NOT EXISTS locked_by INTEGER REFERENCES users(id);
       ALTER TABLE seminar_sessions DROP CONSTRAINT IF EXISTS seminar_sessions_status_check;
       ALTER TABLE seminar_sessions ADD CONSTRAINT seminar_sessions_status_check
-        CHECK (status IN ('SETUP','UPLOAD','VALIDATION','ASSIGNMENT','PUBLISHED','REGISTRATION_OPEN','LOCKED'));
+        CHECK (status IN ('SETUP','UPLOAD','VALIDATION','ASSIGNMENT','PUBLISHED','REGISTRATION_OPEN','LOCKED','DRAFT'));
 
       ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS leader_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
       ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS leader_prn VARCHAR(60);
@@ -939,6 +939,30 @@ async function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_magazines_status ON magazines(status);
       CREATE INDEX IF NOT EXISTS idx_magazines_academic_year ON magazines(academic_year);
 
+      -- ─── PRESENTATION SCHEDULES ──────────────────────────────────────────────
+      CREATE TABLE IF NOT EXISTS presentation_schedules (
+        id              SERIAL PRIMARY KEY,
+        session_id      INTEGER NOT NULL REFERENCES seminar_sessions(id) ON DELETE CASCADE,
+        presentation_no INTEGER NOT NULL,
+        title           VARCHAR(255) NOT NULL DEFAULT 'Seminar Presentation Schedule',
+        updated_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        updated_at      TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE (session_id, presentation_no)
+      );
+
+      CREATE TABLE IF NOT EXISTS presentation_schedule_rows (
+        id          SERIAL PRIMARY KEY,
+        schedule_id INTEGER NOT NULL REFERENCES presentation_schedules(id) ON DELETE CASCADE,
+        guide_id    INTEGER NOT NULL,
+        room_no     VARCHAR(100),
+        date        DATE,
+        time_text   VARCHAR(100),
+        UNIQUE (schedule_id, guide_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_psched_sess ON presentation_schedules(session_id);
+      CREATE INDEX IF NOT EXISTS idx_psched_rows_sched ON presentation_schedule_rows(schedule_id);
+      CREATE INDEX IF NOT EXISTS idx_psched_rows_guide ON presentation_schedule_rows(guide_id);
       -- 2024 Pattern Subjects Columns Support
       ALTER TABLE subjects ALTER COLUMN code TYPE VARCHAR(50);
       ALTER TABLE subjects
@@ -955,6 +979,60 @@ async function runMigrations() {
       -- Allow same roll numbers across different classes/divisions, but enforce uniqueness within the same class
       ALTER TABLE students DROP CONSTRAINT IF EXISTS students_roll_no_key;
       CREATE UNIQUE INDEX IF NOT EXISTS idx_students_roll_division ON students (LOWER(TRIM(roll_no)), LOWER(TRIM(division)));
+
+      -- ─── TE MID-SEM FEEDBACK SYSTEM ──────────────────────────────────────
+      CREATE TABLE IF NOT EXISTS feedback_forms (
+        id            VARCHAR(60) PRIMARY KEY,
+        title         VARCHAR(250) NOT NULL,
+        academic_year VARCHAR(20) NOT NULL,
+        semester      INTEGER NOT NULL,
+        class_year    VARCHAR(20) NOT NULL DEFAULT 'TE',
+        division      VARCHAR(30) NOT NULL DEFAULT 'All',
+        status        VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'unpublished', 'archived')),
+        created_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        published_at  TIMESTAMPTZ,
+        form_config   JSONB DEFAULT '{}'::jsonb,
+        created_at    TIMESTAMPTZ DEFAULT NOW(),
+        updated_at    TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_feedback_forms_status ON feedback_forms(status);
+      CREATE INDEX IF NOT EXISTS idx_feedback_forms_ay_sem ON feedback_forms(academic_year, semester, division);
+
+      CREATE TABLE IF NOT EXISTS feedback_submissions (
+        id                    SERIAL PRIMARY KEY,
+        form_id               VARCHAR(60) NOT NULL REFERENCES feedback_forms(id) ON DELETE CASCADE,
+        student_id            INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+        academic_year         VARCHAR(20) NOT NULL,
+        semester              INTEGER NOT NULL,
+        division              VARCHAR(30) NOT NULL,
+        batch                 VARCHAR(20),
+        selected_elective     VARCHAR(200),
+        selected_open_elective VARCHAR(200),
+        submitted_at          TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(form_id, student_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_feedback_sub_form ON feedback_submissions(form_id);
+      CREATE INDEX IF NOT EXISTS idx_feedback_sub_student ON feedback_submissions(student_id);
+
+      CREATE TABLE IF NOT EXISTS feedback_responses (
+        id              SERIAL PRIMARY KEY,
+        submission_id   INTEGER NOT NULL REFERENCES feedback_submissions(id) ON DELETE CASCADE,
+        section_type    VARCHAR(50) NOT NULL,
+        subject_id      INTEGER REFERENCES subjects(id) ON DELETE SET NULL,
+        subject_name    VARCHAR(250) NOT NULL,
+        faculty_id      INTEGER REFERENCES faculty(id) ON DELETE SET NULL,
+        faculty_name    VARCHAR(250) NOT NULL,
+        question_number INTEGER NOT NULL,
+        question_text   TEXT NOT NULL,
+        rating          INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 10),
+        created_at      TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_feedback_resp_sub ON feedback_responses(submission_id);
+      CREATE INDEX IF NOT EXISTS idx_feedback_resp_fac ON feedback_responses(faculty_id);
+      CREATE INDEX IF NOT EXISTS idx_feedback_resp_subj ON feedback_responses(subject_id);
     `);
 
     await client.query('COMMIT');

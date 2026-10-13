@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js",
+    "dev": "node --watch --watch-path=server.js --watch-path=routes --watch-path=services --watch-path=middleware --watch-path=db server.js",
     "build": "npm --prefix client run build",
     "client": "npm --prefix client run dev",
     "migrate": "node db/run-migrate.js",
@@ -33,6 +33,7 @@
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.3.0",
     "nodemailer": "^10.0.1",
+    "pdf-parse": "^2.4.5",
     "pg": "^8.23.0",
     "pino": "^10.4.0",
     "qrcode-terminal": "^0.12.0",

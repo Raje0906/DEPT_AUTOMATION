@@ -133,9 +133,9 @@ export default function SeminarMarksOverview() {
             />
           </div>
           <div className="flex gap-4 mt-2">
-            <span className="flex items-center gap-1 text-[10px] text-emerald-700"><span className="w-2 h-2 rounded-full bg-emerald-500" />Submitted</span>
-            <span className="flex items-center gap-1 text-[10px] text-amber-700"><span className="w-2 h-2 rounded-full bg-amber-400" />Draft</span>
-            <span className="flex items-center gap-1 text-[10px] text-slate-500"><span className="w-2 h-2 rounded-full bg-slate-400" />Not Started</span>
+            <span className="flex items-center gap-1 text-[10px] text-emerald-700">Submitted</span>
+            <span className="flex items-center gap-1 text-[10px] text-amber-700">Draft</span>
+            <span className="flex items-center gap-1 text-[10px] text-slate-500">Not Started</span>
           </div>
         </div>
       )}
@@ -186,8 +186,7 @@ export default function SeminarMarksOverview() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full ${mStatus.bg} ${mStatus.text}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${mStatus.dot}`} />
+                        <span className={`inline-flex items-center text-[10px] font-bold px-2.5 py-1 rounded-full ${mStatus.bg} ${mStatus.text}`}>
                           {mStatus.label}
                         </span>
                       </td>

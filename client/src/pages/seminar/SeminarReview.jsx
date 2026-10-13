@@ -51,6 +51,18 @@ export default function SeminarReview() {
 
   useEffect(() => { load(); }, [load]);
 
+  const handleUnpublish = async () => {
+    if (!window.confirm('Depublish this session? Group responses, student submissions, and member details will be preserved.')) return;
+    try {
+      await api.post(`/seminar/sessions/${id}/publish`, { publish: false });
+      toast.success('Session depublished to draft! Group responses are preserved.');
+      await load();
+      navigate(`/faculty/seminar/${id}/assign`);
+    } catch {
+      toast.error('Failed to depublish session');
+    }
+  };
+
   const handleExport = async () => {
     setDownloading(true);
     try {
@@ -97,12 +109,30 @@ export default function SeminarReview() {
 
       <StepBar current={2} />
 
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
         <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border ${
+              session?.status === 'PUBLISHED'
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                : 'bg-amber-50 text-amber-800 border-amber-300'
+            }`}>
+              {session?.status === 'PUBLISHED' ? 'Published' : 'Draft / Setup'}
+            </span>
+          </div>
           <h1 className="text-2xl font-bold text-[var(--navy)]">Final Group List & Marks Entry</h1>
           <p className="text-sm text-[var(--ink)]/50 mt-0.5">{session?.batch} · {session?.academic_year} · {groups.length} groups</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex items-center gap-3">
+          {session?.status === 'PUBLISHED' && (
+            <button
+              type="button"
+              onClick={handleUnpublish}
+              className="px-3.5 py-2 border border-amber-300 text-amber-900 bg-amber-50 hover:bg-amber-100 text-xs font-bold rounded-md transition-colors shadow-2xs"
+            >
+              Revert to Draft (Depublish)
+            </button>
+          )}
           <button
             id="btn-export"
             onClick={handleExport}
@@ -152,7 +182,18 @@ export default function SeminarReview() {
                             {g.domain}
                           </td>
                           <td rowSpan={members.length} className="px-3 py-2 text-[var(--ink)] border-b border-[var(--rule)] align-middle">
-                            {g.guide_name || <span className="text-amber-600 font-medium">Unassigned</span>}
+                            {g.guide_name && g.guide_name !== 'Unassigned' ? (
+                              <div>
+                                <span className="font-bold text-[var(--navy)]">{g.guide_name}</span>
+                                {g.guide_designation && (
+                                  <span className="block text-[10px] text-slate-500">{g.guide_designation}</span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-amber-700 font-medium bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[10px]">
+                                Unassigned
+                              </span>
+                            )}
                           </td>
                         </>
                       )}
@@ -161,15 +202,17 @@ export default function SeminarReview() {
                       <td className="px-3 py-2 text-[var(--ink)]/60 max-w-[180px] truncate">{m.topic1}</td>
                       {mi === 0 && (
                         <td rowSpan={members.length} className="px-3 py-2 text-right border-b border-[var(--rule)] align-middle">
-                          {g.status === 'APPROVED' ? (
+                          {g.guide_name && g.guide_name !== 'Unassigned' && g.status === 'APPROVED' ? (
                             <Link
                               to={`/faculty/seminar/evaluate/${g.id}`}
-                              className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded text-xs font-semibold hover:bg-blue-100 transition-colors"
+                              className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-50 text-emerald-800 border border-emerald-300 rounded text-xs font-semibold hover:bg-emerald-100 transition-colors"
                             >
                               Evaluation
                             </Link>
+                          ) : !g.guide_name || g.guide_name === 'Unassigned' ? (
+                            <span className="text-[10px] text-amber-700 font-medium">Unassigned</span>
                           ) : (
-                            <span className="text-[10px] text-[var(--ink)]/50 italic">Not Approved</span>
+                            <span className="text-[10px] text-slate-500 italic">Not Approved</span>
                           )}
                         </td>
                       )}

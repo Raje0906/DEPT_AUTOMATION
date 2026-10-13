@@ -1,9 +1,25 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api/axios';
 import { StatusBadge } from '../../components/ResultTable';
+import { useAuth } from '../../contexts/AuthContext';
+import { isAuthorizedFeedbackCoordinator } from '../../utils/feedbackPermissions';
+import {
+  AcademicCapIcon,
+  BookOpenIcon,
+  CalendarDaysIcon,
+  CheckCircleIcon,
+  ChevronRightIcon,
+  ClipboardDocumentCheckIcon,
+  ClockIcon,
+  DocumentChartBarIcon,
+  NewspaperIcon,
+  ShieldCheckIcon,
+  UserGroupIcon
+} from '@heroicons/react/24/outline';
 
 export default function FacultyDashboard() {
+  const { user }                      = useAuth();
   const [data, setData]               = useState(null);
   const [loading, setLoading]         = useState(true);
   const [academicYear, setAcademicYear] = useState('');
@@ -27,6 +43,33 @@ export default function FacultyDashboard() {
     fetchDashboard(academicYear);
   }, [academicYear]);
 
+  const allSubjects               = data?.subjects || [];
+  const academicYears             = data?.academicYears || [];
+  const faculty                   = data?.faculty;
+  const panelAssignments         = data?.panelAssignments || [];
+  const pendingPanelEvaluations   = data?.pendingPanelEvaluations || 0;
+  const completedPanelEvaluations = data?.completedPanelEvaluations || 0;
+
+  const groupedPanelAssignments = useMemo(() => {
+    const map = new Map();
+    for (const ass of panelAssignments) {
+      const gid = ass.group_id || ass.group_code || ass.assignment_id;
+      if (!map.has(gid)) {
+        map.set(gid, {
+          group_id: ass.group_id,
+          group_code: ass.group_code,
+          title: ass.title,
+          domain: ass.domain,
+          guide_name: ass.guide_name,
+          members: ass.members || [],
+          stages: [],
+        });
+      }
+      map.get(gid).stages.push(ass);
+    }
+    return Array.from(map.values());
+  }, [panelAssignments]);
+
   if (loading && !data) {
     return (
       <div className="p-8 lg:p-10 w-full max-w-7xl mx-auto">
@@ -34,13 +77,6 @@ export default function FacultyDashboard() {
       </div>
     );
   }
-
-  const allSubjects               = data?.subjects || [];
-  const academicYears             = data?.academicYears || [];
-  const faculty                   = data?.faculty;
-  const panelAssignments         = data?.panelAssignments || [];
-  const pendingPanelEvaluations   = data?.pendingPanelEvaluations || 0;
-  const completedPanelEvaluations = data?.completedPanelEvaluations || 0;
 
   // Filter by SE, TE, BE
   const subjects = allSubjects.filter(s => {
@@ -55,122 +91,216 @@ export default function FacultyDashboard() {
   const completedSubjects   = allSubjects.filter(s => s.submission_status === 'approved' || s.submission_status === 'published');
   const totalEnrolled       = allSubjects.reduce((sum, s) => sum + (parseInt(s.enrolled_count, 10) || 0), 0);
 
+  const facultyName = faculty?.name || 'Faculty Member';
+  const facultyInitials = facultyName
+    .replace(/(Dr\.|Prof\.|Mr\.|Mrs\.|Ms\.)/gi, '')
+    .trim()
+    .split(' ')
+    .filter(Boolean)
+    .map(n => n[0])
+    .filter(c => /[A-Za-z]/.test(c))
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || 'FC';
+
   return (
     <div className="p-8 lg:p-10 w-full max-w-7xl mx-auto">
-      {/* Page Header */}
-      <div className="mb-8 pb-5 border-b border-rule flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="font-serif text-3xl lg:text-4xl font-bold text-ink">Faculty Dashboard</h1>
-          <p className="text-base text-draft mt-1 font-medium">
-            {faculty?.designation || 'Faculty'} · {faculty?.department || 'Computer Engineering'}
-            {faculty?.employee_id ? ` · EMP ID: ${faculty.employee_id}` : ''}
-          </p>
-          {data?.classTeacherOf?.length > 0 && (
-            <div className="mt-2.5 flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-amber-50 border border-amber-300 text-amber-950 text-xs font-bold shadow-2xs">
-                <span>⭐ Designated Class Teacher:</span>
-                <span className="font-extrabold text-amber-900">{data.classTeacherOf.join(', ')}</span>
-              </span>
+      {/* Editorial Faculty Profile Header */}
+      <div className="bg-white border border-rule rounded-xl p-6 mb-8 shadow-xs">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="flex items-start sm:items-center gap-4">
+            <div className="w-14 h-14 rounded-xl bg-navy text-white flex items-center justify-center font-bold text-xl shadow-xs border border-white/20 flex-shrink-0">
+              {facultyInitials}
+            </div>
+            <div>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="font-serif text-2xl lg:text-3xl font-bold text-ink">
+                  {faculty?.name || 'Faculty Dashboard'}
+                </h1>
+                {faculty?.employee_id && (
+                  <span className="font-mono text-xs font-semibold px-2.5 py-0.5 rounded bg-gray-100 text-draft border border-gray-200">
+                    EMP: {faculty.employee_id}
+                  </span>
+                )}
+                {data?.classTeacherOf?.length > 0 && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-amber-50 border border-amber-300 text-amber-900 text-xs font-bold shadow-2xs">
+                    <ShieldCheckIcon className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Class Teacher: {data.classTeacherOf.join(', ')}</span>
+                  </span>
+                )}
+              </div>
+              <p className="text-xs sm:text-sm text-draft mt-1 font-medium flex items-center gap-2 flex-wrap">
+                <span>{faculty?.designation || 'Assistant Professor'}</span>
+                <span>·</span>
+                <span>{faculty?.department || 'Department of Computer Engineering'}</span>
+              </p>
+            </div>
+          </div>
+
+          {/* Academic Session Selector */}
+          {academicYears.length > 0 && (
+            <div className="flex items-center gap-2.5 bg-paper/60 border border-rule px-3.5 py-2 rounded-lg self-start md:self-center">
+              <CalendarDaysIcon className="w-4 h-4 text-draft" />
+              <div className="text-left">
+                <span className="block text-[10px] uppercase font-bold tracking-wider text-draft">Academic Session</span>
+                <select
+                  id="ay-select"
+                  value={academicYear || data?.selectedYear || ''}
+                  onChange={(e) => setAcademicYear(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-ink focus:outline-none cursor-pointer pr-4"
+                >
+                  {academicYears.map((yr) => (
+                    <option key={yr} value={yr}>{yr}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           )}
         </div>
-
-        {/* Academic Year Selector */}
-        {academicYears.length > 0 && (
-          <div className="flex items-center gap-2">
-            <label htmlFor="ay-select" className="text-xs font-semibold text-draft uppercase tracking-wider">
-              Academic Year:
-            </label>
-            <select
-              id="ay-select"
-              value={academicYear || data?.selectedYear || ''}
-              onChange={(e) => setAcademicYear(e.target.value)}
-              className="px-3 py-1.5 bg-white border border-rule rounded text-xs font-semibold text-ink focus:outline-none focus:ring-1 focus:ring-maroon"
-            >
-              {academicYears.map((yr) => (
-                <option key={yr} value={yr}>{yr}</option>
-              ))}
-            </select>
-          </div>
-        )}
       </div>
 
-      {/* Action Banners */}
-      <div className="space-y-3 mb-8">
-        {pendingSubjects.length > 0 && (
-          <div className="notification-strip py-3.5 px-5 text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="flex items-center">
-              <span className="text-xs font-bold text-navy uppercase tracking-wider mr-2.5 bg-blue-100 px-2 py-0.5 rounded">
-                Action required
-              </span>
-              <span className="font-medium text-ink">
-                {pendingSubjects.length} assigned course{pendingSubjects.length > 1 ? 's have' : ' has'} marks pending submission.
-              </span>
+      {/* Priority Action Task Advisory */}
+      {(pendingSubjects.length > 0 || pendingPanelEvaluations > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          {pendingSubjects.length > 0 && (
+            <div className="bg-gradient-to-r from-amber-50/90 to-amber-100/40 border border-amber-200/80 rounded-xl p-4 flex items-center justify-between gap-4 shadow-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center flex-shrink-0">
+                  <ClockIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-900 bg-amber-200/80 px-2 py-0.5 rounded">
+                      Action Required
+                    </span>
+                    <span className="text-xs font-bold text-ink">Marks Submission Pending</span>
+                  </div>
+                  <p className="text-xs text-draft mt-0.5">
+                    {pendingSubjects.length} assigned subject{pendingSubjects.length > 1 ? 's require' : ' requires'} CIE / semester mark entry.
+                  </p>
+                </div>
+              </div>
+              <Link
+                to="/faculty/subjects"
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-amber-900 text-white rounded-lg hover:bg-amber-950 transition-all shadow-2xs flex-shrink-0"
+              >
+                <span>Enter Marks</span>
+                <ChevronRightIcon className="w-3.5 h-3.5" />
+              </Link>
             </div>
-            <Link
-              to="/faculty/subjects"
-              className="text-xs font-semibold text-maroon hover:underline flex-shrink-0"
-            >
-              Go to Result Generation →
-            </Link>
-          </div>
-        )}
+          )}
 
-        {pendingPanelEvaluations > 0 && (
-          <div className="notification-strip py-3.5 px-5 text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-purple-50/90 border-purple-200">
-            <div className="flex items-center">
-              <span className="text-xs font-bold text-purple-900 uppercase tracking-wider mr-2.5 bg-purple-200/80 px-2 py-0.5 rounded">
-                Panel Evaluation
-              </span>
-              <span className="font-medium text-purple-950">
-                {pendingPanelEvaluations} BE Project group{pendingPanelEvaluations > 1 ? 's' : ''} assigned for panel rubric evaluation.
-              </span>
+          {pendingPanelEvaluations > 0 && (
+            <div className="bg-gradient-to-r from-purple-50/90 to-purple-100/40 border border-purple-200/80 rounded-xl p-4 flex items-center justify-between gap-4 shadow-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-purple-100 text-purple-800 flex items-center justify-center flex-shrink-0">
+                  <AcademicCapIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-900 bg-purple-200/80 px-2 py-0.5 rounded">
+                      Panel Evaluation
+                    </span>
+                    <span className="text-xs font-bold text-ink">BE Project Rubrics</span>
+                  </div>
+                  <p className="text-xs text-draft mt-0.5">
+                    {pendingPanelEvaluations} project group{pendingPanelEvaluations > 1 ? 's have' : ' has'} pending evaluation stages.
+                  </p>
+                </div>
+              </div>
+              <Link
+                to="/faculty/project-eval?tab=evaluations"
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-purple-900 text-white rounded-lg hover:bg-purple-950 transition-all shadow-2xs flex-shrink-0"
+              >
+                <span>Evaluate</span>
+                <ChevronRightIcon className="w-3.5 h-3.5" />
+              </Link>
             </div>
-            <Link
-              to="/faculty/project-eval"
-              className="text-xs font-semibold text-purple-900 hover:text-purple-950 hover:underline flex-shrink-0"
-            >
-              Evaluate in Portal →
-            </Link>
+          )}
+
+          {isAuthorizedFeedbackCoordinator(user) && (
+            <div className="bg-gradient-to-r from-blue-50/90 to-blue-100/40 border border-blue-200/80 rounded-xl p-4 flex items-center justify-between gap-4 shadow-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-blue-100 text-navy flex items-center justify-center flex-shrink-0">
+                  <DocumentChartBarIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-navy bg-blue-200/80 px-2 py-0.5 rounded border border-blue-200">
+                      Feedback Coordinator
+                    </span>
+                    <span className="text-xs font-bold text-ink">TE Mid-Sem Evaluations</span>
+                  </div>
+                  <p className="text-xs text-draft mt-0.5">
+                    You are the designated Coordinator for TE Mid-Sem Feedback. Manage forms, monitor submissions, and review reports.
+                  </p>
+                </div>
+              </div>
+              <Link
+                to="/faculty/feedback"
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-navy text-white rounded-lg hover:bg-slate-900 transition-all shadow-2xs flex-shrink-0"
+              >
+                <span>Dashboard</span>
+                <ChevronRightIcon className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Institutional Metric Strip */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+        <div className="bg-white border border-rule rounded-xl p-4 shadow-xs hover:border-navy/40 transition-all">
+          <div className="flex items-center justify-between text-draft mb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider">Assigned Classes</span>
+            <UserGroupIcon className="w-4 h-4 text-navy" />
           </div>
-        )}
-
-      </div>
-
-      {/* Key Metric KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
-        <div className="panel p-5">
-          <p className="text-xs text-draft uppercase tracking-wider font-semibold mb-1">Assigned Classes</p>
           <p className="font-serif text-3xl font-bold text-ink">{allSubjects.length}</p>
-          <p className="text-xs text-draft mt-1">SE, TE &amp; BE classes</p>
+          <p className="text-[11px] text-draft mt-1 font-medium">SE, TE &amp; BE Teaching Load</p>
         </div>
 
-        <div className="panel p-5">
-          <p className="text-xs text-draft uppercase tracking-wider font-semibold mb-1">Marks Pending</p>
-          <p className="font-serif text-3xl font-bold text-maroon">{pendingSubjects.length}</p>
-          <p className="text-xs text-draft mt-1">Requires mark entry</p>
+        <div className="bg-white border border-rule rounded-xl p-4 shadow-xs hover:border-amber-400 transition-all">
+          <div className="flex items-center justify-between text-draft mb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider">Marks Pending</span>
+            <ClockIcon className="w-4 h-4 text-amber-600" />
+          </div>
+          <p className={`font-serif text-3xl font-bold ${pendingSubjects.length > 0 ? 'text-amber-700' : 'text-pass'}`}>
+            {pendingSubjects.length}
+          </p>
+          <p className="text-[11px] text-draft mt-1 font-medium">
+            {pendingSubjects.length > 0 ? 'Requires mark entry' : 'All marks submitted'}
+          </p>
         </div>
 
-        <div className="panel p-5">
-          <p className="text-xs text-draft uppercase tracking-wider font-semibold mb-1">Submitted / Published</p>
+        <div className="bg-white border border-rule rounded-xl p-4 shadow-xs hover:border-emerald-400 transition-all">
+          <div className="flex items-center justify-between text-draft mb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider">Finalized &amp; Published</span>
+            <CheckCircleIcon className="w-4 h-4 text-emerald-600" />
+          </div>
           <p className="font-serif text-3xl font-bold text-pass">{completedSubjects.length}</p>
-          <p className="text-xs text-draft mt-1">Completed submissions</p>
+          <p className="text-[11px] text-draft mt-1 font-medium">Approved / Published courses</p>
         </div>
 
-        <div className="panel p-5">
-          <p className="text-xs text-draft uppercase tracking-wider font-semibold mb-1">Students Taught</p>
+        <div className="bg-white border border-rule rounded-xl p-4 shadow-xs hover:border-navy/40 transition-all">
+          <div className="flex items-center justify-between text-draft mb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider">Students Taught</span>
+            <BookOpenIcon className="w-4 h-4 text-navy" />
+          </div>
           <p className="font-serif text-3xl font-bold text-ink">{totalEnrolled}</p>
-          <p className="text-xs text-draft mt-1">Across 4 divisions per year</p>
+          <p className="text-[11px] text-draft mt-1 font-medium">Enrolled across all divisions</p>
         </div>
 
-        <div className="panel p-5">
-          <p className="text-xs text-draft uppercase tracking-wider font-semibold mb-1">Panel Evaluations</p>
-          <p className="font-serif text-3xl font-bold text-navy">{panelAssignments.length}</p>
-          <p className="text-xs mt-1 font-medium">
+        <div className="bg-white border border-rule rounded-xl p-4 shadow-xs hover:border-purple-400 transition-all col-span-2 lg:col-span-1">
+          <div className="flex items-center justify-between text-draft mb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider">Panel Evaluations</span>
+            <AcademicCapIcon className="w-4 h-4 text-purple-600" />
+          </div>
+          <p className="font-serif text-3xl font-bold text-purple-900">{groupedPanelAssignments.length}</p>
+          <p className="text-[11px] mt-1 font-medium">
             {pendingPanelEvaluations > 0 ? (
-              <span className="text-amber-700">{pendingPanelEvaluations} pending review</span>
+              <span className="text-amber-700 font-semibold">{pendingPanelEvaluations} stages pending</span>
             ) : panelAssignments.length > 0 ? (
-              <span className="text-emerald-700">All completed</span>
+              <span className="text-emerald-700 font-semibold">All stages completed</span>
             ) : (
               <span className="text-draft">No assignments</span>
             )}
@@ -178,77 +308,127 @@ export default function FacultyDashboard() {
         </div>
       </div>
 
-      {/* Quick Action Navigation Grid */}
+      {/* Workspace Hub */}
       <div className="mb-8">
-        <h2 className="font-serif text-xl font-semibold text-ink mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="font-serif text-xl font-bold text-ink">Academic Workspace</h2>
+            <p className="text-xs text-draft">Direct access to core grading, supervision, and documentation tools</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Link
             to="/faculty/subjects"
-            className="panel p-5 hover:border-maroon/40 hover:shadow-sm transition-all group block"
+            className="group bg-white border border-rule rounded-xl p-5 hover:border-maroon/60 hover:shadow-md transition-all flex flex-col justify-between"
           >
-            <div className="flex items-center gap-3 mb-2">
-              <span className="w-8 h-8 rounded bg-maroon/10 text-maroon flex items-center justify-center font-bold text-sm">
-                📝
-              </span>
-              <h3 className="font-semibold text-ink text-base group-hover:text-maroon transition-colors">
+            <div>
+              <div className="w-10 h-10 rounded-lg bg-maroon/10 text-maroon flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+                <ClipboardDocumentCheckIcon className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-ink text-sm group-hover:text-maroon transition-colors">
                 Result Generation
               </h3>
+              <p className="text-xs text-draft mt-1 leading-relaxed">
+                Enter CIE, In-Sem, Practical, and End-Sem marks across assigned divisions.
+              </p>
             </div>
-            <p className="text-xs text-draft leading-relaxed">
-              Enter CIE, Practical, and End-Sem marks across SE, TE, and BE classes.
-            </p>
+            <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs font-bold text-maroon">
+              <span>Open Gradebook</span>
+              <ChevronRightIcon className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+            </div>
           </Link>
 
           <Link
             to="/faculty/reports"
-            className="panel p-5 hover:border-maroon/40 hover:shadow-sm transition-all group block"
+            className="group bg-white border border-rule rounded-xl p-5 hover:border-navy/60 hover:shadow-md transition-all flex flex-col justify-between"
           >
-            <div className="flex items-center gap-3 mb-2">
-              <span className="w-8 h-8 rounded bg-blue-100 text-blue-800 flex items-center justify-center font-bold text-sm">
-                📊
-              </span>
-              <h3 className="font-semibold text-ink text-base group-hover:text-maroon transition-colors">
-                Class Reports
+            <div>
+              <div className="w-10 h-10 rounded-lg bg-blue-50 text-navy flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+                <DocumentChartBarIcon className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-ink text-sm group-hover:text-navy transition-colors">
+                Class Reports &amp; Gazettes
               </h3>
+              <p className="text-xs text-draft mt-1 leading-relaxed">
+                Generate divisional result gazettes, pass/fail analysis, and ledger summaries.
+              </p>
             </div>
-            <p className="text-xs text-draft leading-relaxed">
-              Generate divisional result gazettes and analytics for Comp 1 to Comp 4.
-            </p>
+            <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs font-bold text-navy">
+              <span>View Reports</span>
+              <ChevronRightIcon className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+            </div>
           </Link>
 
           <Link
             to="/faculty/project-eval"
-            className="panel p-5 hover:border-maroon/40 hover:shadow-sm transition-all group block"
+            className="group bg-white border border-rule rounded-xl p-5 hover:border-purple-600 hover:shadow-md transition-all flex flex-col justify-between"
           >
-            <div className="flex items-center gap-3 mb-2">
-              <span className="w-8 h-8 rounded bg-purple-100 text-purple-800 flex items-center justify-center font-bold text-sm">
-                🎓
-              </span>
-              <h3 className="font-semibold text-ink text-base group-hover:text-maroon transition-colors">
+            <div>
+              <div className="w-10 h-10 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+                <AcademicCapIcon className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-ink text-sm group-hover:text-purple-900 transition-colors">
                 BE Project Evaluation
               </h3>
+              <p className="text-xs text-draft mt-1 leading-relaxed">
+                Guide project groups, assess rubrics, and record panel scorecard evaluations.
+              </p>
             </div>
-            <p className="text-xs text-draft leading-relaxed">
-              Guide, review, and evaluate Final Year BE Project batches, milestones, and rubrics.
-            </p>
+            <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs font-bold text-purple-900">
+              <span>Supervision Portal</span>
+              <ChevronRightIcon className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+            </div>
           </Link>
 
           <Link
             to="/faculty/magazines"
-            className="panel p-5 hover:border-maroon/40 hover:shadow-sm transition-all group block"
+            className="group bg-white border border-rule rounded-xl p-5 hover:border-emerald-600 hover:shadow-md transition-all flex flex-col justify-between"
           >
-            <div className="flex items-center gap-3 mb-2">
-              <span className="w-8 h-8 rounded bg-rose-100 text-rose-800 flex items-center justify-center font-bold text-sm">
-                📖
-              </span>
-              <h3 className="font-semibold text-ink text-base group-hover:text-maroon transition-colors">
-                Magazines &amp; Research
+            <div>
+              <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+                <NewspaperIcon className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-ink text-sm group-hover:text-emerald-900 transition-colors">
+                Newsletter &amp; Periodicals
               </h3>
+              <p className="text-xs text-draft mt-1 leading-relaxed">
+                Browse published departmental newsletters, research digests, and student works.
+              </p>
             </div>
-            <p className="text-xs text-draft leading-relaxed">
-              Access departmental research periodicals, technical magazines, and publications.
-            </p>
+            <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs font-bold text-emerald-900">
+              <span>Read Editions</span>
+              <ChevronRightIcon className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+            </div>
           </Link>
+
+          {isAuthorizedFeedbackCoordinator(user) && (
+            <Link
+              to="/faculty/feedback"
+              className="group bg-white border border-blue-200 rounded-xl p-5 hover:border-navy hover:shadow-md transition-all flex flex-col justify-between bg-blue-50/20"
+            >
+              <div>
+                <div className="w-10 h-10 rounded-lg bg-blue-100 text-navy flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+                  <DocumentChartBarIcon className="w-5 h-5" />
+                </div>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-blue-100 text-navy">
+                    Coordinator Desk
+                  </span>
+                </div>
+                <h3 className="font-bold text-ink text-sm group-hover:text-navy transition-colors">
+                  TE Mid-Sem Feedback
+                </h3>
+                <p className="text-xs text-draft mt-1 leading-relaxed">
+                  Create, configure, publish, and view live analytics for student course evaluations.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs font-bold text-navy">
+                <span>Manage Feedback</span>
+                <ChevronRightIcon className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </Link>
+          )}
         </div>
       </div>
 
@@ -289,9 +469,10 @@ export default function FacultyDashboard() {
         ) : (
           <div className="divide-y divide-rule">
             {subjects.map((s, i) => {
-              const entered = parseInt(s.marks_entered, 10) || 0;
               const enrolled = parseInt(s.enrolled_count, 10) || 0;
-              const pct = enrolled > 0 ? Math.round((entered / enrolled) * 100) : 0;
+              const rawEntered = parseInt(s.marks_entered, 10) || 0;
+              const entered = enrolled > 0 ? Math.min(rawEntered, enrolled) : rawEntered;
+              const pct = enrolled > 0 ? Math.min(100, Math.round((entered / enrolled) * 100)) : 0;
 
               return (
                 <div key={s.map_id || i} className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -348,7 +529,7 @@ export default function FacultyDashboard() {
           <div className="flex items-center gap-3">
             <h2 className="font-serif text-xl font-semibold">Assigned Panel Evaluations</h2>
             <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-900 border border-purple-200">
-              {panelAssignments.length} Assigned
+              {groupedPanelAssignments.length} Group{groupedPanelAssignments.length !== 1 ? 's' : ''} ({panelAssignments.length} Stages)
             </span>
           </div>
           <Link
@@ -359,10 +540,10 @@ export default function FacultyDashboard() {
           </Link>
         </div>
 
-        {panelAssignments.length === 0 ? (
+        {groupedPanelAssignments.length === 0 ? (
           <div className="empty-state py-10 text-center">
-            <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-purple-50 text-purple-700 flex items-center justify-center text-xl font-bold">
-              🎓
+            <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-purple-50 text-purple-700 flex items-center justify-center">
+              <AcademicCapIcon className="w-6 h-6" />
             </div>
             <p className="text-base font-semibold text-ink">No Panel Evaluations Assigned</p>
             <p className="text-xs text-draft mt-1 max-w-md mx-auto">
@@ -379,28 +560,31 @@ export default function FacultyDashboard() {
           </div>
         ) : (
           <div className="divide-y divide-rule">
-            {panelAssignments.map((ass) => {
-              const isSubmitted = ass.evaluation_status === 'SUBMITTED' || ass.evaluation_status === 'LOCKED';
-              const isDraft = ass.evaluation_status === 'DRAFT';
+            {groupedPanelAssignments.map((grp) => {
+              const allSubmitted = grp.stages.every(
+                (s) => s.evaluation_status === 'SUBMITTED' || s.evaluation_status === 'LOCKED'
+              );
+              const hasDraft = grp.stages.some((s) => s.evaluation_status === 'DRAFT');
+
               return (
                 <div
-                  key={ass.assignment_id}
-                  className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-paper/40 transition-colors"
+                  key={grp.group_id || grp.group_code}
+                  className="p-5 flex flex-col md:flex-row md:items-start justify-between gap-4 hover:bg-paper/40 transition-colors"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                       <span className="font-mono text-xs font-bold text-navy bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
-                        {ass.group_code}
+                        {grp.group_code}
                       </span>
                       <span className="font-semibold text-ink text-base">
-                        {ass.title}
+                        {grp.title}
                       </span>
-                      {isSubmitted ? (
+                      {allSubmitted ? (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                          Submitted
+                          All Stages Evaluated
                         </span>
-                      ) : isDraft ? (
+                      ) : hasDraft ? (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
                           <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
                           Draft Saved
@@ -415,36 +599,58 @@ export default function FacultyDashboard() {
 
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-draft">
                       <span>
-                        <strong className="text-ink font-medium">Domain:</strong> {ass.domain || 'General'}
+                        <strong className="text-ink font-medium">Domain:</strong> {grp.domain || 'General'}
                       </span>
                       <span>·</span>
                       <span>
-                        <strong className="text-ink font-medium">Stage:</strong> {ass.stage_name} ({Math.round(ass.max_marks_total || 50)} Marks)
-                      </span>
-                      <span>·</span>
-                      <span>
-                        <strong className="text-ink font-medium">Guide:</strong> {ass.guide_name || 'Unassigned'}
+                        <strong className="text-ink font-medium">Guide:</strong> {grp.guide_name || 'Unassigned'}
                       </span>
                     </div>
 
-                    {ass.members && ass.members.length > 0 && (
+                    {Array.isArray(grp.members) && grp.members.length > 0 && (
                       <p className="text-xs text-draft mt-1.5 flex items-center gap-1 truncate">
                         <span className="font-medium text-ink">Students:</span>
-                        <span>{ass.members.map((m) => `${m.name} (${m.roll_no})`).join(', ')}</span>
+                        <span>{grp.members.map((m) => `${m?.name || 'Student'} (${m?.roll_no || '-'})`).join(', ')}</span>
                       </p>
                     )}
+
+                    {/* Evaluation Stages Breakdown */}
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span className="text-[11px] font-semibold text-draft uppercase tracking-wider">Evaluation Stages:</span>
+                      {grp.stages.map((st) => {
+                        const isSubmitted =
+                          st.evaluation_status === 'SUBMITTED' || st.evaluation_status === 'LOCKED';
+                        const isDraft = st.evaluation_status === 'DRAFT';
+                        return (
+                          <div
+                            key={st.assignment_id}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-gray-50 border border-gray-200 text-xs"
+                          >
+                            <span className="font-medium text-ink">{st.stage_name}</span>
+                            <span className="text-[10px] text-draft">({Math.round(st.max_marks_total || 50)} Marks)</span>
+                            {isSubmitted ? (
+                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/70 px-1.5 py-0.5 rounded">✓ Completed</span>
+                            ) : isDraft ? (
+                              <span className="text-[10px] font-bold text-amber-700 bg-amber-100/70 px-1.5 py-0.5 rounded">Draft</span>
+                            ) : (
+                              <span className="text-[10px] font-bold text-purple-700 bg-purple-100/70 px-1.5 py-0.5 rounded">Pending</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
 
-                  <div className="flex items-center justify-end flex-shrink-0">
+                  <div className="flex items-center justify-end flex-shrink-0 pt-1">
                     <Link
                       to="/faculty/project-eval"
                       className={`inline-flex items-center gap-1 px-3.5 py-1.5 text-xs font-semibold rounded transition-all ${
-                        isSubmitted
+                        allSubmitted
                           ? 'border border-rule text-ink hover:bg-paper'
                           : 'bg-maroon text-white hover:bg-[#4E1C27] shadow-xs'
                       }`}
                     >
-                      {isSubmitted ? 'View Rubric Scorecard →' : 'Evaluate Group →'}
+                      {allSubmitted ? 'View Rubric Scorecards →' : 'Evaluate Group →'}
                     </Link>
                   </div>
                 </div>

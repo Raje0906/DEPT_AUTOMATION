@@ -18,7 +18,7 @@ router.get('/dashboard', async (req, res) => {
       SELECT fsm.id, s.id AS subject_id, s.name AS subject_name, s.code, s.semester, s.credits,
              s.subject_type, s.has_practical, fsm.division, fsm.academic_year,
              u.name AS faculty_name, f.employee_id,
-             COUNT(sem.id) AS marks_entered,
+             COUNT(DISTINCT sem.student_id) AS marks_entered,
              (SELECT COUNT(*) FROM students st WHERE (st.division = fsm.division OR st.division = REPLACE(fsm.division, ' Comp ', ' ') OR REPLACE(st.division, ' Comp ', ' ') = fsm.division) AND st.current_semester = fsm.semester) AS enrolled,
              CASE
                WHEN COUNT(sem.id) = 0 THEN 'not_started'
@@ -31,7 +31,8 @@ router.get('/dashboard', async (req, res) => {
       JOIN subjects s ON s.id = fsm.subject_id
       JOIN faculty f ON f.id = fsm.faculty_id
       JOIN users u ON u.id = f.user_id
-      LEFT JOIN student_exam_marks sem ON sem.subject_id = s.id AND sem.semester = fsm.semester AND sem.academic_year = fsm.academic_year
+      LEFT JOIN students st ON (st.division = fsm.division OR st.division = REPLACE(fsm.division, ' Comp ', ' ') OR REPLACE(st.division, ' Comp ', ' ') = fsm.division) AND st.current_semester = fsm.semester
+      LEFT JOIN student_exam_marks sem ON sem.subject_id = s.id AND sem.student_id = st.id AND sem.semester = fsm.semester AND sem.academic_year = fsm.academic_year
       WHERE (f.department = $1 OR f.department ILIKE '%Computer%') AND fsm.academic_year = $2
     `;
     const params = [deptFilter, selectedYear];
@@ -102,15 +103,15 @@ router.get('/exam-completion-status', async (req, res) => {
               s.id AS subject_id, s.name AS subject_name, s.code AS subject_code, s.subject_type,
               u.name AS faculty_name, f.employee_id,
               et.id AS exam_type_id, et.code AS exam_code, et.name AS exam_name,
-              COUNT(sem.id) AS entered_count,
-              (SELECT COUNT(*) FROM students st WHERE st.division = fsm.division AND st.current_semester = fsm.semester) AS total_students,
+              COUNT(DISTINCT sem.student_id) AS entered_count,
+              (SELECT COUNT(*) FROM students st WHERE (st.division = fsm.division OR st.division = REPLACE(fsm.division, ' Comp ', ' ') OR REPLACE(st.division, ' Comp ', ' ') = fsm.division) AND st.current_semester = fsm.semester) AS total_students,
               MAX(sem.status) AS current_status
        FROM faculty_subject_map fsm
        JOIN subjects s ON s.id = fsm.subject_id
        JOIN faculty f ON f.id = fsm.faculty_id
        JOIN users u ON u.id = f.user_id
        CROSS JOIN exam_types et
-       LEFT JOIN students st2 ON st2.division = fsm.division AND st2.current_semester = fsm.semester
+       LEFT JOIN students st2 ON (st2.division = fsm.division OR st2.division = REPLACE(fsm.division, ' Comp ', ' ') OR REPLACE(st2.division, ' Comp ', ' ') = fsm.division) AND st2.current_semester = fsm.semester
        LEFT JOIN student_exam_marks sem ON sem.student_id = st2.id 
          AND sem.subject_id = s.id 
          AND sem.exam_type_id = et.id 
@@ -275,24 +276,31 @@ router.post('/publish', async (req, res) => {
     try {
       await client.query('BEGIN');
 
+      const normDiv = (division || '').trim();
+      const shortDiv = normDiv.replace(/\s+Comp\s+/i, ' ');
+      const longDiv = normDiv.includes(' Comp ') ? normDiv : normDiv.replace(/^(FE|SE|TE|BE)\s+/i, '$1 Comp ');
+      const allowedDivs = Array.from(new Set([normDiv, shortDiv, longDiv])).filter(Boolean);
+
       // Publish all marks for this division & semester
       const pubRes = await client.query(
         `UPDATE student_exam_marks sem
          SET status = 'published', last_modified_at = NOW()
          FROM students st
-         WHERE sem.student_id = st.id AND sem.semester = $1 AND sem.academic_year = $2 AND st.division = $3
+         WHERE sem.student_id = st.id AND sem.semester = $1 AND sem.academic_year = $2 AND st.division = ANY($3)
          RETURNING sem.id`,
-        [semester, academicYear, division]
+        [semester, academicYear, allowedDivs]
       );
 
-      // Update or insert publish status record
-      await client.query(
-        `INSERT INTO result_publish_status (semester, academic_year, department, division, status, published_by, published_at)
-         VALUES ($1, $2, $3, $4, 'published', $5, NOW())
-         ON CONFLICT (semester, academic_year, department, division)
-         DO UPDATE SET status='published', published_by=$5, published_at=NOW()`,
-        [semester, academicYear, req.user.dept, division, req.user.id]
-      );
+      // Update or insert publish status record for each representation
+      for (const d of allowedDivs) {
+        await client.query(
+          `INSERT INTO result_publish_status (semester, academic_year, department, division, status, published_by, published_at)
+           VALUES ($1, $2, $3, $4, 'published', $5, NOW())
+           ON CONFLICT (semester, academic_year, department, division)
+           DO UPDATE SET status='published', published_by=$5, published_at=NOW()`,
+          [semester, academicYear, req.user.dept, d, req.user.id]
+        );
+      }
 
 
       await client.query('COMMIT');

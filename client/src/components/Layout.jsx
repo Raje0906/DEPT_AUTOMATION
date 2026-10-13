@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation, Link } from 'react-router-dom';
+import api from '../api/axios';
 import { useAuth } from '../contexts/AuthContext';
 import { useMagazine } from '../contexts/MagazineContext';
+import { isAuthorizedFeedbackCoordinator } from '../utils/feedbackPermissions';
 
 const Icons = {
   dashboard: (
@@ -106,6 +108,7 @@ const roleNav = {
         { to: '/student/cgpa',        label: 'CGPA Overview',         icon: Icons.cgpa },
         { to: '/student/project',     label: 'BE Project',            icon: Icons.project },
         { to: '/student/seminar',     label: 'TE Seminar Registration', icon: Icons.seminar },
+        { to: '/student/feedback',    label: 'TE Mid-Sem Feedback',   icon: Icons.results },
       ],
     },
     {
@@ -135,9 +138,7 @@ const roleNav = {
         { to: '/faculty/project-eval',    label: 'BE Project Evaluation', icon: Icons.project },
         { to: '/faculty/magazines',       label: 'Newsletter',            icon: Icons.magazines },
         { to: '/faculty/seminar',         label: 'TE Seminar Governance', icon: Icons.seminar },
-        { to: '/faculty/seminar/import-assign', label: 'Import and assign guides', icon: Icons.seminar },
-        { to: '/faculty/seminar/schedule',      label: 'Schedule presentation',    icon: Icons.results },
-        { to: '/faculty/seminar/my-groups', label: 'Seminar Assigned Groups', icon: Icons.teachers },
+        { to: '/faculty/seminar/my-groups', label: 'My Assigned Groups',  icon: Icons.teachers },
       ],
     },
   ],
@@ -146,7 +147,7 @@ const roleNav = {
       group: 'Overview & Insights',
       items: [
         { to: '/hod',                 label: 'Executive Dashboard',     icon: Icons.dashboard },
-        { to: '/hod/analytics',       label: 'Academic Analytics',      icon: Icons.analytics },
+        { to: '/hod/analytics',       label: 'Department Analytics',    icon: Icons.analytics },
       ],
     },
     {
@@ -177,6 +178,7 @@ const roleNav = {
       group: 'Department Administration',
       items: [
         { to: '/hod/magazine-approvals', label: 'Newsletter Approvals', icon: Icons.magazines },
+        { to: '/hod/feedback',        label: 'TE Feedback Reports',     icon: Icons.results },
         { to: '/faculty/class-namelist', label: 'Namelist Segregator',   icon: Icons.results },
         { to: '/hod/rollover',        label: 'Term Rollover',           icon: Icons.rollover },
       ],
@@ -194,6 +196,7 @@ const PAGE_TITLES = {
   '/student/seminar': 'TE Seminar Registration',
   '/student/clubs': 'Student Technical Clubs',
   '/student/magazine': 'Department Newsletter',
+  '/student/feedback': 'TE Mid-Sem Feedback Form',
   '/faculty': 'Faculty Portal & Overview',
   '/faculty/subjects': 'Result Generation & Evaluation',
   '/faculty/remedial': 'Remedial Classes & Action Plan',
@@ -205,16 +208,18 @@ const PAGE_TITLES = {
   '/faculty/clubs': 'Manage Student Clubs',
   '/faculty/project-eval': 'BE Project Evaluation',
   '/faculty/project-coordination': 'BE Project Governance',
-  '/faculty/seminar': 'TE Seminar Coordinator Portal',
+  '/faculty/feedback': 'TE Mid-Sem Feedback Management',
+  '/faculty/seminar': 'TE Seminar Governance',
   '/faculty/seminar/import-assign': 'Import Responses & Assign Guides',
-  '/faculty/seminar/schedule': 'Schedule Seminar Presentation',
-  '/faculty/seminar/my-groups': 'Assigned Seminar Groups',
+  '/faculty/seminar/schedule': 'Schedule Presentation',
+  '/faculty/seminar/my-groups': 'My Assigned Groups',
   '/faculty/class-namelist': 'University Namelist Segregator',
   '/hod': 'HOD Executive Dashboard',
   '/hod/teachers': 'Faculty Teaching Allocation',
   '/hod/coordinators': 'Academic Coordinator Assignment',
   '/hod/projects': 'BE Project Groups & Review',
   '/hod/seminar-approvals': 'TE Seminar Approval Desk',
+  '/hod/feedback': 'TE Mid-Sem Feedback Reports',
   '/hod/approval': 'Mark Submission Approvals',
   '/hod/remedial': 'Remedial Action Plans Review',
   '/hod/marksheet/insem-cce': 'In-Semester Marksheets & Analysis',
@@ -222,7 +227,7 @@ const PAGE_TITLES = {
   '/hod/magazine-approvals': 'Department Newsletter Approval',
   '/hod/publish': 'Publish Academic Results',
   '/hod/rollover': 'Academic Term Rollover',
-  '/hod/analytics': 'Department Academic Analytics',
+  '/hod/analytics': 'Department Analytics',
   '/hod/audit': 'System Audit Log & Trail',
   '/alumni/feedback': 'Alumni Graduate Feedback',
   '/alumni/distinguished': 'Distinguished Alumni Directory',
@@ -289,6 +294,18 @@ export default function Layout({ children }) {
         }
         return group;
       });
+    }
+
+    if (isAuthorizedFeedbackCoordinator(user)) {
+      navGroups = [
+        ...navGroups,
+        {
+          group: 'Feedback Coordinator Desk',
+          items: [
+            { to: '/faculty/feedback', label: 'TE Mid-Sem Feedback', icon: Icons.results }
+          ]
+        }
+      ];
     }
   }
   if (user?.role === 'hod' && pendingMagazinesCount > 0) {
@@ -387,13 +404,16 @@ export default function Layout({ children }) {
                   key={item.to}
                   to={item.to}
                   end={item.to === '/student' || item.to === '/faculty' || item.to === '/hod'}
-                  className={({ isActive }) =>
-                    `group flex items-center gap-3 px-3 py-2 text-xs font-medium rounded transition-all duration-150 ${
-                      isActive
+                  className={({ isActive }) => {
+                    const isCustomActive = item.to === '/faculty/seminar'
+                      ? location.pathname.startsWith('/faculty/seminar') && !location.pathname.startsWith('/faculty/seminar/my-groups')
+                      : isActive;
+                    return `group flex items-center gap-3 px-3 py-2 text-xs font-medium rounded transition-all duration-150 ${
+                      isCustomActive
                         ? 'bg-white/12 text-white font-semibold border-l-2 border-[#E5A93C] shadow-sm'
                         : 'text-blue-200/90 hover:text-white hover:bg-white/6'
-                    }`
-                  }
+                    }`;
+                  }}
                   onClick={() => setMobileOpen(false)}
                 >
                   <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center">

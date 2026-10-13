@@ -6,31 +6,27 @@ import toast from 'react-hot-toast';
 const StatusBadge = ({ session }) => {
   if (session?.status === 'PUBLISHED') {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border bg-emerald-50 text-emerald-800 border-emerald-200">
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold border bg-emerald-50 text-emerald-800 border-emerald-200">
         Published
       </span>
     );
   }
   if (session?.status === 'ASSIGNMENT') {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border bg-purple-50 text-purple-800 border-purple-200">
-        <span className="w-1.5 h-1.5 rounded-full bg-purple-600"></span>
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold border bg-purple-50 text-purple-800 border-purple-200">
         Guide Allocation
       </span>
     );
   }
   if (session?.is_locked) {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border bg-amber-50 text-amber-800 border-amber-200">
-        <span className="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold border bg-amber-50 text-amber-800 border-amber-200">
         Registration Locked
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border bg-blue-50 text-blue-800 border-blue-200">
-      <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
+    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold border bg-blue-50 text-blue-800 border-blue-200">
       Registration Open
     </span>
   );
@@ -44,6 +40,7 @@ export default function SeminarSessions() {
   const [form, setForm] = useState({ name: '', academic_year: '', batch: '' });
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [publishingId, setPublishingId] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -55,6 +52,33 @@ export default function SeminarSessions() {
       setLoading(false);
     }
   }, []);
+
+  const handlePublishSession = async (s) => {
+    setPublishingId(s.id);
+    try {
+      await api.post(`/seminar/sessions/${s.id}/publish`, { publish: true, force: true });
+      toast.success(`Session "${s.name}" published successfully`);
+      await load();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Failed to publish session');
+    } finally {
+      setPublishingId(null);
+    }
+  };
+
+  const handleUnpublishSession = async (s) => {
+    if (!window.confirm(`Depublish "${s.name}" to draft? Groups and student responses will be preserved.`)) return;
+    setPublishingId(s.id);
+    try {
+      await api.post(`/seminar/sessions/${s.id}/publish`, { publish: false });
+      toast.success(`Session "${s.name}" reverted to draft. Responses are kept.`);
+      await load();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Failed to depublish session');
+    } finally {
+      setPublishingId(null);
+    }
+  };
 
   useEffect(() => { load(); }, [load]);
 
@@ -114,7 +138,7 @@ export default function SeminarSessions() {
             id="btn-new-session"
             type="button"
             onClick={() => setShowForm(true)}
-            className="h-8.5 inline-flex items-center gap-1.5 px-4 bg-[var(--navy)] text-white text-xs font-semibold rounded-md hover:bg-[#2a3d7a] transition-colors shadow-2xs shrink-0"
+            className="h-8 px-3.5 inline-flex items-center gap-1.5 bg-[var(--navy)] text-white text-xs font-semibold rounded-md hover:bg-[#2a3d7a] transition-colors shadow-2xs shrink-0"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -180,14 +204,14 @@ export default function SeminarSessions() {
                 <button
                   type="button"
                   onClick={() => setShowForm(false)}
-                  className="h-8.5 px-4 text-xs font-medium text-slate-600 hover:text-slate-800 transition-colors border border-[var(--rule)] rounded-md bg-white hover:bg-slate-50"
+                  className="h-8 px-3.5 inline-flex items-center text-xs font-medium text-slate-600 hover:text-slate-800 transition-colors border border-[var(--rule)] rounded-md bg-white hover:bg-slate-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="h-8.5 px-4.5 bg-[var(--navy)] text-white text-xs font-semibold rounded-md hover:bg-[#2a3d7a] disabled:opacity-60 transition-colors shadow-2xs"
+                  className="h-8 px-3.5 inline-flex items-center text-xs font-semibold bg-[var(--navy)] text-white rounded-md hover:bg-[#2a3d7a] disabled:opacity-60 transition-colors shadow-2xs"
                 >
                   {saving ? 'Creating…' : 'Create Session'}
                 </button>
@@ -209,7 +233,7 @@ export default function SeminarSessions() {
           <button
             type="button"
             onClick={() => setShowForm(true)}
-            className="h-8.5 px-4 bg-[var(--navy)] text-white text-xs font-semibold rounded-md hover:bg-[#2a3d7a] transition-colors"
+            className="h-8 px-3.5 inline-flex items-center text-xs font-semibold bg-[var(--navy)] text-white rounded-md hover:bg-[#2a3d7a] transition-colors shadow-2xs"
           >
             Create Session
           </button>
@@ -253,6 +277,16 @@ export default function SeminarSessions() {
 
               {/* Action Buttons */}
               <div className="flex items-center gap-2 shrink-0 pt-3 md:pt-0 border-t md:border-t-0 border-[var(--rule)]">
+                {s.status === 'PUBLISHED' && (
+                  <button
+                    type="button"
+                    id={`btn-schedule-session-${s.id}`}
+                    onClick={() => navigate('/faculty/seminar/schedule', { state: { sessionId: s.id } })}
+                    className="h-8 px-3 inline-flex items-center text-xs font-semibold border border-[#D4D0C8] text-[#1E2D5A] rounded-md bg-white hover:bg-slate-50 transition-colors shadow-2xs"
+                  >
+                    Schedule presentation
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => navigate(`/faculty/seminar/${s.id}/upload`)}
@@ -267,6 +301,27 @@ export default function SeminarSessions() {
                 >
                   {s.status === 'PUBLISHED' ? 'Review & Export' : 'Continue →'}
                 </button>
+                {s.status === 'PUBLISHED' ? (
+                  <button
+                    type="button"
+                    onClick={() => handleUnpublishSession(s)}
+                    disabled={publishingId === s.id}
+                    className="h-8 px-2.5 inline-flex items-center text-xs font-medium border border-amber-300 text-amber-900 bg-amber-50 hover:bg-amber-100 rounded-md transition-colors shadow-2xs"
+                    title="Depublish session back to draft (keeps all group responses)"
+                  >
+                    Unpublish
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handlePublishSession(s)}
+                    disabled={publishingId === s.id}
+                    className="h-8 px-2.5 inline-flex items-center text-xs font-medium border border-emerald-300 text-emerald-900 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors shadow-2xs"
+                    title="Publish session to make schedules active"
+                  >
+                    Publish session
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => handleDelete(s)}

@@ -245,7 +245,6 @@ export default function SeminarEvaluation() {
 
         {/* Evaluation Status Badge */}
         <div className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl border ${marksStatus.bg} ${marksStatus.border} shrink-0`}>
-          <span className={`w-2 h-2 rounded-full ${marksStatus.dot} ${marksStatusRaw === 'NOT_STARTED' ? '' : 'animate-pulse'}`} />
           <span className={`text-xs font-bold ${marksStatus.text}`}>{marksStatus.label}</span>
           {evaluatedCount > 0 && (
             <span className="text-[10px] text-[var(--ink)]/40">{evaluatedCount}/{memberCount} evaluated</span>
@@ -272,7 +271,7 @@ export default function SeminarEvaluation() {
               onClick={handleUnlock}
               className="px-3 py-1.5 text-xs font-bold bg-white text-emerald-800 border border-emerald-300 rounded-lg hover:bg-emerald-50 disabled:opacity-50 transition-colors shrink-0"
             >
-              {unlocking ? 'Unlocking…' : '🔓 Unlock'}
+              {unlocking ? 'Unlocking…' : 'Unlock'}
             </button>
           )}
         </div>

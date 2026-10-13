@@ -18,6 +18,7 @@ import StudentProject    from './pages/student/StudentProject'
 import SeminarGroupRegistration from './pages/student/SeminarGroupRegistration'
 import StudentMagazine   from './pages/student/StudentMagazine'
 import StudentClubActivities from './pages/student/StudentClubActivities'
+import StudentFeedback   from './pages/student/StudentFeedback'
 
 // Faculty
 import FacultyDashboard  from './pages/faculty/FacultyDashboard'
@@ -31,6 +32,7 @@ import CreateMagazineForm from './pages/faculty/magazine/CreateMagazineForm'
 import MagazineEditor    from './pages/faculty/magazine/MagazineEditor'
 import MagazinePreview   from './pages/faculty/magazine/MagazinePreview'
 import OnlineMagazineViewer from './pages/faculty/magazine/OnlineMagazineViewer'
+import FeedbackDashboard from './pages/faculty/feedback/FeedbackDashboard'
 import ManageClubs       from './pages/faculty/ManageClubs'
 import RemedialClasses   from './pages/faculty/RemedialClasses'
 import InsemMarksheetAnalysis from './pages/faculty/InsemMarksheetAnalysis'
@@ -84,6 +86,9 @@ function CoordinatorLayout({ children }) {
 function MagazineCreatorLayout({ children }) {
   return <ProtectedRoute role="faculty" requireMagazineCreator={true}><Layout>{children}</Layout></ProtectedRoute>
 }
+function FeedbackCoordinatorLayout({ children }) {
+  return <ProtectedRoute requireFeedbackCoordinator={true}><Layout>{children}</Layout></ProtectedRoute>
+}
 // Alumni pages are accessible to any authenticated user (no role restriction)
 function AnyLayout({ children }) {
   return <ProtectedRoute><Layout>{children}</Layout></ProtectedRoute>
@@ -115,6 +120,7 @@ export default function App() {
           <Route path="/student/magazine" element={<StudentLayout><StudentMagazine /></StudentLayout>} />
           <Route path="/student/magazine/view/:id" element={<ProtectedRoute role="student"><OnlineMagazineViewer /></ProtectedRoute>} />
           <Route path="/student/clubs" element={<StudentLayout><StudentClubActivities /></StudentLayout>} />
+          <Route path="/student/feedback" element={<StudentLayout><StudentFeedback /></StudentLayout>} />
 
           {/* Faculty */}
           <Route path="/faculty" element={<FacultyLayout><FacultyDashboard /></FacultyLayout>} />
@@ -132,13 +138,14 @@ export default function App() {
           <Route path="/faculty/magazines/editor/:id" element={<MagazineEditor />} />
           <Route path="/faculty/magazines/preview/:id" element={<MagazinePreview />} />
           <Route path="/faculty/magazines/view/:id" element={<OnlineMagazineViewer />} />
+          <Route path="/faculty/feedback" element={<FeedbackCoordinatorLayout><FeedbackDashboard /></FeedbackCoordinatorLayout>} />
           <Route path="/faculty/clubs" element={<FacultyLayout><ManageClubs /></FacultyLayout>} />
           <Route path="/hod/clubs" element={<Navigate to="/hod" replace />} />
           <Route path="/faculty/class-namelist" element={<AnyLayout><ClassTeacherNamelist /></AnyLayout>} />
 
           {/* Seminar Tool — Coordinator */}
           <Route path="/faculty/seminar"                    element={<CoordinatorLayout><SeminarSessions /></CoordinatorLayout>} />
-          <Route path="/faculty/seminar/import-assign"      element={<CoordinatorLayout><SeminarImportAssignWorkflow /></CoordinatorLayout>} />
+          <Route path="/faculty/seminar/import-assign"      element={<Navigate to="/faculty/seminar" replace />} />
           <Route path="/faculty/seminar/schedule"           element={<CoordinatorLayout><SeminarSchedule /></CoordinatorLayout>} />
           <Route path="/faculty/seminar/:id/upload"         element={<CoordinatorLayout><SeminarUpload /></CoordinatorLayout>} />
           <Route path="/faculty/seminar/:id/assign"         element={<CoordinatorLayout><SeminarAssignment /></CoordinatorLayout>} />
@@ -162,6 +169,7 @@ export default function App() {
           <Route path="/hod/marksheet/end-term-internal" element={<HODLayout><EndTermInternalMarksheet /></HODLayout>} />
           <Route path="/hod/magazine-approvals" element={<HODLayout><HODMagazineApprovals /></HODLayout>} />
           <Route path="/hod/magazines/preview/:id" element={<HODLayout><MagazinePreview /></HODLayout>} />
+          <Route path="/hod/feedback" element={<HODLayout><FeedbackDashboard /></HODLayout>} />
           <Route path="/hod/publish" element={<HODLayout><PublishResults /></HODLayout>} />
           <Route path="/hod/rollover" element={<HODLayout><TermRollover /></HODLayout>} />
           <Route path="/hod/analytics" element={<HODLayout><HODAnalytics /></HODLayout>} />
