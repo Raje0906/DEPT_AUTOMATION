@@ -100,10 +100,11 @@ export default function StudentFeedback() {
     // 1. Collect theory responses
     for (const sub of theorySubjects) {
       for (const q of formData.theoryQuestions) {
-        const key = `theory_${sub.subject_id}_${q.id}`;
+        const qNum = q.id || q.number;
+        const key = `theory_${sub.subject_id}_${qNum}`;
         const ratingVal = ratings[key];
         if (!ratingVal) {
-          setSubmitError(`Please answer Question ${q.id} for "${sub.subject_name}" (${sub.faculty_name}).`);
+          setSubmitError(`Please answer Question ${qNum} for "${sub.subject_name}" (${sub.faculty_name}).`);
           return;
         }
         payloadResponses.push({
@@ -113,7 +114,7 @@ export default function StudentFeedback() {
           facultyId: sub.faculty_id,
           facultyName: sub.faculty_name,
           sectionType: 'theory',
-          questionNumber: q.id,
+          questionNumber: qNum,
           questionText: q.text,
           rating: ratingVal,
         });
@@ -123,10 +124,11 @@ export default function StudentFeedback() {
     // 2. Collect elective responses (if applicable)
     if (chosenElective) {
       for (const q of formData.theoryQuestions) {
-        const key = `elective_${chosenElective.subject_id}_${q.id}`;
+        const qNum = q.id || q.number;
+        const key = `elective_${chosenElective.subject_id}_${qNum}`;
         const ratingVal = ratings[key];
         if (!ratingVal) {
-          setSubmitError(`Please answer Question ${q.id} for your elective "${chosenElective.subject_name}" (${chosenElective.faculty_name}).`);
+          setSubmitError(`Please answer Question ${qNum} for your elective "${chosenElective.subject_name}" (${chosenElective.faculty_name}).`);
           return;
         }
         payloadResponses.push({
@@ -136,7 +138,7 @@ export default function StudentFeedback() {
           facultyId: chosenElective.faculty_id,
           facultyName: chosenElective.faculty_name,
           sectionType: 'theory_elective',
-          questionNumber: q.id,
+          questionNumber: qNum,
           questionText: q.text,
           rating: ratingVal,
         });
@@ -146,10 +148,11 @@ export default function StudentFeedback() {
     // 3. Collect practical responses
     for (const sub of practicalSubjects) {
       for (const q of formData.practicalQuestions) {
-        const key = `practical_${sub.subject_id}_${q.id}`;
+        const qNum = q.id || q.number;
+        const key = `practical_${sub.subject_id}_${qNum}`;
         const ratingVal = ratings[key];
         if (!ratingVal) {
-          setSubmitError(`Please answer Question ${q.id} for Lab "${sub.subject_name}" (${sub.faculty_name}).`);
+          setSubmitError(`Please answer Question ${qNum} for Lab "${sub.subject_name}" (${sub.faculty_name}).`);
           return;
         }
         payloadResponses.push({
@@ -159,7 +162,7 @@ export default function StudentFeedback() {
           facultyId: sub.faculty_id,
           facultyName: sub.faculty_name,
           sectionType: 'practical',
-          questionNumber: q.id,
+          questionNumber: qNum,
           questionText: q.text,
           rating: ratingVal,
         });
@@ -432,39 +435,47 @@ export default function StudentFeedback() {
               {/* 7 Theory Questions */}
               <div className="space-y-6">
                 {theoryQuestions.map((q) => {
-                  const key = `theory_${subject.subject_id}_${q.id}`;
+                  const qNum = q.id || q.number;
+                  const key = `theory_${subject.subject_id}_${qNum}`;
                   const currentVal = ratings[key];
 
                   return (
-                    <div key={q.id} className="pt-2">
-                      <p className="text-xs sm:text-sm font-semibold text-gray-800 mb-2">
+                    <div key={qNum} className="pt-2">
+                      <p className="text-xs sm:text-sm font-semibold text-gray-800 mb-2.5">
                         {q.text} <span className="text-red-500">*</span>
                       </p>
 
-                      <div className="flex items-center justify-between max-w-xl bg-gray-50/90 p-2.5 rounded border border-gray-200">
-                        <span className="text-[10px] font-bold text-draft uppercase">1 (Worst)</span>
-                        <div className="flex items-center gap-1 sm:gap-2">
-                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
-                            <label
-                              key={num}
-                              className={`flex flex-col items-center gap-1 cursor-pointer p-1 rounded hover:bg-white transition-colors ${
-                                currentVal === num ? 'font-bold text-navy' : 'text-gray-600'
-                              }`}
-                            >
-                              <span className="text-[10px]">{num}</span>
-                              <input
-                                type="radio"
-                                required
-                                name={key}
-                                value={num}
-                                checked={currentVal === num}
-                                onChange={() => handleRatingChange('theory', subject.subject_id, q.id, num)}
-                                className="w-3.5 h-3.5 text-navy accent-navy cursor-pointer"
-                              />
-                            </label>
-                          ))}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50/90 p-3.5 rounded-lg border border-gray-200">
+                        <span className="text-[10px] font-bold text-draft uppercase sm:w-16">1 (Worst)</span>
+                        <div className="grid grid-cols-10 gap-1 sm:gap-2 flex-1 max-w-xl">
+                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
+                            const isSelected = currentVal === num;
+                            return (
+                              <label
+                                key={num}
+                                className={`flex flex-col items-center justify-center cursor-pointer py-2 px-1 rounded-md border text-center transition-all duration-150 select-none ${
+                                  isSelected
+                                    ? 'bg-navy text-white border-navy font-bold shadow-md ring-2 ring-navy/30 scale-105'
+                                    : 'bg-white text-gray-700 border-gray-300 hover:border-navy/60 hover:bg-gray-100'
+                                }`}
+                              >
+                                <span className={`text-xs leading-none mb-1.5 ${isSelected ? 'font-black text-white' : 'font-semibold text-gray-700'}`}>
+                                  {num}
+                                </span>
+                                <input
+                                  type="radio"
+                                  required
+                                  name={key}
+                                  value={num}
+                                  checked={isSelected}
+                                  onChange={() => handleRatingChange('theory', subject.subject_id, qNum, num)}
+                                  className="w-3.5 h-3.5 text-navy accent-navy cursor-pointer"
+                                />
+                              </label>
+                            );
+                          })}
                         </div>
-                        <span className="text-[10px] font-bold text-draft uppercase">10 (Best)</span>
+                        <span className="text-[10px] font-bold text-draft uppercase sm:w-16 text-right">10 (Best)</span>
                       </div>
                     </div>
                   );
@@ -519,39 +530,47 @@ export default function StudentFeedback() {
                   </div>
 
                   {theoryQuestions.map((q) => {
-                    const key = `elective_${chosenElective.subject_id}_${q.id}`;
+                    const qNum = q.id || q.number;
+                    const key = `elective_${chosenElective.subject_id}_${qNum}`;
                     const currentVal = ratings[key];
 
                     return (
-                      <div key={q.id} className="pt-2">
-                        <p className="text-xs sm:text-sm font-semibold text-gray-800 mb-2">
+                      <div key={qNum} className="pt-2">
+                        <p className="text-xs sm:text-sm font-semibold text-gray-800 mb-2.5">
                           {q.text} <span className="text-red-500">*</span>
                         </p>
 
-                        <div className="flex items-center justify-between max-w-xl bg-gray-50/90 p-2.5 rounded border border-gray-200">
-                          <span className="text-[10px] font-bold text-draft uppercase">1 (Worst)</span>
-                          <div className="flex items-center gap-1 sm:gap-2">
-                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
-                              <label
-                                key={num}
-                                className={`flex flex-col items-center gap-1 cursor-pointer p-1 rounded hover:bg-white transition-colors ${
-                                  currentVal === num ? 'font-bold text-navy' : 'text-gray-600'
-                                }`}
-                              >
-                                <span className="text-[10px]">{num}</span>
-                                <input
-                                  type="radio"
-                                  required
-                                  name={key}
-                                  value={num}
-                                  checked={currentVal === num}
-                                  onChange={() => handleRatingChange('elective', chosenElective.subject_id, q.id, num)}
-                                  className="w-3.5 h-3.5 text-navy accent-navy cursor-pointer"
-                                />
-                              </label>
-                            ))}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50/90 p-3.5 rounded-lg border border-gray-200">
+                          <span className="text-[10px] font-bold text-draft uppercase sm:w-16">1 (Worst)</span>
+                          <div className="grid grid-cols-10 gap-1 sm:gap-2 flex-1 max-w-xl">
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
+                              const isSelected = currentVal === num;
+                              return (
+                                <label
+                                  key={num}
+                                  className={`flex flex-col items-center justify-center cursor-pointer py-2 px-1 rounded-md border text-center transition-all duration-150 select-none ${
+                                    isSelected
+                                      ? 'bg-navy text-white border-navy font-bold shadow-md ring-2 ring-navy/30 scale-105'
+                                      : 'bg-white text-gray-700 border-gray-300 hover:border-navy/60 hover:bg-gray-100'
+                                  }`}
+                                >
+                                  <span className={`text-xs leading-none mb-1.5 ${isSelected ? 'font-black text-white' : 'font-semibold text-gray-700'}`}>
+                                    {num}
+                                  </span>
+                                  <input
+                                    type="radio"
+                                    required
+                                    name={key}
+                                    value={num}
+                                    checked={isSelected}
+                                    onChange={() => handleRatingChange('elective', chosenElective.subject_id, qNum, num)}
+                                    className="w-3.5 h-3.5 text-navy accent-navy cursor-pointer"
+                                  />
+                                </label>
+                              );
+                            })}
                           </div>
-                          <span className="text-[10px] font-bold text-draft uppercase">10 (Best)</span>
+                          <span className="text-[10px] font-bold text-draft uppercase sm:w-16 text-right">10 (Best)</span>
                         </div>
                       </div>
                     );
@@ -594,39 +613,47 @@ export default function StudentFeedback() {
               {/* 6 Practical Questions */}
               <div className="space-y-6">
                 {practicalQuestions.map((q) => {
-                  const key = `practical_${subject.subject_id}_${q.id}`;
+                  const qNum = q.id || q.number;
+                  const key = `practical_${subject.subject_id}_${qNum}`;
                   const currentVal = ratings[key];
 
                   return (
-                    <div key={q.id} className="pt-2">
-                      <p className="text-xs sm:text-sm font-semibold text-gray-800 mb-2">
+                    <div key={qNum} className="pt-2">
+                      <p className="text-xs sm:text-sm font-semibold text-gray-800 mb-2.5">
                         {q.text} <span className="text-red-500">*</span>
                       </p>
 
-                      <div className="flex items-center justify-between max-w-xl bg-gray-50/90 p-2.5 rounded border border-gray-200">
-                        <span className="text-[10px] font-bold text-draft uppercase">1 (Worst)</span>
-                        <div className="flex items-center gap-1 sm:gap-2">
-                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
-                            <label
-                              key={num}
-                              className={`flex flex-col items-center gap-1 cursor-pointer p-1 rounded hover:bg-white transition-colors ${
-                                currentVal === num ? 'font-bold text-navy' : 'text-gray-600'
-                              }`}
-                            >
-                              <span className="text-[10px]">{num}</span>
-                              <input
-                                type="radio"
-                                required
-                                name={key}
-                                value={num}
-                                checked={currentVal === num}
-                                onChange={() => handleRatingChange('practical', subject.subject_id, q.id, num)}
-                                className="w-3.5 h-3.5 text-navy accent-navy cursor-pointer"
-                              />
-                            </label>
-                          ))}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50/90 p-3.5 rounded-lg border border-gray-200">
+                        <span className="text-[10px] font-bold text-draft uppercase sm:w-16">1 (Worst)</span>
+                        <div className="grid grid-cols-10 gap-1 sm:gap-2 flex-1 max-w-xl">
+                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
+                            const isSelected = currentVal === num;
+                            return (
+                              <label
+                                key={num}
+                                className={`flex flex-col items-center justify-center cursor-pointer py-2 px-1 rounded-md border text-center transition-all duration-150 select-none ${
+                                  isSelected
+                                    ? 'bg-navy text-white border-navy font-bold shadow-md ring-2 ring-navy/30 scale-105'
+                                    : 'bg-white text-gray-700 border-gray-300 hover:border-navy/60 hover:bg-gray-100'
+                                }`}
+                              >
+                                <span className={`text-xs leading-none mb-1.5 ${isSelected ? 'font-black text-white' : 'font-semibold text-gray-700'}`}>
+                                  {num}
+                                </span>
+                                <input
+                                  type="radio"
+                                  required
+                                  name={key}
+                                  value={num}
+                                  checked={isSelected}
+                                  onChange={() => handleRatingChange('practical', subject.subject_id, qNum, num)}
+                                  className="w-3.5 h-3.5 text-navy accent-navy cursor-pointer"
+                                />
+                              </label>
+                            );
+                          })}
                         </div>
-                        <span className="text-[10px] font-bold text-draft uppercase">10 (Best)</span>
+                        <span className="text-[10px] font-bold text-draft uppercase sm:w-16 text-right">10 (Best)</span>
                       </div>
                     </div>
                   );

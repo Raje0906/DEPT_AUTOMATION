@@ -136,30 +136,33 @@ export default function FeedbackPreviewModal({ isOpen, onClose, formId, formInfo
 
                       {/* 7 Theory Questions */}
                       <div className="space-y-5">
-                        {THEORY_QUESTIONS.map((q) => (
-                          <div key={q.id} className="pt-2">
-                            <p className="text-xs sm:text-sm font-semibold text-gray-800 mb-2">
-                              {q.text} <span className="text-red-500">*</span>
-                            </p>
-                            <div className="flex items-center justify-between max-w-lg bg-gray-50/80 p-2 rounded border border-gray-200">
-                              <span className="text-[10px] font-bold text-draft uppercase">1 (Worst)</span>
-                              <div className="flex items-center gap-1.5 sm:gap-2">
-                                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
-                                  <label key={num} className="flex flex-col items-center gap-1 cursor-not-allowed">
-                                    <span className="text-[10px] text-gray-600 font-medium">{num}</span>
-                                    <input
-                                      type="radio"
-                                      disabled
-                                      name={`preview_th_${subject.subject_id}_${q.id}`}
-                                      className="w-3.5 h-3.5 text-navy border-gray-300"
-                                    />
-                                  </label>
-                                ))}
+                        {THEORY_QUESTIONS.map((q) => {
+                          const qNum = q.id || q.number;
+                          return (
+                            <div key={qNum} className="pt-2">
+                              <p className="text-xs sm:text-sm font-semibold text-gray-800 mb-2">
+                                {q.text} <span className="text-red-500">*</span>
+                              </p>
+                              <div className="flex items-center justify-between max-w-lg bg-gray-50/80 p-2 rounded border border-gray-200">
+                                <span className="text-[10px] font-bold text-draft uppercase">1 (Worst)</span>
+                                <div className="flex items-center gap-1.5 sm:gap-2">
+                                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                                    <label key={num} className="flex flex-col items-center gap-1 cursor-not-allowed">
+                                      <span className="text-[10px] text-gray-600 font-medium">{num}</span>
+                                      <input
+                                        type="radio"
+                                        disabled
+                                        name={`preview_th_${subject.subject_id}_${qNum}`}
+                                        className="w-3.5 h-3.5 text-navy border-gray-300"
+                                      />
+                                    </label>
+                                  ))}
+                                </div>
+                                <span className="text-[10px] font-bold text-draft uppercase">10 (Best)</span>
                               </div>
-                              <span className="text-[10px] font-bold text-draft uppercase">10 (Best)</span>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   ))
@@ -209,30 +212,33 @@ export default function FeedbackPreviewModal({ isOpen, onClose, formId, formInfo
                           </span>
                         </div>
 
-                        {THEORY_QUESTIONS.map((q) => (
-                          <div key={q.id} className="pt-2">
-                            <p className="text-xs sm:text-sm font-semibold text-gray-800 mb-2">
-                              {q.text} <span className="text-red-500">*</span>
-                            </p>
-                            <div className="flex items-center justify-between max-w-lg bg-gray-50/80 p-2 rounded border border-gray-200">
-                              <span className="text-[10px] font-bold text-draft uppercase">1 (Worst)</span>
-                              <div className="flex items-center gap-1.5 sm:gap-2">
-                                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
-                                  <label key={num} className="flex flex-col items-center gap-1 cursor-not-allowed">
-                                    <span className="text-[10px] text-gray-600 font-medium">{num}</span>
-                                    <input
-                                      type="radio"
-                                      disabled
-                                      name={`preview_el_${q.id}`}
-                                      className="w-3.5 h-3.5 text-navy border-gray-300"
-                                    />
-                                  </label>
-                                ))}
+                        {THEORY_QUESTIONS.map((q) => {
+                          const qNum = q.id || q.number;
+                          return (
+                            <div key={qNum} className="pt-2">
+                              <p className="text-xs sm:text-sm font-semibold text-gray-800 mb-2">
+                                {q.text} <span className="text-red-500">*</span>
+                              </p>
+                              <div className="flex items-center justify-between max-w-lg bg-gray-50/80 p-2 rounded border border-gray-200">
+                                <span className="text-[10px] font-bold text-draft uppercase">1 (Worst)</span>
+                                <div className="flex items-center gap-1.5 sm:gap-2">
+                                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                                    <label key={num} className="flex flex-col items-center gap-1 cursor-not-allowed">
+                                      <span className="text-[10px] text-gray-600 font-medium">{num}</span>
+                                      <input
+                                        type="radio"
+                                        disabled
+                                        name={`preview_el_${qNum}`}
+                                        className="w-3.5 h-3.5 text-navy border-gray-300"
+                                      />
+                                    </label>
+                                  ))}
+                                </div>
+                                <span className="text-[10px] font-bold text-draft uppercase">10 (Best)</span>
                               </div>
-                              <span className="text-[10px] font-bold text-draft uppercase">10 (Best)</span>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -270,30 +276,33 @@ export default function FeedbackPreviewModal({ isOpen, onClose, formId, formInfo
 
                       {/* 6 Practical Questions */}
                       <div className="space-y-5">
-                        {PRACTICAL_QUESTIONS.map((q) => (
-                          <div key={q.id} className="pt-2">
-                            <p className="text-xs sm:text-sm font-semibold text-gray-800 mb-2">
-                              {q.text} <span className="text-red-500">*</span>
-                            </p>
-                            <div className="flex items-center justify-between max-w-lg bg-gray-50/80 p-2 rounded border border-gray-200">
-                              <span className="text-[10px] font-bold text-draft uppercase">1 (Worst)</span>
-                              <div className="flex items-center gap-1.5 sm:gap-2">
-                                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
-                                  <label key={num} className="flex flex-col items-center gap-1 cursor-not-allowed">
-                                    <span className="text-[10px] text-gray-600 font-medium">{num}</span>
-                                    <input
-                                      type="radio"
-                                      disabled
-                                      name={`preview_pr_${subject.subject_id}_${q.id}`}
-                                      className="w-3.5 h-3.5 text-navy border-gray-300"
-                                    />
-                                  </label>
-                                ))}
+                        {PRACTICAL_QUESTIONS.map((q) => {
+                          const qNum = q.id || q.number;
+                          return (
+                            <div key={qNum} className="pt-2">
+                              <p className="text-xs sm:text-sm font-semibold text-gray-800 mb-2">
+                                {q.text} <span className="text-red-500">*</span>
+                              </p>
+                              <div className="flex items-center justify-between max-w-lg bg-gray-50/80 p-2 rounded border border-gray-200">
+                                <span className="text-[10px] font-bold text-draft uppercase">1 (Worst)</span>
+                                <div className="flex items-center gap-1.5 sm:gap-2">
+                                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                                    <label key={num} className="flex flex-col items-center gap-1 cursor-not-allowed">
+                                      <span className="text-[10px] text-gray-600 font-medium">{num}</span>
+                                      <input
+                                        type="radio"
+                                        disabled
+                                        name={`preview_pr_${subject.subject_id}_${qNum}`}
+                                        className="w-3.5 h-3.5 text-navy border-gray-300"
+                                      />
+                                    </label>
+                                  ))}
+                                </div>
+                                <span className="text-[10px] font-bold text-draft uppercase">10 (Best)</span>
                               </div>
-                              <span className="text-[10px] font-bold text-draft uppercase">10 (Best)</span>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   ))
