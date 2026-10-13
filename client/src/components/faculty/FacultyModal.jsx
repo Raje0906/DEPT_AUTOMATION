@@ -18,7 +18,7 @@ const DEPARTMENTS = [
   'Applied Science & Humanities',
 ];
 
-export default function FacultyModal({ isOpen, onClose, onSave, facultyToEdit = null }) {
+export default function FacultyModal({ isOpen, onClose, onSave, onDelete, facultyToEdit = null }) {
   const isEdit = Boolean(facultyToEdit);
 
   const [formData, setFormData] = useState({
@@ -28,7 +28,6 @@ export default function FacultyModal({ isOpen, onClose, onSave, facultyToEdit = 
     designation: 'Assistant Professor',
     department: 'Computer Engineering',
     password: '',
-    is_seminar_coordinator: false,
   });
 
   const [saving, setSaving] = useState(false);
@@ -42,7 +41,6 @@ export default function FacultyModal({ isOpen, onClose, onSave, facultyToEdit = 
         designation: facultyToEdit.designation || 'Assistant Professor',
         department: facultyToEdit.department || 'Computer Engineering',
         password: '',
-        is_seminar_coordinator: Boolean(facultyToEdit.is_seminar_coordinator),
       });
     } else {
       setFormData({
@@ -52,7 +50,6 @@ export default function FacultyModal({ isOpen, onClose, onSave, facultyToEdit = 
         designation: 'Assistant Professor',
         department: 'Computer Engineering',
         password: '',
-        is_seminar_coordinator: false,
       });
     }
   }, [facultyToEdit, isOpen]);
@@ -83,7 +80,6 @@ export default function FacultyModal({ isOpen, onClose, onSave, facultyToEdit = 
         employee_id: formData.employee_id.trim().toUpperCase(),
         designation: formData.designation,
         department: formData.department,
-        is_seminar_coordinator: formData.is_seminar_coordinator,
       };
 
       if (formData.password && formData.password.trim()) {
@@ -216,50 +212,53 @@ export default function FacultyModal({ isOpen, onClose, onSave, facultyToEdit = 
               />
             </div>
 
-            <div className="md:col-span-2 bg-[#FAF8F5] p-3 rounded border border-[#E8E4DC]">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.is_seminar_coordinator}
-                  onChange={(e) => setFormData({ ...formData, is_seminar_coordinator: e.target.checked })}
-                  className="rounded border-gray-300 text-navy focus:ring-navy w-4 h-4"
-                />
-                <span className="text-xs font-semibold text-gray-800">
-                  Appoint as TE Seminar Coordinator
-                </span>
-              </label>
-              <p className="text-[11px] text-gray-500 mt-1 ml-6">
-                Grants coordinator authority for managing TE Seminar sessions, uploads, and guide allocations.
-              </p>
-            </div>
           </div>
 
           {/* Actions */}
-          <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-200 mt-6">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3.5 py-1.5 text-xs font-medium text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-gray-300 rounded transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-1.5 text-xs font-semibold text-white bg-[#1E2D5A] hover:bg-[#141C38] disabled:opacity-50 rounded shadow-2xs transition-colors flex items-center gap-2"
-            >
-              {saving ? (
-                <>
-                  <svg className="animate-spin h-3.5 w-3.5 text-white" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+          <div className="flex items-center justify-between pt-4 border-t border-gray-200 mt-6">
+            <div>
+              {isEdit && onDelete && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onDelete(facultyToEdit);
+                  }}
+                  className="px-3 py-1.5 text-xs font-semibold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded transition-colors flex items-center gap-1.5"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
-                  <span>Saving…</span>
-                </>
-              ) : (
-                <span>{isEdit ? 'Save Changes' : 'Register Faculty'}</span>
+                  <span>Remove Faculty</span>
+                </button>
               )}
-            </button>
+            </div>
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3.5 py-1.5 text-xs font-medium text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-gray-300 rounded transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="px-4 py-1.5 text-xs font-semibold text-white bg-[#1E2D5A] hover:bg-[#141C38] disabled:opacity-50 rounded shadow-2xs transition-colors flex items-center gap-2"
+              >
+                {saving ? (
+                  <>
+                    <svg className="animate-spin h-3.5 w-3.5 text-white" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                    </svg>
+                    <span>Saving…</span>
+                  </>
+                ) : (
+                  <span>{isEdit ? 'Save Changes' : 'Register Faculty'}</span>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>

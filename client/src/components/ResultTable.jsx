@@ -77,8 +77,11 @@ export default function ResultTable({ subjects = [], mode = 'final', showStatus 
               const isTW = row.exams?.term_work !== null && row.exams?.term_work !== undefined;
               const isPR = row.exams?.final_practical !== null && row.exams?.final_practical !== undefined;
 
-              const col1 = isInsem ? `${row.exams.insem} / 30` : (isTW ? `${row.exams.term_work} / ${row.subjectType === 'seminar' ? 50 : 25}` : '—');
-              const col2 = isEndsem ? `${row.exams.endsem} / 70` : (isPR ? `${row.exams.final_practical} / 25` : (row.subjectType === 'seminar' ? 'N/A' : '—'));
+              const isSeminar = row.subjectType === 'seminar' || row.subjectCode?.includes('SEM') || row.maxPractical === 50;
+              const practicalMax = isSeminar ? 50 : (row.maxPractical || 25);
+
+              const col1 = isInsem ? `${row.exams.insem} / 30` : (isTW ? `${row.exams.term_work} / ${practicalMax}` : '—');
+              const col2 = isEndsem ? `${row.exams.endsem} / 70` : (isPR ? `${row.exams.final_practical} / ${practicalMax}` : (isSeminar ? 'N/A' : '—'));
 
               return (
                 <tr key={row.subjectId || row.id || idx} className="hover:bg-gray-50/75 transition-colors">
@@ -195,13 +198,14 @@ export default function ResultTable({ subjects = [], mode = 'final', showStatus 
                 <th className="px-4 py-3 text-right">Assignment 1 (7)</th>
                 <th className="px-4 py-3 text-right">Assignment 2 (7)</th>
                 <th className="px-4 py-3 text-right">Timely Submission (6)</th>
-                <th className="px-4 py-3 text-right font-bold">Total TW (25)</th>
+                <th className="px-4 py-3 text-right font-bold">Total TW</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {twSubjects.map((row, idx) => {
                 const tw = row.termWorkDetail || {};
                 const totalTW = row.exams?.term_work ?? tw.total_tw_marks ?? null;
+                const isSeminar = row.subjectType === 'seminar' || row.subjectCode?.includes('SEM') || row.maxPractical === 50;
                 return (
                   <tr key={row.subjectId || row.id || idx} className="hover:bg-gray-50/75 transition-colors">
                     <td className="px-4 py-3 text-gray-400 font-mono text-xs">{idx + 1}</td>
@@ -220,7 +224,7 @@ export default function ResultTable({ subjects = [], mode = 'final', showStatus 
                       {tw.timely_submission_marks != null ? `${tw.timely_submission_marks} / 6` : '—'}
                     </td>
                     <td className="px-4 py-3 text-right font-bold text-gray-900 font-mono">
-                      {totalTW != null ? `${totalTW} / ${row.subjectType === 'seminar' ? 50 : 25}` : '—'}
+                      {totalTW != null ? `${totalTW} / ${isSeminar ? 50 : 25}` : '—'}
                     </td>
                   </tr>
                 );
@@ -243,26 +247,30 @@ export default function ResultTable({ subjects = [], mode = 'final', showStatus 
             <th className="px-4 py-3 text-left">Code</th>
             <th className="px-4 py-3 text-right">Insem Exam (30)</th>
             <th className="px-4 py-3 text-right">Endsem Exam (70)</th>
-            <th className="px-4 py-3 text-right">Final Practical/Oral (25)</th>
+            <th className="px-4 py-3 text-right">Final Practical/Oral (25/50)</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200">
-          {subjects.map((row, idx) => (
-            <tr key={row.subjectId || row.id || idx} className="hover:bg-gray-50/75 transition-colors">
-              <td className="px-4 py-3 text-gray-400 font-mono text-xs">{idx + 1}</td>
-              <td className="px-4 py-3 font-medium text-gray-900">{row.subjectName}</td>
-              <td className="px-4 py-3 font-mono text-xs text-gray-500">{row.subjectCode}</td>
-              <td className="px-4 py-3 text-right font-mono text-gray-700">
-                {row.exams?.insem != null ? `${row.exams.insem} / 30` : <span className="text-gray-300">—</span>}
-              </td>
-              <td className="px-4 py-3 text-right font-mono text-gray-700">
-                {row.exams?.endsem != null ? `${row.exams.endsem} / 70` : <span className="text-gray-300">—</span>}
-              </td>
-              <td className="px-4 py-3 text-right font-mono text-gray-700">
-                {row.exams?.final_practical != null ? `${row.exams.final_practical} / 25` : <span className="text-gray-300">—</span>}
-              </td>
-            </tr>
-          ))}
+          {subjects.map((row, idx) => {
+            const isSeminar = row.subjectType === 'seminar' || row.subjectCode?.includes('SEM') || row.maxPractical === 50;
+            const maxPr = isSeminar ? 50 : (row.maxPractical || 25);
+            return (
+              <tr key={row.subjectId || row.id || idx} className="hover:bg-gray-50/75 transition-colors">
+                <td className="px-4 py-3 text-gray-400 font-mono text-xs">{idx + 1}</td>
+                <td className="px-4 py-3 font-medium text-gray-900">{row.subjectName}</td>
+                <td className="px-4 py-3 font-mono text-xs text-gray-500">{row.subjectCode}</td>
+                <td className="px-4 py-3 text-right font-mono text-gray-700">
+                  {row.exams?.insem != null ? `${row.exams.insem} / 30` : <span className="text-gray-300">—</span>}
+                </td>
+                <td className="px-4 py-3 text-right font-mono text-gray-700">
+                  {row.exams?.endsem != null ? `${row.exams.endsem} / 70` : <span className="text-gray-300">—</span>}
+                </td>
+                <td className="px-4 py-3 text-right font-mono text-gray-700">
+                  {row.exams?.final_practical != null ? `${row.exams.final_practical} / ${maxPr}` : <span className="text-gray-300">—</span>}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

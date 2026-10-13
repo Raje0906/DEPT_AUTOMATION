@@ -51,16 +51,16 @@ function computeSubjectRollup(subject, examRows = []) {
     };
   }
 
-  const isSeminar = subject.code.includes('SEM') || subject.name.toLowerCase().includes('seminar');
+  const isSeminar = (subject.code && subject.code.includes('SEM')) || (subject.name && subject.name.toLowerCase().includes('seminar'));
   const isPractical = subject.subject_type === 'practical' || Boolean(subject.has_practical);
 
   let totalObtained = 0;
-  let maxMarks = 100;
+  let maxMarks = Number(subject.max_total) || 100;
   let isComplete = false;
   let hasAnyMark = false;
 
   if (isSeminar) {
-    maxMarks = 50;
+    maxMarks = Number(subject.max_total) || 50;
     const tw = examMap['term_work'];
     if (tw && tw.marks !== null) {
       hasAnyMark = true;
@@ -68,21 +68,46 @@ function computeSubjectRollup(subject, examRows = []) {
       isComplete = true;
     }
   } else if (isPractical) {
-    maxMarks = 50;
+    maxMarks = Number(subject.max_total) || (Number(subject.max_practical) || 50);
     const tw = examMap['term_work'];
     const pr = examMap['final_practical'];
     if (tw && tw.marks !== null) hasAnyMark = true;
     if (pr && pr.marks !== null) hasAnyMark = true;
 
-    if (tw && tw.marks !== null && pr && pr.marks !== null) {
-      isComplete = true;
-      totalObtained = (Number(tw.marks) || 0) + (Number(pr.marks) || 0);
+    // Check which components this practical subject expects
+    const hasTwComponent = subject.max_tw !== undefined ? subject.max_tw > 0 : true;
+    const hasPrComponent = subject.max_pr !== undefined || subject.max_oral !== undefined
+      ? ((subject.max_pr || 0) > 0 || (subject.max_oral || 0) > 0)
+      : true;
+
+    if (hasTwComponent && hasPrComponent) {
+      if (tw && tw.marks !== null && pr && pr.marks !== null) {
+        isComplete = true;
+        totalObtained = (Number(tw.marks) || 0) + (Number(pr.marks) || 0);
+      } else {
+        totalObtained = (Number(tw?.marks) || 0) + (Number(pr?.marks) || 0);
+      }
+    } else if (hasTwComponent && !hasPrComponent) {
+      if (tw && tw.marks !== null) {
+        isComplete = true;
+        totalObtained = Number(tw.marks) || 0;
+      }
+    } else if (!hasTwComponent && hasPrComponent) {
+      if (pr && pr.marks !== null) {
+        isComplete = true;
+        totalObtained = Number(pr.marks) || 0;
+      }
     } else {
-      totalObtained = (Number(tw?.marks) || 0) + (Number(pr?.marks) || 0);
+      if (tw && tw.marks !== null && pr && pr.marks !== null) {
+        isComplete = true;
+        totalObtained = (Number(tw.marks) || 0) + (Number(pr.marks) || 0);
+      } else {
+        totalObtained = (Number(tw?.marks) || 0) + (Number(pr?.marks) || 0);
+      }
     }
   } else {
-    // Theory subject
-    maxMarks = 100;
+    // Theory subject (can be 100 or 50 max marks)
+    maxMarks = Number(subject.max_total) || ((Number(subject.max_cie) || 30) + (Number(subject.max_end_sem) || 70));
     const insem = examMap['insem'];
     const endsem = examMap['endsem'];
     if (insem && insem.marks !== null) hasAnyMark = true;
@@ -111,6 +136,8 @@ function computeSubjectRollup(subject, examRows = []) {
     subject_type: isSeminar ? 'seminar' : (isPractical ? 'practical' : 'theory'),
     maxMarks,
     max_marks: maxMarks,
+    maxPractical: Number(subject.max_practical) || (isSeminar ? 50 : 25),
+    max_practical: Number(subject.max_practical) || (isSeminar ? 50 : 25),
     totalObtained: hasAnyMark ? totalObtained : null,
     total: hasAnyMark ? totalObtained : null,
     percentage: hasAnyMark ? Math.round(percentage * 100) / 100 : null,

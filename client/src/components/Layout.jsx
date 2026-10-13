@@ -143,21 +143,42 @@ const roleNav = {
   ],
   hod: [
     {
-      group: 'Department Governance',
+      group: 'Overview & Insights',
       items: [
         { to: '/hod',                 label: 'Executive Dashboard',     icon: Icons.dashboard },
+        { to: '/hod/analytics',       label: 'Academic Analytics',      icon: Icons.analytics },
+      ],
+    },
+    {
+      group: 'Faculty & Coordination',
+      items: [
         { to: '/hod/teachers',        label: 'Faculty Allocation',      icon: Icons.teachers },
         { to: '/hod/coordinators',    label: 'Coordinator Assignment',  icon: Icons.teachers },
-        { to: '/hod/projects',        label: 'BE Project Governance',   icon: Icons.project },
-        { to: '/hod/seminar-approvals', label: 'TE Seminar Governance', icon: Icons.seminar },
+      ],
+    },
+    {
+      group: 'Examinations & Marks',
+      items: [
         { to: '/hod/approval',        label: 'Mark Approvals',          icon: Icons.approval },
-        { to: '/hod/remedial',        label: 'Remedial Action Plans',   icon: Icons.results },
         { to: '/hod/marksheet/insem-cce', label: 'In-Sem (CCE) Marksheets', icon: Icons.resultGen },
         { to: '/hod/marksheet/end-term-internal', label: 'End-Term Internal Marksheets', icon: Icons.results },
-        { to: '/hod/magazine-approvals', label: 'Magazine Approvals',   icon: Icons.magazines },
+        { to: '/hod/remedial',        label: 'Remedial Action Plans',   icon: Icons.results },
         { to: '/hod/publish',         label: 'Publish Results',         icon: Icons.publish },
+      ],
+    },
+    {
+      group: 'Projects & Seminars',
+      items: [
+        { to: '/hod/projects',        label: 'BE Project Governance',   icon: Icons.project },
+        { to: '/hod/seminar-approvals', label: 'TE Seminar Governance', icon: Icons.seminar },
+      ],
+    },
+    {
+      group: 'Department Administration',
+      items: [
+        { to: '/hod/magazine-approvals', label: 'Magazine Approvals',   icon: Icons.magazines },
+        { to: '/faculty/class-namelist', label: 'Namelist Segregator',   icon: Icons.results },
         { to: '/hod/rollover',        label: 'Term Rollover',           icon: Icons.rollover },
-        { to: '/hod/analytics',       label: 'Academic Analytics',      icon: Icons.analytics },
       ],
     },
   ],
@@ -296,19 +317,6 @@ export default function Layout({ children }) {
         ]
       }
     ];
-  } else if (user?.role === 'hod') {
-    navGroups = navGroups.map(group => {
-      if (group.group === 'Department Governance') {
-        return {
-          ...group,
-          items: [
-            ...group.items,
-            { to: '/faculty/class-namelist', label: 'Namelist Segregator', icon: Icons.results }
-          ]
-        };
-      }
-      return group;
-    });
   }
 
   const handleLogout = () => {
@@ -364,9 +372,9 @@ export default function Layout({ children }) {
         </div>
 
         {/* Navigation Sections */}
-        <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto min-h-0 sidebar-scroll">
+        <nav className="flex-1 px-3 py-4 space-y-4 overflow-y-auto min-h-0 sidebar-scroll">
           {navGroups.map((group, gIdx) => (
-            <div key={gIdx} className="space-y-1">
+            <div key={gIdx} className={`space-y-1 ${gIdx > 0 ? 'pt-3 border-t border-white/5' : ''}`}>
               {group.group && (
                 <p className="px-3 pb-1 text-[10px] font-bold text-blue-300/60 uppercase tracking-widest">
                   {group.group}
@@ -401,7 +409,7 @@ export default function Layout({ children }) {
           ))}
 
           {/* ── Alumni Section (expandable, all roles) ─────────────────── */}
-          <div className="space-y-1">
+          <div className="space-y-1 pt-3 border-t border-white/5">
             <p className="px-3 pb-1 text-[10px] font-bold text-blue-300/60 uppercase tracking-widest">
               Alumni
             </p>
