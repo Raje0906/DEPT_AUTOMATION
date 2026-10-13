@@ -112,7 +112,7 @@ const roleNav = {
       group: 'Clubs & Co-Curricular',
       items: [
         { to: '/student/clubs',       label: 'Club Activities',       icon: Icons.clubs },
-        { to: '/student/magazine',    label: 'Magazine',              icon: Icons.magazines },
+        { to: '/student/magazine',    label: 'Newsletter',            icon: Icons.magazines },
       ],
     },
   ],
@@ -133,7 +133,7 @@ const roleNav = {
       items: [
         { to: '/faculty/clubs',           label: 'Manage Clubs',          icon: Icons.clubs },
         { to: '/faculty/project-eval',    label: 'BE Project Evaluation', icon: Icons.project },
-        { to: '/faculty/magazines',       label: 'Magazine',              icon: Icons.magazines },
+        { to: '/faculty/magazines',       label: 'Newsletter',            icon: Icons.magazines },
         { to: '/faculty/seminar',         label: 'TE Seminar Governance', icon: Icons.seminar },
         { to: '/faculty/seminar/import-assign', label: 'Import and assign guides', icon: Icons.seminar },
         { to: '/faculty/seminar/schedule',      label: 'Schedule presentation',    icon: Icons.results },
@@ -143,21 +143,42 @@ const roleNav = {
   ],
   hod: [
     {
-      group: 'Department Governance',
+      group: 'Overview & Insights',
       items: [
         { to: '/hod',                 label: 'Executive Dashboard',     icon: Icons.dashboard },
+        { to: '/hod/analytics',       label: 'Academic Analytics',      icon: Icons.analytics },
+      ],
+    },
+    {
+      group: 'Faculty & Coordination',
+      items: [
         { to: '/hod/teachers',        label: 'Faculty Allocation',      icon: Icons.teachers },
         { to: '/hod/coordinators',    label: 'Coordinator Assignment',  icon: Icons.teachers },
-        { to: '/hod/projects',        label: 'BE Project View',         icon: Icons.project },
-        { to: '/hod/seminar-approvals', label: 'TE Seminar Governance', icon: Icons.seminar },
+      ],
+    },
+    {
+      group: 'Examinations & Marks',
+      items: [
         { to: '/hod/approval',        label: 'Mark Approvals',          icon: Icons.approval },
-        { to: '/hod/remedial',        label: 'Remedial Action Plans',   icon: Icons.results },
         { to: '/hod/marksheet/insem-cce', label: 'In-Sem (CCE) Marksheets', icon: Icons.resultGen },
         { to: '/hod/marksheet/end-term-internal', label: 'End-Term Internal Marksheets', icon: Icons.results },
-        { to: '/hod/magazine-approvals', label: 'Magazine Approvals',   icon: Icons.magazines },
+        { to: '/hod/remedial',        label: 'Remedial Action Plans',   icon: Icons.results },
         { to: '/hod/publish',         label: 'Publish Results',         icon: Icons.publish },
+      ],
+    },
+    {
+      group: 'Projects & Seminars',
+      items: [
+        { to: '/hod/projects',        label: 'BE Project Governance',   icon: Icons.project },
+        { to: '/hod/seminar-approvals', label: 'TE Seminar Governance', icon: Icons.seminar },
+      ],
+    },
+    {
+      group: 'Department Administration',
+      items: [
+        { to: '/hod/magazine-approvals', label: 'Newsletter Approvals', icon: Icons.magazines },
+        { to: '/faculty/class-namelist', label: 'Namelist Segregator',   icon: Icons.results },
         { to: '/hod/rollover',        label: 'Term Rollover',           icon: Icons.rollover },
-        { to: '/hod/analytics',       label: 'Academic Analytics',      icon: Icons.analytics },
       ],
     },
   ],
@@ -172,13 +193,15 @@ const PAGE_TITLES = {
   '/student/project': 'BE Final Year Project',
   '/student/seminar': 'TE Seminar Registration',
   '/student/clubs': 'Student Technical Clubs',
-  '/student/magazine': 'Department Magazine',
+  '/student/magazine': 'Department Newsletter',
   '/faculty': 'Faculty Portal & Overview',
   '/faculty/subjects': 'Result Generation & Evaluation',
   '/faculty/remedial': 'Remedial Classes & Action Plan',
   '/faculty/marksheet/insem-cce': 'In-Sem (CCE) Marksheet & Analysis',
   '/faculty/marksheet/end-term-internal': 'End-Term Internal Evaluation Ledger',
   '/faculty/reports': 'Class Academic Reports',
+  '/faculty/magazines': 'Department Newsletter',
+  '/faculty/magazines/create': 'Create New Newsletter',
   '/faculty/clubs': 'Manage Student Clubs',
   '/faculty/project-eval': 'BE Project Evaluation',
   '/faculty/project-coordination': 'BE Project Governance',
@@ -196,7 +219,7 @@ const PAGE_TITLES = {
   '/hod/remedial': 'Remedial Action Plans Review',
   '/hod/marksheet/insem-cce': 'In-Semester Marksheets & Analysis',
   '/hod/marksheet/end-term-internal': 'End-Term Internal Evaluation Ledgers',
-  '/hod/magazine-approvals': 'Department Magazine Approval',
+  '/hod/magazine-approvals': 'Department Newsletter Approval',
   '/hod/publish': 'Publish Academic Results',
   '/hod/rollover': 'Academic Term Rollover',
   '/hod/analytics': 'Department Academic Analytics',
@@ -296,19 +319,6 @@ export default function Layout({ children }) {
         ]
       }
     ];
-  } else if (user?.role === 'hod') {
-    navGroups = navGroups.map(group => {
-      if (group.group === 'Department Governance') {
-        return {
-          ...group,
-          items: [
-            ...group.items,
-            { to: '/faculty/class-namelist', label: 'Namelist Segregator', icon: Icons.results }
-          ]
-        };
-      }
-      return group;
-    });
   }
 
   const handleLogout = () => {
@@ -364,9 +374,9 @@ export default function Layout({ children }) {
         </div>
 
         {/* Navigation Sections */}
-        <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto min-h-0 sidebar-scroll">
+        <nav className="flex-1 px-3 py-4 space-y-4 overflow-y-auto min-h-0 sidebar-scroll">
           {navGroups.map((group, gIdx) => (
-            <div key={gIdx} className="space-y-1">
+            <div key={gIdx} className={`space-y-1 ${gIdx > 0 ? 'pt-3 border-t border-white/5' : ''}`}>
               {group.group && (
                 <p className="px-3 pb-1 text-[10px] font-bold text-blue-300/60 uppercase tracking-widest">
                   {group.group}
@@ -401,7 +411,7 @@ export default function Layout({ children }) {
           ))}
 
           {/* ── Alumni Section (expandable, all roles) ─────────────────── */}
-          <div className="space-y-1">
+          <div className="space-y-1 pt-3 border-t border-white/5">
             <p className="px-3 pb-1 text-[10px] font-bold text-blue-300/60 uppercase tracking-widest">
               Alumni
             </p>

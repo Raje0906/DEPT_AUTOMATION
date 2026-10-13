@@ -90,19 +90,22 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const user = userResult.rows[0];
-
-    if (!user.is_active) {
-      return res.status(403).json({ error: 'Account is inactive. Contact administration.' });
+    let user = null;
+    for (const candidate of userResult.rows) {
+      if (!candidate.is_active) continue;
+      const trimmedPw = (password || '').trim();
+      const passwordMatch = (await bcrypt.compare(password, candidate.password_hash))
+        || (await bcrypt.compare(trimmedPw, candidate.password_hash))
+        || (candidate.role === 'faculty' && (trimmedPw === 'faculty@123' || password === 'faculty@123' || trimmedPw === 'password123'))
+        || (candidate.role === 'hod' && (trimmedPw === 'hod@123' || password === 'hod@123' || trimmedPw === 'faculty@123' || trimmedPw === 'password123'))
+        || (candidate.role === 'student' && (trimmedPw === 'student@123' || password === 'student@123' || trimmedPw === 'password123'));
+      if (passwordMatch) {
+        user = candidate;
+        break;
+      }
     }
 
-    const trimmedPw = (password || '').trim();
-    const passwordMatch = (await bcrypt.compare(password, user.password_hash))
-      || (await bcrypt.compare(trimmedPw, user.password_hash))
-      || (user.role === 'faculty' && (trimmedPw === 'faculty@123' || password === 'faculty@123' || trimmedPw === 'password123'))
-      || (user.role === 'hod' && (trimmedPw === 'hod@123' || password === 'hod@123' || trimmedPw === 'faculty@123' || trimmedPw === 'password123'))
-      || (user.role === 'student' && (trimmedPw === 'student@123' || password === 'student@123' || trimmedPw === 'password123'));
-    if (!passwordMatch) {
+    if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -372,17 +375,52 @@ router.post('/register-student', async (req, res) => {
       return res.status(400).json({ error: 'An account with this email already exists.' });
     }
 
-    // Check duplicate roll_no or enrollment_no
-    const studentCheck = await client.query(
-      'SELECT id, roll_no, enrollment_no FROM students WHERE LOWER(roll_no) = $1 OR LOWER(enrollment_no) = $2',
-      [cleanRoll.toLowerCase(), cleanEnroll.toLowerCase()]
+    // 1. Check duplicate PRN / Enrollment Number globally across the institution
+    const prnCheck = await client.query(
+      'SELECT id FROM students WHERE LOWER(TRIM(enrollment_no)) = $1',
+      [cleanEnroll.toLowerCase()]
     );
-    if (studentCheck.rows.length > 0) {
-      const match = studentCheck.rows[0];
-      if (match.roll_no.toLowerCase() === cleanRoll.toLowerCase()) {
-        return res.status(400).json({ error: 'A student with this Roll Number is already registered.' });
-      }
+    if (prnCheck.rows.length > 0) {
       return res.status(400).json({ error: 'A student with this PRN / Enrollment Number is already registered.' });
+    }
+
+    // 2. Normalize class division (e.g. 'SE' + 'Comp 2' -> 'SE Comp 2')
+    const cleanDivision = division.trim();
+    const normalizedDivision = cleanDivision.toUpperCase().startsWith(cleanClassYear)
+      ? cleanDivision
+      : `${cleanClassYear} ${cleanDivision}`;
+
+    // 3. Check duplicate roll_no ONLY within the SAME class / division
+    // (A student can have the same roll number in a different class, but not within the same class)
+    const rollCheck = await client.query(
+      `SELECT id, roll_no, division, class_year, current_semester 
+       FROM students 
+       WHERE LOWER(TRIM(roll_no)) = $1
+         AND (
+           LOWER(TRIM(division)) = $2
+           OR LOWER(TRIM(division)) = $3
+           OR (
+             (LOWER(TRIM(class_year)) = $4 OR current_semester = $5)
+             AND (
+               LOWER(TRIM(division)) LIKE '%' || $6 || '%'
+               OR $2 LIKE '%' || LOWER(TRIM(division)) || '%'
+             )
+           )
+         )`,
+      [
+        cleanRoll.toLowerCase(),
+        normalizedDivision.toLowerCase(),
+        cleanDivision.toLowerCase(),
+        cleanClassYear.toLowerCase(),
+        semesterInt,
+        cleanDivision.replace(/^(SE|TE|BE)\s*/i, '').trim().toLowerCase()
+      ]
+    );
+
+    if (rollCheck.rows.length > 0) {
+      return res.status(400).json({
+        error: `A student with Roll Number ${cleanRoll} is already registered in class ${normalizedDivision}.`
+      });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -402,7 +440,7 @@ router.post('/register-student', async (req, res) => {
     await client.query(
       `INSERT INTO students (user_id, roll_no, enrollment_no, batch, current_semester, division, class_year)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [userId, cleanRoll, cleanEnroll, batch.trim(), semesterInt, division.trim(), cleanClassYear]
+      [userId, cleanRoll, cleanEnroll, batch.trim(), semesterInt, normalizedDivision, cleanClassYear]
     );
 
     await client.query('COMMIT');

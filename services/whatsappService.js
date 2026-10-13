@@ -17,13 +17,19 @@ const ALLOWED_ENROLLMENTS = new Set([
   'F23112151', // SOHAM ATUL SHELKE
 ]);
 
-// Known verified mobile numbers for the allowed students
+// Known verified mobile numbers for the allowed students and faculty
 const ALLOWED_PHONE_NUMBERS = new Set([
   '9699616876', // Aditya Raje
   '9970024032', // Aditya Raje (alternate)
   '9404241539', // Nihar Pal
   '8446016602', // Anshu Hole
   '9970024042', // Soham Shelke
+  '8830673864', // Faculty CYV (Ms. C. Y. Vakte)
+]);
+
+// Allowed Faculty IDs for testing
+const ALLOWED_FACULTY_IDS = new Set([
+  'CYV', // Ms. C. Y. Vakte
 ]);
 
 let sock = null;
@@ -35,8 +41,11 @@ let reconnectTimer = null;
 /**
  * Checks if a recipient is allowed under the current test whitelist
  */
-function isAllowedRecipient({ enrollment_no, phone }) {
+function isAllowedRecipient({ enrollment_no, phone, employee_id }) {
   if (enrollment_no && ALLOWED_ENROLLMENTS.has(String(enrollment_no).trim().toUpperCase())) {
+    return true;
+  }
+  if (employee_id && ALLOWED_FACULTY_IDS.has(String(employee_id).trim().toUpperCase())) {
     return true;
   }
   if (phone) {
@@ -175,6 +184,7 @@ function getStatus() {
     whitelist: {
       enrollments: Array.from(ALLOWED_ENROLLMENTS),
       phones: Array.from(ALLOWED_PHONE_NUMBERS),
+      faculty: Array.from(ALLOWED_FACULTY_IDS),
     },
   };
 }
@@ -326,23 +336,39 @@ async function sendResultAlert({ enrollmentNo, semester, sgpa, resultStatus }) {
 }
 
 /**
- * Send Broadcast Announcement (Delivers ONLY to the 4 whitelisted students)
+ * Send Broadcast Announcement (Delivers to whitelisted students & faculty)
  */
-async function sendBroadcastNotice({ title, message, authorName = 'HOD Office' }) {
+async function sendBroadcastNotice({ title = 'DEPARTMENT ALERT', message, authorName = 'Dr.(Mrs.) N. F. Shaikh' }) {
   const results = [];
   const enrollments = Array.from(ALLOWED_ENROLLMENTS);
 
-  for (const enr of enrollments) {
-    const text =
-      `📢 *DEPARTMENT NOTICE: ${title.toUpperCase()}*\n\n` +
+  const text = message.includes('DEPARTMENT NOTICE:')
+    ? message
+    : `📢 *DEPARTMENT NOTICE: ${title.toUpperCase()}*\n\n` +
       `${message}\n\n` +
       `— *${authorName}*`;
 
+  for (const enr of enrollments) {
     const res = await sendStudentNotification(enr, text);
     results.push({ enrollment_no: enr, ...res });
   }
 
+  // Also deliver to whitelisted faculty CYV
+  const cyvRes = await sendDirectMessage('8830673864', text);
+  results.push({ enrollment_no: 'FACULTY_CYV', ...cyvRes });
+
   return results;
+}
+
+/**
+ * Send notification to a faculty member by employee_id or initials
+ */
+async function sendFacultyNotification(employeeId, messageText) {
+  const normId = String(employeeId).trim().toUpperCase();
+  if (normId === 'CYV' || ALLOWED_FACULTY_IDS.has(normId)) {
+    return sendDirectMessage('8830673864', messageText);
+  }
+  return { success: false, blocked: true, error: `Faculty ${normId} is not in test whitelist.` };
 }
 
 module.exports = {
@@ -350,9 +376,11 @@ module.exports = {
   getStatus,
   sendDirectMessage,
   sendStudentNotification,
+  sendFacultyNotification,
   sendDefaulterAlert,
   sendResultAlert,
   sendBroadcastNotice,
   ALLOWED_ENROLLMENTS,
   ALLOWED_PHONE_NUMBERS,
+  ALLOWED_FACULTY_IDS,
 };

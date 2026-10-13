@@ -77,8 +77,14 @@ export default function MarksEntry() {
     }
   }, [activeSection, examTypes, categorizedExams, selectedExamId]);
 
-  const fetchMarksData = (targetExamId, targetDivision) => {
-    setLoading(true);
+  const [switchingExam, setSwitchingExam] = useState(false);
+
+  const fetchMarksData = (targetExamId, targetDivision, isTabSwitch = false) => {
+    if (!isTabSwitch) {
+      setLoading(true);
+    } else {
+      setSwitchingExam(true);
+    }
     setRbacError(null);
     const divToUse = targetDivision || division;
     let url = `/faculty/marks/${subjectId}?semester=${semester}&academic_year=${encodeURIComponent(academicYear)}&division=${encodeURIComponent(divToUse)}`;
@@ -129,17 +135,20 @@ export default function MarksEntry() {
           toast.error(err.response?.data?.error || 'Failed to load marks');
         }
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+        setSwitchingExam(false);
+      });
   };
 
   useEffect(() => {
-    fetchMarksData(selectedExamId, division);
+    fetchMarksData(selectedExamId, division, false);
   }, [subjectId, semester, academicYear, division]);
 
-  // When selectedExamId changes, reload students for that specific exam
+  // When selectedExamId changes, reload marks without unmounting student table
   const handleSelectExam = (examId) => {
     setSelectedExamId(examId);
-    fetchMarksData(examId, division);
+    fetchMarksData(examId, division, true);
   };
 
   // Switch class / division directly from dropdown

@@ -44,21 +44,45 @@ router.get('/results/:semester', async (req, res) => {
     const examTypes = examTypesRes.rows;
 
     // Requirement: Data is for TE Semester 1 (Semester 5), AY 2025-26 only.
-    // For any other semester, show all marks/results as 0 (no data entered yet)
     if (semester !== 5) {
+      const subRes = await pool.query(
+        `SELECT id, name, code, semester, credits, max_cie, max_practical, max_end_sem, max_tw, max_pr, max_oral, max_total, has_practical, subject_type 
+         FROM subjects WHERE semester = $1 ORDER BY code`,
+        [semester]
+      );
+      const subjectsWithZero = subRes.rows.map(s => ({
+        subject_id: s.id,
+        subjectId: s.id,
+        subject_name: s.name,
+        subjectName: s.name,
+        subject_code: s.code,
+        subjectCode: s.code,
+        credits: s.credits,
+        max_marks: s.max_total || 100,
+        grade: '—',
+        grade_points: 0,
+        total: 0,
+        percentage: 0,
+        is_backlog: false,
+        status: 'pending',
+        result: 'PENDING'
+      }));
+
+      const totalCreds = subRes.rows.reduce((sum, s) => sum + Number(s.credits), 0) || 22;
+
       return res.json({
         student,
         semester,
         academicYear: '2026-27',
         examTypes,
-        subjects: [],
+        subjects: subjectsWithZero,
         termWorkDetails: {},
         sgpa: 0,
-        totalCredits: 22,
+        totalCredits: totalCreds,
         earnedCredits: 0,
         published: false,
         isOtherSemester: true,
-        message: 'No data entered yet (all marks/results are 0).'
+        message: 'No marks data entered yet (all marks are 0 / pending).'
       });
     }
 
@@ -77,7 +101,7 @@ router.get('/results/:semester', async (req, res) => {
               et.id AS exam_type_id, et.code AS exam_code, et.name AS exam_name,
               et.category AS exam_category, et.has_result_impact, et.default_max_marks,
               s.id AS subject_id, s.name AS subject_name, s.code AS subject_code,
-              s.credits, s.subject_type, s.has_practical
+              s.credits, s.subject_type, s.has_practical, s.max_practical
        FROM student_exam_marks sem
        JOIN subjects s ON s.id = sem.subject_id
        JOIN exam_types et ON et.id = sem.exam_type_id
@@ -110,7 +134,8 @@ router.get('/results/:semester', async (req, res) => {
             code: row.subject_code,
             credits: row.credits,
             subject_type: row.subject_type,
-            has_practical: row.has_practical
+            has_practical: row.has_practical,
+            max_practical: row.max_practical
           },
           examRows: []
         };
@@ -170,7 +195,7 @@ router.get('/results', async (req, res) => {
       `SELECT sem.id, sem.marks_obtained, sem.is_absent, sem.status,
               et.id AS exam_type_id, et.code AS exam_code, et.name AS exam_name,
               s.id AS subject_id, s.name AS subject_name, s.code AS subject_code,
-              s.credits, s.subject_type, s.has_practical
+              s.credits, s.subject_type, s.has_practical, s.max_practical
        FROM student_exam_marks sem
        JOIN subjects s ON s.id = sem.subject_id
        JOIN exam_types et ON et.id = sem.exam_type_id
@@ -189,7 +214,8 @@ router.get('/results', async (req, res) => {
             code: row.subject_code,
             credits: row.credits,
             subject_type: row.subject_type,
-            has_practical: row.has_practical
+            has_practical: row.has_practical,
+            max_practical: row.max_practical
           },
           examRows: []
         };

@@ -26,7 +26,7 @@ export default function MagazineDashboard() {
       <div className="mb-8 pb-5 border-b border-rule flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
           <p className="text-[10px] font-bold text-draft uppercase tracking-widest mb-1">Department Publications</p>
-          <h1 className="font-serif text-3xl font-bold text-ink">College Magazine</h1>
+          <h1 className="font-serif text-3xl font-bold text-ink">Department Newsletter</h1>
           <p className="text-sm text-draft mt-1 font-medium">
             Manage previous issues and browse departmental publications.
           </p>
@@ -43,7 +43,7 @@ export default function MagazineDashboard() {
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
               </svg>
-              Create New Magazine
+              Create New Newsletter
             </button>
           )}
         </div>
@@ -86,7 +86,7 @@ export default function MagazineDashboard() {
               </svg>
             </div>
             <div>
-              <p className="text-base font-bold text-navy">Create New Magazine</p>
+              <p className="text-base font-bold text-navy">Create New Newsletter</p>
               <p className="text-xs text-draft mt-0.5">Start a new edition of Reflection or any departmental publication.</p>
             </div>
           </div>
@@ -131,7 +131,7 @@ export default function MagazineDashboard() {
             <svg className="w-12 h-12 text-draft mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
             </svg>
-            <p className="text-sm font-medium text-draft">No magazines found for "{filter}"</p>
+            <p className="text-sm font-medium text-draft">No newsletters found for "{filter}"</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">

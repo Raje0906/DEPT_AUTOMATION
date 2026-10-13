@@ -70,9 +70,21 @@ export default function StudentMagazine() {
   const navigate = useNavigate();
   const { magazines, sectionData } = useMagazine();
 
-  // Strict Filter: ONLY show Published magazines to students
+  // Strict Filter: ONLY show Published magazines to students, strictly sorted latest first
   const publishedMagazines = useMemo(() => {
-    return magazines.filter(m => m.status === 'Published');
+    return [...magazines]
+      .filter(m => m.status === 'Published')
+      .sort((a, b) => {
+        const issueA = Number(a.issueNumber) || 0;
+        const issueB = Number(b.issueNumber) || 0;
+        if (issueA !== issueB) return issueB - issueA;
+
+        const dateA = a.publishedDate ? new Date(a.publishedDate).getTime() : 0;
+        const dateB = b.publishedDate ? new Date(b.publishedDate).getTime() : 0;
+        if (dateA !== dateB) return dateB - dateA;
+
+        return 0;
+      });
   }, [magazines]);
 
   const [downloadingMagId, setDownloadingMagId] = useState(null);
@@ -87,6 +99,13 @@ export default function StudentMagazine() {
 
   // Active magazine for background PDF rendering
   const [activeDownloadMag, setActiveDownloadMag] = useState(currentIssue);
+
+  // Keep active download target synchronized with current latest issue
+  React.useEffect(() => {
+    if (currentIssue && (!activeDownloadMag || activeDownloadMag.id !== currentIssue.id)) {
+      setActiveDownloadMag(currentIssue);
+    }
+  }, [currentIssue]);
 
   const downloadPages = useMemo(() => {
     if (!activeDownloadMag) return [];
@@ -116,7 +135,7 @@ export default function StudentMagazine() {
       toast.success(`Downloaded: ${filename}`, { id: toastId });
     } catch (err) {
       console.error('Student PDF download error:', err);
-      toast.error('Failed to generate magazine PDF. Please try again.', { id: toastId });
+      toast.error('Failed to generate newsletter PDF. Please try again.', { id: toastId });
     } finally {
       setDownloadingMagId(null);
       setDownloadProgress('');
@@ -140,10 +159,10 @@ export default function StudentMagazine() {
           Department Publications
         </p>
         <h1 className="font-serif text-3xl lg:text-4xl font-bold text-ink">
-          College Magazine
+          Department Newsletter
         </h1>
         <p className="text-sm text-draft mt-1.5 font-medium max-w-2xl">
-          Explore the latest college publications, achievements and campus highlights.
+          Explore the latest departmental publications, achievements and campus highlights.
         </p>
       </div>
 
@@ -152,7 +171,7 @@ export default function StudentMagazine() {
           <svg className="w-12 h-12 text-draft opacity-40 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
           </svg>
-          <h3 className="font-serif text-xl font-bold text-ink mb-1">No Published Magazines Yet</h3>
+          <h3 className="font-serif text-xl font-bold text-ink mb-1">No Published Newsletters Yet</h3>
           <p className="text-sm text-draft max-w-md mx-auto">
             The department editorial board is currently preparing upcoming editions. Please check back soon.
           </p>
@@ -200,7 +219,7 @@ export default function StudentMagazine() {
 
                       <p className="text-sm text-slate-600 mt-3 leading-relaxed max-w-3xl">
                         {currentIssue.description ||
-                          'The annual departmental magazine capturing student achievements, academic milestones, and departmental events with curated faculty and student articles.'}
+                          'The annual departmental newsletter capturing student achievements, academic milestones, and departmental events with curated faculty and student articles.'}
                       </p>
 
                       {currentIssue.tagline && (
@@ -234,14 +253,14 @@ export default function StudentMagazine() {
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
                         </svg>
-                        Read Magazine
+                        Read Newsletter
                       </button>
 
                       <button
                         onClick={() => handleDownloadPdf(currentIssue)}
                         disabled={downloadingMagId === currentIssue.id}
                         className="btn-secondary text-sm py-2 px-4 flex items-center gap-2 disabled:opacity-50"
-                        title="Download full magazine in high-resolution PDF"
+                        title="Download full newsletter in high-resolution PDF"
                       >
                         {downloadingMagId === currentIssue.id ? (
                           <>

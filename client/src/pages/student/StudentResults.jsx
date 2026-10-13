@@ -67,9 +67,18 @@ export default function StudentResults() {
               onChange={(e) => setSemester(parseInt(e.target.value, 10))}
               className="px-3 py-1.5 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
-              {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
+              {[
+                { s: 1, label: 'Semester 1 (FE Sem 1)' },
+                { s: 2, label: 'Semester 2 (FE Sem 2)' },
+                { s: 3, label: 'Semester 3 (SE Sem 1 - 2024 Pattern)' },
+                { s: 4, label: 'Semester 4 (SE Sem 2 - 2024 Pattern)' },
+                { s: 5, label: 'Semester 5 (TE Sem 1 - 2026-27)' },
+                { s: 6, label: 'Semester 6 (TE Sem 2)' },
+                { s: 7, label: 'Semester 7 (BE Sem 1)' },
+                { s: 8, label: 'Semester 8 (BE Sem 2)' }
+              ].map(({ s, label }) => (
                 <option key={s} value={s}>
-                  Semester {s} {s === 5 ? '(TE Sem 1 - 2026-27)' : ''}
+                  {label}
                 </option>
               ))}
             </select>

@@ -62,7 +62,8 @@ export default function SppuMarksheet({ student, subjects = [], semester = 5, ac
     ? Number(sgpa).toFixed(2)
     : (displayTotalCredits > 0 ? (totalCreditPoints / displayTotalCredits).toFixed(2) : '0.00');
 
-  const semName = semester === 5 ? 'Fifth' : `Semester ${semester}`;
+  const semNameMap = { 1: 'First', 2: 'Second', 3: 'Third', 4: 'Fourth', 5: 'Fifth', 6: 'Sixth', 7: 'Seventh', 8: 'Eighth' };
+  const semName = semNameMap[semester] || `Semester ${semester}`;
 
   return (
     <div className="sppu-marksheet-container bg-white text-black font-sans border border-gray-400 p-6 sm:p-8 max-w-4xl mx-auto shadow-sm print:shadow-none print:border print:border-black print:p-2 print:max-w-none print:w-full">
