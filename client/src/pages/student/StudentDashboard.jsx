@@ -180,7 +180,7 @@ export default function StudentDashboard() {
                         <span className="badge badge-approved text-[10px] py-0.5 px-2">Assigned</span>
                       </div>
                       {seminarData.group.guide_email && (
-                        <p className="text-xs font-mono text-draft mt-0.5">✉️ {seminarData.group.guide_email}</p>
+                        <p className="text-xs font-mono text-draft mt-0.5">{seminarData.group.guide_email}</p>
                       )}
                     </div>
                   ) : (

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation, Link } from 'react-router-dom';
+import api from '../api/axios';
 import { useAuth } from '../contexts/AuthContext';
 import { useMagazine } from '../contexts/MagazineContext';
 
@@ -133,6 +134,8 @@ const roleNav = {
       items: [
         { to: '/faculty/clubs',           label: 'Manage Clubs',          icon: Icons.clubs },
         { to: '/faculty/project-eval',    label: 'BE Project Evaluation', icon: Icons.project },
+        { to: '/faculty/magazines',       label: 'Magazine',              icon: Icons.magazines },
+        { to: '/faculty/seminar',         label: 'Submission',            icon: Icons.seminar },
         { to: '/faculty/magazines',       label: 'Newsletter',            icon: Icons.magazines },
         { to: '/faculty/seminar',         label: 'TE Seminar Governance', icon: Icons.seminar },
         { to: '/faculty/seminar/import-assign', label: 'Import and assign guides', icon: Icons.seminar },
@@ -205,9 +208,8 @@ const PAGE_TITLES = {
   '/faculty/clubs': 'Manage Student Clubs',
   '/faculty/project-eval': 'BE Project Evaluation',
   '/faculty/project-coordination': 'BE Project Governance',
-  '/faculty/seminar': 'TE Seminar Coordinator Portal',
-  '/faculty/seminar/import-assign': 'Import Responses & Assign Guides',
-  '/faculty/seminar/schedule': 'Schedule Seminar Presentation',
+  '/faculty/seminar': 'Seminar Submissions',
+  '/faculty/seminar/schedule': 'Schedule Presentation',
   '/faculty/seminar/my-groups': 'Assigned Seminar Groups',
   '/faculty/class-namelist': 'University Namelist Segregator',
   '/hod': 'HOD Executive Dashboard',
@@ -244,6 +246,19 @@ export default function Layout({ children }) {
   }, [location.pathname]);
 
   const pendingMagazinesCount = magazines?.filter(m => m.status === 'Under Review').length || 0;
+  const [isSeminarPublished, setIsSeminarPublished] = useState(false);
+
+  useEffect(() => {
+    if (user?.role === 'faculty' && user?.is_seminar_coordinator) {
+      api.get('/seminar/sessions')
+        .then(({ data }) => {
+          const sessions = data.sessions || [];
+          const hasPublished = sessions.some(s => s.status === 'PUBLISHED');
+          setIsSeminarPublished(hasPublished);
+        })
+        .catch(() => {});
+    }
+  }, [user]);
 
   let navGroups = roleNav[user?.role] || [];
   if (user?.role === 'faculty') {
@@ -252,6 +267,29 @@ export default function Layout({ children }) {
         ...group,
         items: group.items.filter(item => !item.to.startsWith('/faculty/seminar') || item.to === '/faculty/seminar/my-groups')
       }));
+    } else {
+      // Coordinator nav: Schedule presentation placed just before Submission when session is published
+      navGroups = navGroups.map(group => {
+        if (group.group === 'Department Administration') {
+          const items = [];
+          for (const item of group.items) {
+            if (item.to === '/faculty/seminar') {
+              if (isSeminarPublished) {
+                items.push({
+                  to: '/faculty/seminar/schedule',
+                  label: 'Schedule presentation',
+                  icon: Icons.results
+                });
+              }
+              items.push(item);
+            } else {
+              items.push(item);
+            }
+          }
+          return { ...group, items };
+        }
+        return group;
+      });
     }
     if (user?.is_project_coordinator) {
       navGroups = navGroups.map(group => {
@@ -387,13 +425,18 @@ export default function Layout({ children }) {
                   key={item.to}
                   to={item.to}
                   end={item.to === '/student' || item.to === '/faculty' || item.to === '/hod'}
-                  className={({ isActive }) =>
-                    `group flex items-center gap-3 px-3 py-2 text-xs font-medium rounded transition-all duration-150 ${
-                      isActive
+                  className={({ isActive }) => {
+                    const isCustomActive = item.to === '/faculty/seminar'
+                      ? location.pathname.startsWith('/faculty/seminar') &&
+                        !location.pathname.startsWith('/faculty/seminar/my-groups') &&
+                        !location.pathname.startsWith('/faculty/seminar/schedule')
+                      : isActive;
+                    return `group flex items-center gap-3 px-3 py-2 text-xs font-medium rounded transition-all duration-150 ${
+                      isCustomActive
                         ? 'bg-white/12 text-white font-semibold border-l-2 border-[#E5A93C] shadow-sm'
                         : 'text-blue-200/90 hover:text-white hover:bg-white/6'
-                    }`
-                  }
+                    }`;
+                  }}
                   onClick={() => setMobileOpen(false)}
                 >
                   <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center">

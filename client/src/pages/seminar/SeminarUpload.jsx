@@ -266,7 +266,7 @@ export default function SeminarUpload() {
                 ? 'bg-amber-50 text-amber-800 border-amber-300'
                 : 'bg-emerald-50 text-emerald-800 border-emerald-300'
             }`}>
-              {session?.is_locked ? '🔒 Registration Locked' : '🟢 Registration Open'}
+              {session?.is_locked ? 'Registration Locked' : 'Registration Open'}
             </span>
             <span className="text-xs font-mono text-[var(--ink)]/50">
               {session?.batch} · {session?.academic_year}
@@ -292,7 +292,7 @@ export default function SeminarUpload() {
                 : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300'
             }`}
           >
-            {session?.is_locked ? '🔓 Reopen Registration' : '🔒 Lock Registration'}
+            {session?.is_locked ? 'Reopen Registration' : 'Lock Registration'}
           </button>
 
           {/* Download Draft Export */}
@@ -352,7 +352,7 @@ export default function SeminarUpload() {
                 ? 'bg-amber-100 text-amber-900 border-amber-300'
                 : 'bg-emerald-100 text-emerald-800 border-emerald-300'
             }`}>
-              {session?.is_locked ? '🔒 Locked' : '🟢 Open for Students'}
+              {session?.is_locked ? 'Locked' : 'Open for Students'}
             </span>
           </div>
         </div>
@@ -496,34 +496,14 @@ export default function SeminarUpload() {
 
                       <td className="p-3 max-w-sm align-top">
                         {viewMode === 'compact' ? (
-                          <div className="space-y-1.5">
-                            {/* Primary Choice Topic Preview */}
-                            {(g.members?.find(m => m.is_leader) || g.members?.[0])?.topic1 ? (
-                              <div className="p-1.5 bg-amber-50/60 border border-amber-200/70 rounded text-[11px]">
-                                <div className="text-[10px] text-amber-900 font-bold flex items-center gap-1">
-                                  <span>⭐ Primary Topic ({(g.members?.find(m => m.is_leader) || g.members?.[0])?.student_name}):</span>
-                                </div>
-                                <div
-                                  className="text-slate-800 truncate mt-0.5 font-medium"
-                                  title={(g.members?.find(m => m.is_leader) || g.members?.[0])?.topic1}
-                                >
-                                  {(g.members?.find(m => m.is_leader) || g.members?.[0])?.topic1}
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="text-slate-400 italic text-[11px]">No primary topic recorded</div>
-                            )}
-
-                            {/* View All Topics Button */}
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => setSelectedGroupModal(g)}
-                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--navy)] bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded transition-colors"
-                              >
-                                <span>📖 View All Topics ({g.members?.length || 0} Students)</span>
-                              </button>
-                            </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedGroupModal(g)}
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--navy)] bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2.5 py-1 rounded transition-colors"
+                            >
+                              <span>View All Topics ({g.members?.length || 0} Students)</span>
+                            </button>
                           </div>
                         ) : (
                           /* Detailed View: Render individual cards inline */
@@ -658,7 +638,6 @@ export default function SeminarUpload() {
           {/* Issue Cards */}
           {validation.issues.length === 0 ? (
             <div className="bg-white border border-emerald-200 rounded-xl p-8 text-center space-y-2">
-              <span className="text-3xl">🎉</span>
               <h3 className="text-base font-bold text-emerald-900">Zero Validation Conflicts Detected</h3>
               <p className="text-xs text-emerald-800/80 max-w-md mx-auto">
                 All submitted groups comply with group size limits, unique PRN constraints, and required fields.
@@ -685,7 +664,7 @@ export default function SeminarUpload() {
                       <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 ${
                         isErr ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'
                       }`}>
-                        {isErr ? '✕' : '⚠️'}
+                        {isErr ? '✕' : '!'}
                       </span>
                       <div>
                         <div className="flex items-center gap-2">

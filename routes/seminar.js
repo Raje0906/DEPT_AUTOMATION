@@ -634,6 +634,72 @@ router.post('/register-group', verifyToken, requireRole('student'), async (req, 
       });
     }
 
+    // PART 2: Enforce mandatory Name, PRN, and Topics (3 per member) on student registration form
+    const REQUIRED_TOPIC_COUNT = 3;
+    const PLACEHOLDER_STRINGS = new Set(['.', '..', '-', 'n/a', 'na', 'none']);
+
+    function isFieldBlankOrPlaceholder(val) {
+      if (val === null || val === undefined) return true;
+      const s = String(val).trim();
+      if (s === '') return true;
+      return PLACEHOLDER_STRINGS.has(s.toLowerCase());
+    }
+
+    function escapeHtml(val) {
+      if (val === null || val === undefined) return '';
+      return String(val)
+        .trim()
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    const fieldErrors = [];
+    const rawMembers = Array.isArray(members) ? members : [];
+
+    rawMembers.forEach((m, idx) => {
+      const memberNum = idx + 1;
+      const rawName = m?.student_name || m?.name;
+      const rawPrn = m?.prn || m?.roll_no;
+
+      if (isFieldBlankOrPlaceholder(rawName)) {
+        fieldErrors.push({
+          memberIndex: memberNum,
+          field: 'student_name',
+          message: `Enter the name of member ${memberNum}`,
+        });
+      }
+
+      if (isFieldBlankOrPlaceholder(rawPrn)) {
+        fieldErrors.push({
+          memberIndex: memberNum,
+          field: 'prn',
+          message: `Enter the PRN of member ${memberNum}`,
+        });
+      }
+
+      for (let t = 1; t <= REQUIRED_TOPIC_COUNT; t++) {
+        const rawTopic = m?.[`topic${t}`];
+        if (isFieldBlankOrPlaceholder(rawTopic)) {
+          fieldErrors.push({
+            memberIndex: memberNum,
+            field: `topic${t}`,
+            message: `Enter topic ${t} of member ${memberNum}`,
+          });
+        }
+      }
+    });
+
+    if (fieldErrors.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(422).json({
+        error: 'Mandatory fields missing: Name, PRN, and 3 Topics are required for each member.',
+        errors: fieldErrors,
+      });
+    }
+
     // In-memory validation of fields, formats, group size, and duplicate PRNs within submission
     const valResult = validateSingleGroup({ domain, members });
     if (!valResult.valid) {
@@ -646,6 +712,19 @@ router.post('/register-group', verifyToken, requireRole('student'), async (req, 
     }
 
     const { cleanedGroup } = valResult;
+
+    // Trim and escape all inputs before persistence
+    cleanedGroup.members = cleanedGroup.members.map(m => ({
+      ...m,
+      student_name: escapeHtml(m.student_name),
+      prn: escapeHtml(m.prn).toUpperCase(),
+      division: escapeHtml(m.division),
+      mobile: escapeHtml(m.mobile),
+      email: escapeHtml(m.email).toLowerCase(),
+      topic1: escapeHtml(m.topic1),
+      topic2: escapeHtml(m.topic2),
+      topic3: escapeHtml(m.topic3),
+    }));
 
     // Database check for duplicate PRNs across OTHER groups in this session
     const prnList = cleanedGroup.members.map(m => m.prn);
@@ -1404,7 +1483,9 @@ router.get('/sessions/:id/assignments', verifyToken, requireCoordinator, async (
   try {
     const r = await pool.query(
       `SELECT sg.id, sg.group_no, sg.domain, sg.status,
+              COALESCE(sg.seminar_guide_id, sem_g.id) as seminar_guide_id,
               COALESCE(sg.seminar_guide_id, sem_g.id) as guide_id,
+              COALESCE(sg.guide_id, sem_g.faculty_id) as faculty_id,
               COALESCE(sg.guide_name, sem_g.guide_name, u.name, 'Unassigned') as guide_name,
               COALESCE(sem_g.designation, f.designation, '') as guide_designation,
               (SELECT json_agg(json_build_object('name', m.student_name,'prn',m.prn,'division',m.division,'is_leader',m.is_leader,'topic1',m.topic1,'topic2',m.topic2,'topic3',m.topic3) ORDER BY m.member_index)
@@ -1551,7 +1632,7 @@ router.patch('/sessions/:id/assignments/:groupId', verifyToken, requireCoordinat
       );
     }
 
-    res.json({ updated: true });
+    res.json({ updated: true, guide_name: guide_id ? (await pool.query('SELECT guide_name FROM seminar_groups WHERE id = $1', [req.params.groupId])).rows[0]?.guide_name : null });
   } catch (err) {
     console.error('[Seminar] reassign:', err.message);
     res.status(500).json({ error: 'Reassignment failed' });
@@ -1564,21 +1645,275 @@ router.patch('/sessions/:id/assignments/:groupId', verifyToken, requireCoordinat
 router.post('/sessions/:id/publish', verifyToken, requireCoordinator, async (req, res) => {
   const sessionId = parseInt(req.params.id, 10);
   try {
-    const unassigned = await pool.query(
-      `SELECT COUNT(*) FROM seminar_groups
-       WHERE session_id = $1 AND seminar_guide_id IS NULL AND guide_id IS NULL AND (guide_name IS NULL OR guide_name = '')`,
-      [sessionId]
-    );
-    if (parseInt(unassigned.rows[0].count, 10) > 0) {
-      return res.status(409).json({ error: `${unassigned.rows[0].count} group(s) are not yet assigned to a guide` });
+    const { publish = true, force = false } = req.body || {};
+    if (!publish) {
+      // Unpublish session to draft (preserves all saved presentation schedules & rows)
+      await pool.query(
+        `UPDATE seminar_sessions SET status = 'SETUP', published_at = NULL WHERE id = $1`,
+        [sessionId]
+      );
+      return res.json({ published: false, status: 'SETUP' });
+    }
+
+    if (!force) {
+      const unassigned = await pool.query(
+        `SELECT COUNT(*) FROM seminar_groups
+         WHERE session_id = $1 AND seminar_guide_id IS NULL AND guide_id IS NULL AND (guide_name IS NULL OR guide_name = '')`,
+        [sessionId]
+      );
+      if (parseInt(unassigned.rows[0].count, 10) > 0) {
+        return res.status(409).json({
+          error: `${unassigned.rows[0].count} group(s) are not yet assigned to a guide`,
+          unassigned_count: parseInt(unassigned.rows[0].count, 10),
+        });
+      }
     }
     await pool.query(
       `UPDATE seminar_sessions SET status = 'PUBLISHED', published_at = NOW(), published_by = $1 WHERE id = $2`,
       [req.user.id, sessionId]
     );
-    res.json({ published: true });
+    res.json({ published: true, status: 'PUBLISHED' });
   } catch (err) {
     res.status(500).json({ error: 'Publish failed' });
+  }
+});
+
+// ─── Presentation Schedules ───────────────────────────────────────────────────
+
+// GET /api/seminar/presentation-schedules/active (resolves active published session)
+router.get('/presentation-schedules/active', verifyToken, requireCoordinator, async (req, res) => {
+  try {
+    const sRes = await pool.query(
+      `SELECT * FROM seminar_sessions
+       WHERE status = 'PUBLISHED'
+       ORDER BY (CASE WHEN academic_year = '2025-26' THEN 1 ELSE 2 END) ASC, created_at DESC LIMIT 1`
+    );
+    if (!sRes.rows.length) {
+      // Find latest session even if draft
+      const anySess = await pool.query('SELECT * FROM seminar_sessions ORDER BY created_at DESC LIMIT 1');
+      if (!anySess.rows.length) {
+        return res.status(404).json({ error: 'No seminar session found' });
+      }
+      return res.status(403).json({
+        error: 'Active session is currently in draft mode. Presentation schedules require a published session.',
+        session: anySess.rows[0],
+      });
+    }
+    const session = sRes.rows[0];
+    const targetUrl = `/api/seminar/sessions/${session.id}/presentation-schedules`;
+    req.url = `/sessions/${session.id}/presentation-schedules`;
+    return router.handle(req, res);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to resolve active session presentation schedule' });
+  }
+});
+
+// GET /api/seminar/sessions/:id/presentation-schedules
+router.get('/sessions/:id/presentation-schedules', verifyToken, requireCoordinator, async (req, res) => {
+  const sessionId = parseInt(req.params.id, 10);
+  try {
+    const sessRes = await pool.query('SELECT id, name, academic_year, batch, status FROM seminar_sessions WHERE id = $1', [sessionId]);
+    if (!sessRes.rows.length) return res.status(404).json({ error: 'Session not found' });
+    const session = sessRes.rows[0];
+
+    // Enforce: other roles, or a draft session, get 403 on every schedule endpoint
+    if (session.status !== 'PUBLISHED') {
+      return res.status(403).json({
+        error: 'Session is not published. Presentation schedules are only accessible after the session is published.',
+        is_draft: true,
+        session,
+      });
+    }
+
+    // Read live group-to-guide assignments for this active session (never store a copy)
+    const groupsRes = await pool.query(`
+      SELECT sg.id, sg.group_no, sg.domain,
+             COALESCE(sg.guide_id, sem_g.faculty_id) as guide_id,
+             COALESCE(u.name, sg.guide_name, sem_g.guide_name, 'Unassigned') as guide_name
+      FROM seminar_groups sg
+      LEFT JOIN seminar_guides sem_g ON sg.seminar_guide_id = sem_g.id
+      LEFT JOIN faculty f ON (sg.guide_id = f.id OR sem_g.faculty_id = f.id)
+      LEFT JOIN users u ON f.user_id = u.id
+      WHERE sg.session_id = $1
+      ORDER BY sg.group_no ASC
+    `, [sessionId]);
+
+    const guideMap = new Map();
+    const unassignedGroups = [];
+
+    for (const g of groupsRes.rows) {
+      if (!g.guide_id || g.guide_name === 'Unassigned') {
+        unassignedGroups.push(g.group_no);
+      } else {
+        if (!guideMap.has(g.guide_id)) {
+          guideMap.set(g.guide_id, {
+            guide_id: g.guide_id,
+            guide_name: g.guide_name,
+            group_nos: [],
+          });
+        }
+        guideMap.get(g.guide_id).group_nos.push(g.group_no);
+      }
+    }
+
+    // Sort group numbers numerically
+    const guides = Array.from(guideMap.values()).map(guide => ({
+      ...guide,
+      group_nos: guide.group_nos.sort((a, b) => a - b),
+    })).sort((a, b) => a.guide_name.localeCompare(b.guide_name));
+
+    unassignedGroups.sort((a, b) => a - b);
+
+    // Fetch saved presentation schedules
+    const schedRes = await pool.query(`
+      SELECT ps.*, u.name as updated_by_name
+      FROM presentation_schedules ps
+      LEFT JOIN users u ON ps.updated_by = u.id
+      WHERE ps.session_id = $1
+      ORDER BY ps.presentation_no ASC
+    `, [sessionId]);
+
+    // Fetch saved rows
+    const rowsRes = await pool.query(`
+      SELECT psr.*, ps.presentation_no
+      FROM presentation_schedule_rows psr
+      JOIN presentation_schedules ps ON psr.schedule_id = ps.id
+      WHERE ps.session_id = $1
+    `, [sessionId]);
+
+    const schedules = {};
+    for (const s of schedRes.rows) {
+      schedules[s.presentation_no] = {
+        id: s.id,
+        presentation_no: s.presentation_no,
+        title: s.title,
+        updated_by: s.updated_by,
+        updated_by_name: s.updated_by_name,
+        updated_at: s.updated_at,
+        rows: {},
+      };
+    }
+
+    for (const r of rowsRes.rows) {
+      if (schedules[r.presentation_no]) {
+        schedules[r.presentation_no].rows[r.guide_id] = {
+          id: r.id,
+          guide_id: r.guide_id,
+          room_no: r.room_no || '',
+          date: r.date ? (r.date instanceof Date ? r.date.toISOString().split('T')[0] : String(r.date).slice(0, 10)) : '',
+          time_text: r.time_text || '',
+        };
+      }
+    }
+
+    res.json({
+      session,
+      guides,
+      unassigned_groups: unassignedGroups,
+      schedules,
+    });
+  } catch (err) {
+    console.error('[Seminar] GET /presentation-schedules:', err);
+    res.status(500).json({ error: 'Failed to fetch presentation schedules' });
+  }
+});
+
+// PUT /api/seminar/sessions/:id/presentation-schedules/:presentationNo
+router.put('/sessions/:id/presentation-schedules/:presentationNo', verifyToken, requireCoordinator, async (req, res) => {
+  const sessionId = parseInt(req.params.id, 10);
+  const presentationNo = parseInt(req.params.presentationNo, 10);
+  const { title, rows } = req.body;
+
+  if (isNaN(sessionId) || isNaN(presentationNo)) {
+    return res.status(400).json({ error: 'Invalid session or presentation number' });
+  }
+
+  const client = await pool.connect();
+  try {
+    const sessRes = await client.query('SELECT id, status FROM seminar_sessions WHERE id = $1', [sessionId]);
+    if (!sessRes.rows.length) {
+      client.release();
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Server-side guard: 403 on draft session
+    if (sessRes.rows[0].status !== 'PUBLISHED') {
+      client.release();
+      return res.status(403).json({
+        error: 'Session is not published. Presentation schedules can only be updated for published sessions.',
+      });
+    }
+
+    await client.query('BEGIN');
+
+    const defaultTitle = `Seminar Presentation ${presentationNo} Schedule`;
+    const scheduleTitle = (title && String(title).trim()) ? String(title).trim() : defaultTitle;
+
+    // Upsert schedule
+    const schedRes = await client.query(`
+      INSERT INTO presentation_schedules (session_id, presentation_no, title, updated_by, updated_at)
+      VALUES ($1, $2, $3, $4, NOW())
+      ON CONFLICT (session_id, presentation_no)
+      DO UPDATE SET title = EXCLUDED.title, updated_by = EXCLUDED.updated_by, updated_at = NOW()
+      RETURNING id, updated_at
+    `, [sessionId, presentationNo, scheduleTitle, req.user.id]);
+
+    const scheduleId = schedRes.rows[0].id;
+    const updatedAt = schedRes.rows[0].updated_at;
+
+    // Soft clash detection check across submitted rows (never blocks saving)
+    const clashWarnings = [];
+    const slotMap = new Map();
+
+    if (Array.isArray(rows)) {
+      for (const row of rows) {
+        const guideId = parseInt(row.guide_id, 10);
+        if (isNaN(guideId)) continue;
+
+        const roomNo = row.room_no ? String(row.room_no).trim() : null;
+        const dateVal = row.date && String(row.date).trim() ? String(row.date).trim() : null;
+        const timeText = row.time_text ? String(row.time_text).trim() : null;
+
+        // Check room clash if room, date, and time are non-empty
+        if (roomNo && dateVal && timeText) {
+          const key = `${roomNo.toLowerCase()}__${dateVal}__${timeText.toLowerCase()}`;
+          if (slotMap.has(key)) {
+            clashWarnings.push({
+              room_no: roomNo,
+              date: dateVal,
+              time_text: timeText,
+              message: `Room "${roomNo}" is used by multiple guides at ${dateVal} (${timeText}).`,
+            });
+          } else {
+            slotMap.set(key, guideId);
+          }
+        }
+
+        // Upsert row
+        await client.query(`
+          INSERT INTO presentation_schedule_rows (schedule_id, guide_id, room_no, date, time_text)
+          VALUES ($1, $2, $3, $4, $5)
+          ON CONFLICT (schedule_id, guide_id)
+          DO UPDATE SET room_no = EXCLUDED.room_no, date = EXCLUDED.date, time_text = EXCLUDED.time_text
+        `, [scheduleId, guideId, roomNo, dateVal, timeText]);
+      }
+    }
+
+    await client.query('COMMIT');
+
+    res.json({
+      success: true,
+      schedule_id: scheduleId,
+      updated_at: updatedAt,
+      updated_by_name: req.user.name,
+      warnings: clashWarnings,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[Seminar] PUT /presentation-schedules/:presentationNo:', err);
+    res.status(500).json({ error: 'Failed to save presentation schedule' });
+  } finally {
+    client.release();
   }
 });
 
