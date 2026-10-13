@@ -100,12 +100,12 @@ const SAMPLE_MAGAZINES = [
 // ── Default section data for a new magazine ───────────────────────────────────
 // ── Default section data for a new magazine ───────────────────────────────────
 export const CLASS_OPTIONS = [
-  'SE - Div A', 'SE - Div B', 'SE - Div C',
-  'TE - Div A', 'TE - Div B', 'TE - Div C',
-  'BE - Div A', 'BE - Div B', 'BE - Div C',
-  'SE I', 'SE II', 'SE III',
-  'TE I', 'TE II', 'TE III',
-  'BE I', 'BE II', 'BE III'
+  'SE - Div A', 'SE - Div B', 'SE - Div C', 'SE - Div D', 'SE - Div E',
+  'TE - Div A', 'TE - Div B', 'TE - Div C', 'TE - Div D', 'TE - Div E',
+  'BE - Div A', 'BE - Div B', 'BE - Div C', 'BE - Div D', 'BE - Div E',
+  'SE I', 'SE II', 'SE III', 'SE IV', 'SE V',
+  'TE I', 'TE II', 'TE III', 'TE IV', 'TE V',
+  'BE I', 'BE II', 'BE III', 'BE IV', 'BE V'
 ];
 
 export function normalizeToppersData(toppersInput) {
@@ -284,7 +284,7 @@ export function MagazineProvider({ children }) {
     let isMounted = true;
     async function loadFromDb() {
       try {
-        const res = await api.get('/magazines');
+        const res = await api.get('/magazines?include_data=true');
         if (isMounted && res.data?.magazines && Array.isArray(res.data.magazines) && res.data.magazines.length > 0) {
           setMagazines(res.data.magazines);
           try {
@@ -678,7 +678,7 @@ export function MagazineProvider({ children }) {
         mag = { ...mag, template: 'modern-academic' };
       }
       setCurrentMagazine(mag);
-      const loadedData = getPersistedSectionData(mag.id, mag.sectionData || defaultSectionData());
+      const loadedData = getPersistedSectionData(mag.id, mag.sectionData || mag.section_data || defaultSectionData());
       setSectionData(loadedData);
       setSectionStatus(
         Object.fromEntries(
