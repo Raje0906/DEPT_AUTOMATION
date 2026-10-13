@@ -135,8 +135,6 @@ const roleNav = {
         { to: '/faculty/project-eval',    label: 'BE Project Evaluation', icon: Icons.project },
         { to: '/faculty/magazines',       label: 'Magazine',              icon: Icons.magazines },
         { to: '/faculty/seminar',         label: 'TE Seminar Governance', icon: Icons.seminar },
-        { to: '/faculty/seminar/import-assign', label: 'Import and assign guides', icon: Icons.seminar },
-        { to: '/faculty/seminar/schedule',      label: 'Schedule presentation',    icon: Icons.results },
         { to: '/faculty/seminar/my-groups', label: 'Seminar Assigned Groups', icon: Icons.teachers },
       ],
     },
@@ -182,9 +180,7 @@ const PAGE_TITLES = {
   '/faculty/clubs': 'Manage Student Clubs',
   '/faculty/project-eval': 'BE Project Evaluation',
   '/faculty/project-coordination': 'BE Project Governance',
-  '/faculty/seminar': 'TE Seminar Coordinator Portal',
-  '/faculty/seminar/import-assign': 'Import Responses & Assign Guides',
-  '/faculty/seminar/schedule': 'Schedule Seminar Presentation',
+  '/faculty/seminar': 'TE Seminar Governance',
   '/faculty/seminar/my-groups': 'Assigned Seminar Groups',
   '/faculty/class-namelist': 'University Namelist Segregator',
   '/hod': 'HOD Executive Dashboard',
@@ -377,13 +373,16 @@ export default function Layout({ children }) {
                   key={item.to}
                   to={item.to}
                   end={item.to === '/student' || item.to === '/faculty' || item.to === '/hod'}
-                  className={({ isActive }) =>
-                    `group flex items-center gap-3 px-3 py-2 text-xs font-medium rounded transition-all duration-150 ${
-                      isActive
+                  className={({ isActive }) => {
+                    const isCustomActive = item.to === '/faculty/seminar'
+                      ? location.pathname.startsWith('/faculty/seminar') && !location.pathname.startsWith('/faculty/seminar/my-groups')
+                      : isActive;
+                    return `group flex items-center gap-3 px-3 py-2 text-xs font-medium rounded transition-all duration-150 ${
+                      isCustomActive
                         ? 'bg-white/12 text-white font-semibold border-l-2 border-[#E5A93C] shadow-sm'
                         : 'text-blue-200/90 hover:text-white hover:bg-white/6'
-                    }`
-                  }
+                    }`;
+                  }}
                   onClick={() => setMobileOpen(false)}
                 >
                   <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center">

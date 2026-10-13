@@ -138,7 +138,7 @@ export default function App() {
 
           {/* Seminar Tool — Coordinator */}
           <Route path="/faculty/seminar"                    element={<CoordinatorLayout><SeminarSessions /></CoordinatorLayout>} />
-          <Route path="/faculty/seminar/import-assign"      element={<CoordinatorLayout><SeminarImportAssignWorkflow /></CoordinatorLayout>} />
+          <Route path="/faculty/seminar/import-assign"      element={<Navigate to="/faculty/seminar" replace />} />
           <Route path="/faculty/seminar/schedule"           element={<CoordinatorLayout><SeminarSchedule /></CoordinatorLayout>} />
           <Route path="/faculty/seminar/:id/upload"         element={<CoordinatorLayout><SeminarUpload /></CoordinatorLayout>} />
           <Route path="/faculty/seminar/:id/assign"         element={<CoordinatorLayout><SeminarAssignment /></CoordinatorLayout>} />
