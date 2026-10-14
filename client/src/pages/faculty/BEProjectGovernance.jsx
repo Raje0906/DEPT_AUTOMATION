@@ -2571,14 +2571,38 @@ export default function BEProjectGovernance() {
                       const isExpanded = expandedGroupId === g.id;
                       return (
                         <React.Fragment key={g.id}>
-                          <tr className={isExpanded ? 'bg-blue-50/30' : ''}>
+                          <tr
+                            onClick={() => setExpandedGroupId(isExpanded ? null : g.id)}
+                            className={`cursor-pointer transition-colors group ${
+                              isExpanded ? 'bg-blue-50/40 border-l-4 border-l-navy' : 'hover:bg-blue-50/20'
+                            }`}
+                            title={isExpanded ? 'Click to collapse group details' : 'Click to expand group (view students & 3 topics)'}
+                          >
                             <td>
-                              <span className="font-mono text-sm font-bold text-navy whitespace-nowrap">
-                                {g.group_code}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`w-5 h-5 rounded flex items-center justify-center text-xs font-bold transition-all duration-200 shrink-0 ${
+                                    isExpanded
+                                      ? 'bg-navy text-white rotate-90 shadow-2xs'
+                                      : 'bg-slate-100 text-slate-500 group-hover:bg-blue-100 group-hover:text-navy'
+                                  }`}
+                                >
+                                  <svg className="w-3 h-3 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                                  </svg>
+                                </span>
+                                <div>
+                                  <span className="font-mono text-sm font-bold text-navy whitespace-nowrap group-hover:text-blue-700 transition-colors">
+                                    {g.group_code}
+                                  </span>
+                                  <span className="text-[10px] text-draft block">
+                                    {isExpanded ? 'Click to hide' : 'Click to view'}
+                                  </span>
+                                </div>
+                              </div>
                             </td>
                             <td className="max-w-xs">
-                              <div className="font-semibold text-ink text-sm line-clamp-2" title={g.title}>{g.title}</div>
+                              <div className="font-semibold text-ink text-sm line-clamp-2 group-hover:text-navy transition-colors" title={g.title}>{g.title}</div>
                               <div className="text-xs text-draft mt-0.5 font-medium">{g.domain}</div>
                             </td>
                             <td>
@@ -2592,7 +2616,10 @@ export default function BEProjectGovernance() {
                                   </span>
                                   <button
                                     type="button"
-                                    onClick={() => setExpandedGroupId(isExpanded ? null : g.id)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setExpandedGroupId(isExpanded ? null : g.id);
+                                    }}
                                     className="text-[11px] font-bold text-navy hover:underline"
                                     title="View/manage students in this group"
                                   >
@@ -2618,7 +2645,8 @@ export default function BEProjectGovernance() {
                                   <div className="flex items-center gap-1.5">
                                     <button
                                       type="button"
-                                      onClick={() => {
+                                      onClick={(e) => {
+                                        e.stopPropagation();
                                         setGuideModalSearch('');
                                         setGuideModalGroup(g);
                                         setSelectedGuideId(g.guide_id ? String(g.guide_id) : '');
@@ -2632,7 +2660,10 @@ export default function BEProjectGovernance() {
                                         <span className="text-slate-300">·</span>
                                         <button
                                           type="button"
-                                          onClick={() => revertGroupGuide(g.id)}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            revertGroupGuide(g.id);
+                                          }}
                                           className="text-[10px] font-semibold text-amber-800 hover:text-amber-950 underline"
                                           title="Revert to database guide"
                                         >
@@ -2655,7 +2686,8 @@ export default function BEProjectGovernance() {
                                   <div className="flex items-center gap-1.5">
                                     <button
                                       type="button"
-                                      onClick={() => {
+                                      onClick={(e) => {
+                                        e.stopPropagation();
                                         setGuideModalSearch('');
                                         setGuideModalGroup(g);
                                         setSelectedGuideId(g.guide_id ? String(g.guide_id) : '');
@@ -2667,7 +2699,10 @@ export default function BEProjectGovernance() {
                                     {g._isGuideStaged && (
                                       <button
                                         type="button"
-                                        onClick={() => revertGroupGuide(g.id)}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          revertGroupGuide(g.id);
+                                        }}
                                         className="text-[10px] font-semibold text-amber-800 hover:text-amber-950 underline ml-1"
                                         title="Revert to database guide"
                                       >
@@ -2711,7 +2746,8 @@ export default function BEProjectGovernance() {
                                     <div className="flex items-center gap-2 pt-0.5">
                                       <button
                                         type="button"
-                                        onClick={() => {
+                                        onClick={(e) => {
+                                          e.stopPropagation();
                                           setSelectedStageId(panelMatrixStageId);
                                           setSelectedGroupId(String(g.id));
                                           setSelectedPanelistIds(groupPanelists.map((p) => String(p.faculty_id)));
@@ -2724,7 +2760,10 @@ export default function BEProjectGovernance() {
                                       <span className="text-slate-300">·</span>
                                       <button
                                         type="button"
-                                        onClick={() => handleStageUnassignGroupMentors(g)}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleStageUnassignGroupMentors(g);
+                                        }}
                                         className="text-[10px] font-semibold text-red-600 hover:underline"
                                       >
                                         Unassign
@@ -2734,7 +2773,10 @@ export default function BEProjectGovernance() {
                                           <span className="text-slate-300">·</span>
                                           <button
                                             type="button"
-                                            onClick={() => revertPanelAssignment(`${panelMatrixStageId}_${g.id}`)}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              revertPanelAssignment(`${panelMatrixStageId}_${g.id}`);
+                                            }}
                                             className="text-[10px] font-semibold text-amber-800 hover:text-amber-950 underline"
                                             title="Revert to database mentors"
                                           >
@@ -2757,7 +2799,8 @@ export default function BEProjectGovernance() {
                                     <div className="flex items-center gap-1.5">
                                       <button
                                         type="button"
-                                        onClick={() => {
+                                        onClick={(e) => {
+                                          e.stopPropagation();
                                           setSelectedStageId(panelMatrixStageId);
                                           setSelectedGroupId(String(g.id));
                                           setSelectedPanelistIds([]);
@@ -2770,7 +2813,10 @@ export default function BEProjectGovernance() {
                                       {isPanelStaged && (
                                         <button
                                           type="button"
-                                          onClick={() => revertPanelAssignment(`${panelMatrixStageId}_${g.id}`)}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            revertPanelAssignment(`${panelMatrixStageId}_${g.id}`);
+                                          }}
                                           className="text-[10px] font-semibold text-amber-800 hover:text-amber-950 underline ml-1"
                                           title="Revert to database mentors"
                                         >
@@ -2791,7 +2837,10 @@ export default function BEProjectGovernance() {
                               {(g.members?.length || g.members_count || 0) < 4 && (
                                 <button
                                   type="button"
-                                  onClick={() => handleOpenAddStudent(g)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenAddStudent(g);
+                                  }}
                                   className="px-2.5 py-1 text-xs font-semibold rounded border bg-slate-100 hover:bg-blue-50 hover:text-navy hover:border-blue-300 text-slate-700 border-slate-300 transition-colors shadow-2xs"
                                   title="Add a student member to this group"
                                 >
@@ -2800,7 +2849,10 @@ export default function BEProjectGovernance() {
                               )}
                               <button
                                 type="button"
-                                onClick={() => handleDeleteGroup(g)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteGroup(g);
+                                }}
                                 className="px-2 py-1 text-xs font-semibold rounded bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 transition-colors"
                                 title="Delete this group"
                               >
@@ -2811,49 +2863,108 @@ export default function BEProjectGovernance() {
 
                           {/* Expanded Details Row */}
                           {isExpanded && (
-                            <tr className="bg-blue-50/20 border-b-2 border-blue-200">
-                              <td colSpan={7} className="p-4">
-                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 bg-white p-4 rounded border border-blue-200 shadow-2xs">
+                            <tr className="bg-blue-50/25 border-b-2 border-blue-200">
+                              <td colSpan={7} className="p-4 sm:p-5">
+                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 bg-white p-4 sm:p-5 rounded-lg border border-blue-200 shadow-sm">
                                   {/* 3 Project Topic Choices */}
                                   <div className="lg:col-span-5 xl:col-span-5 space-y-3">
-                                    <div className="flex items-center justify-between border-b border-rule pb-2">
-                                      <h4 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-navy flex items-center gap-1.5">
-                                        3 Project Topic Preferences
-                                      </h4>
+                                    <div className="flex items-center justify-between border-b border-rule pb-2.5">
+                                      <div className="flex items-center gap-2">
+                                        <h4 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-navy flex items-center gap-1.5">
+                                          3 Project Topics
+                                        </h4>
+                                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-navy font-mono">
+                                          {[g.title, g.title_2, g.title_3].filter((t) => t && t.trim()).length}/3 Submitted
+                                        </span>
+                                      </div>
                                       <button
                                         type="button"
                                         onClick={() => handleOpenEditGroup(g)}
-                                        className="px-2 py-0.5 text-[11px] font-semibold text-navy bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded transition-colors shrink-0"
+                                        className="px-2.5 py-1 text-[11px] font-semibold text-navy bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded transition-colors shrink-0 flex items-center gap-1 shadow-2xs"
                                       >
                                         {Icons.edit} <span>Edit Topics</span>
                                       </button>
                                     </div>
-                                    <div className="space-y-2">
-                                      <div className="p-2.5 rounded-md bg-blue-50/70 border border-blue-200">
-                                        <span className="font-bold text-navy block text-[11px] uppercase tracking-wide">Preference 1 (Primary Topic):</span>
-                                        <p className="text-[13px] sm:text-sm font-semibold text-ink leading-snug mt-0.5">{g.title}</p>
+
+                                    <div className="space-y-2.5">
+                                      {/* Preference 1 (Primary Topic) */}
+                                      <div className="p-3 rounded-md bg-blue-50/70 border border-blue-200 shadow-2xs">
+                                        <div className="flex items-center justify-between gap-2">
+                                          <span className="font-bold text-navy block text-[11px] uppercase tracking-wide">
+                                            Topic 1 (Primary Preference):
+                                          </span>
+                                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-navy text-white uppercase tracking-wider">
+                                            Primary
+                                          </span>
+                                        </div>
+                                        <p className="text-[13px] sm:text-sm font-semibold text-ink leading-snug mt-1">
+                                          {g.title || <span className="text-draft italic font-normal">Primary topic not specified</span>}
+                                        </p>
+                                        {g.domain && (
+                                          <div className="mt-2 flex items-center gap-1.5">
+                                            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Domain:</span>
+                                            <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-white border border-blue-200 text-navy">
+                                              {g.domain}
+                                            </span>
+                                          </div>
+                                        )}
                                       </div>
-                                      {g.title_2 && (
-                                        <div className="p-2.5 rounded-md bg-paper border border-rule">
-                                          <span className="font-bold text-draft block text-[11px] uppercase tracking-wide">Preference 2:</span>
-                                          <p className="text-[13px] sm:text-sm font-medium text-ink leading-snug mt-0.5">{g.title_2}</p>
+
+                                      {/* Preference 2 */}
+                                      <div className={`p-3 rounded-md border ${g.title_2?.trim() ? 'bg-slate-50/80 border-slate-200 shadow-2xs' : 'bg-gray-50/40 border-dashed border-slate-200'}`}>
+                                        <div className="flex items-center justify-between gap-2">
+                                          <span className="font-bold text-slate-700 block text-[11px] uppercase tracking-wide">
+                                            Topic 2 (Second Preference):
+                                          </span>
+                                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-200 text-slate-700 uppercase tracking-wider">
+                                            Preference 2
+                                          </span>
                                         </div>
-                                      )}
-                                      {g.title_3 && (
-                                        <div className="p-2.5 rounded-md bg-paper border border-rule">
-                                          <span className="font-bold text-draft block text-[11px] uppercase tracking-wide">Preference 3:</span>
-                                          <p className="text-[13px] sm:text-sm font-medium text-ink leading-snug mt-0.5">{g.title_3}</p>
+                                        {g.title_2?.trim() ? (
+                                          <p className="text-[13px] sm:text-sm font-medium text-ink leading-snug mt-1">
+                                            {g.title_2}
+                                          </p>
+                                        ) : (
+                                          <p className="text-xs text-draft italic mt-1 font-mono">
+                                            No second topic preference submitted
+                                          </p>
+                                        )}
+                                      </div>
+
+                                      {/* Preference 3 */}
+                                      <div className={`p-3 rounded-md border ${g.title_3?.trim() ? 'bg-slate-50/80 border-slate-200 shadow-2xs' : 'bg-gray-50/40 border-dashed border-slate-200'}`}>
+                                        <div className="flex items-center justify-between gap-2">
+                                          <span className="font-bold text-slate-700 block text-[11px] uppercase tracking-wide">
+                                            Topic 3 (Third Preference):
+                                          </span>
+                                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-200 text-slate-700 uppercase tracking-wider">
+                                            Preference 3
+                                          </span>
                                         </div>
-                                      )}
+                                        {g.title_3?.trim() ? (
+                                          <p className="text-[13px] sm:text-sm font-medium text-ink leading-snug mt-1">
+                                            {g.title_3}
+                                          </p>
+                                        ) : (
+                                          <p className="text-xs text-draft italic mt-1 font-mono">
+                                            No third topic preference submitted
+                                          </p>
+                                        )}
+                                      </div>
                                     </div>
                                   </div>
 
-                                  {/* Team Members */}
+                                  {/* Team Members / Students Present */}
                                   <div className="lg:col-span-7 xl:col-span-7 space-y-3">
-                                    <div className="flex items-center justify-between border-b border-rule pb-2">
-                                      <h4 className="text-xs font-bold uppercase tracking-wider text-navy flex items-center gap-1.5">
-                                        Student Team Members ({g.members?.length || 0}/4)
-                                      </h4>
+                                    <div className="flex items-center justify-between border-b border-rule pb-2.5">
+                                      <div className="flex items-center gap-2">
+                                        <h4 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-navy flex items-center gap-1.5">
+                                          Students Present in Group
+                                        </h4>
+                                        <span className={`px-2 py-0.5 rounded text-[11px] font-bold font-mono border ${(g.members?.length || 0) >= 4 ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'bg-amber-50 border-amber-300 text-amber-900'}`}>
+                                          {g.members?.length || 0} / 4 Students Present
+                                        </span>
+                                      </div>
                                       {(g.members?.length || 0) < 4 ? (
                                         <button
                                           type="button"
@@ -2873,34 +2984,46 @@ export default function BEProjectGovernance() {
                                       <table className="w-full text-xs">
                                         <thead>
                                           <tr className="text-left text-[10px] text-draft uppercase border-b border-rule">
-                                            <th className="py-1.5 px-2 text-left whitespace-nowrap">Role</th>
-                                            <th className="py-1.5 px-2 text-left">Student Name</th>
-                                            <th className="py-1.5 px-2 text-left whitespace-nowrap">PRN</th>
-                                            <th className="py-1.5 px-2 text-right whitespace-nowrap">Actions</th>
+                                            <th className="py-2 px-2 text-left whitespace-nowrap">#</th>
+                                            <th className="py-2 px-2 text-left whitespace-nowrap">Role</th>
+                                            <th className="py-2 px-2 text-left">Student Name</th>
+                                            <th className="py-2 px-2 text-left whitespace-nowrap">PRN / Roll No</th>
+                                            <th className="py-2 px-2 text-left whitespace-nowrap">Division</th>
+                                            <th className="py-2 px-2 text-right whitespace-nowrap">Actions</th>
                                           </tr>
                                         </thead>
                                         <tbody className="divide-y divide-rule/60">
                                           {(g.members || []).length === 0 ? (
                                             <tr>
-                                              <td colSpan={4} className="py-4 text-center text-draft text-xs italic">
-                                                No students in this group yet. Click &quot;+ Add Student&quot; to manually add a member.
+                                              <td colSpan={6} className="py-6 text-center text-draft text-xs italic bg-slate-50/50 rounded">
+                                                No students present in this group yet. Click &quot;+ Add Student&quot; to manually add a member.
                                               </td>
                                             </tr>
                                           ) : (
                                             (g.members || []).map((m, mIdx) => (
-                                              <tr key={m.id || mIdx} className="hover:bg-gray-50/60">
-                                                <td className="py-1.5 px-2 font-medium whitespace-nowrap">
+                                              <tr key={m.id || mIdx} className="hover:bg-blue-50/30 transition-colors">
+                                                <td className="py-2 px-2 text-draft font-mono text-[11px] whitespace-nowrap">
+                                                  {mIdx + 1}
+                                                </td>
+                                                <td className="py-2 px-2 font-medium whitespace-nowrap">
                                                   {m.is_leader ? (
-                                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-navy text-white">Leader</span>
+                                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-navy text-white shadow-2xs">
+                                                      Leader
+                                                    </span>
                                                   ) : (
-                                                    <span className="text-draft text-[11px]">Member</span>
+                                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600">
+                                                      Member
+                                                    </span>
                                                   )}
                                                 </td>
-                                                <td className="py-1.5 px-2 align-middle">
+                                                <td className="py-2 px-2 align-middle">
                                                   <div className="text-xs font-semibold text-ink leading-snug">{m.name}</div>
+                                                  {m.email && <div className="text-[10px] text-draft">{m.email}</div>}
+                                                  {m.mobile_no && <div className="text-[10px] text-draft">{m.mobile_no}</div>}
                                                 </td>
-                                                <td className="py-1.5 px-2 font-mono text-draft whitespace-nowrap">{m.roll_no}</td>
-                                                <td className="py-1.5 px-2 text-right whitespace-nowrap space-x-1">
+                                                <td className="py-2 px-2 font-mono text-draft whitespace-nowrap font-medium">{m.roll_no || '—'}</td>
+                                                <td className="py-2 px-2 font-mono text-slate-700 whitespace-nowrap">{m.division || g.batch || '—'}</td>
+                                                <td className="py-2 px-2 text-right whitespace-nowrap space-x-1">
                                                   <button
                                                     type="button"
                                                     onClick={() => handleOpenEditStudent(g, m)}

@@ -35,13 +35,19 @@ app.use(cors({
     if (!origin || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
       return callback(null, true);
     }
-    if (process.env.CLIENT_URL) {
-      const allowedOrigins = process.env.CLIENT_URL.split(',').map(u => u.trim());
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
+    if (!process.env.CLIENT_URL || process.env.CLIENT_URL === '*') {
+      return callback(null, true);
     }
-    callback(new Error('Not allowed by CORS'));
+    const cleanOrigin = origin.replace(/\/+$/, '');
+    const allowedOrigins = process.env.CLIENT_URL.split(',').map(u => u.trim().replace(/\/+$/, ''));
+    if (allowedOrigins.includes(cleanOrigin) || allowedOrigins.includes('*')) {
+      return callback(null, true);
+    }
+    // Allow vercel preview / branch domains if vercel is configured
+    if (allowedOrigins.some(u => u.includes('vercel.app')) && cleanOrigin.endsWith('.vercel.app')) {
+      return callback(null, true);
+    }
+    callback(new Error(`Not allowed by CORS: ${origin}`));
   },
   credentials: true,
 }));
