@@ -7,7 +7,6 @@ import { StatusBadge } from '../../components/ResultTable';
 export default function StudentDashboard() {
   const { user } = useAuth();
   const [data, setData]       = useState(null);
-  const [notices, setNotices] = useState([]);
   const [upcomingClubEvents, setUpcomingClubEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [seminarData, setSeminarData] = useState(null);
@@ -17,12 +16,10 @@ export default function StudentDashboard() {
     Promise.all([
       api.get(`/student/results/${currentSem}`),
       api.get('/student/results'),
-      api.get('/student/notifications'),
       api.get('/clubs/events?academicYear=2026-27').catch(() => ({ data: { events: [] } })),
       api.get('/seminar/my-submission').catch(() => ({ data: { hasSubmission: false } })),
-    ]).then(([semRes, allRes, notifRes, clubEventsRes, seminarRes]) => {
+    ]).then(([semRes, allRes, clubEventsRes, seminarRes]) => {
       setData({ sem: semRes.data, all: allRes.data });
-      setNotices(notifRes.data.notifications || []);
       setUpcomingClubEvents((clubEventsRes.data?.events || []).slice(0, 3));
       setSeminarData(seminarRes.data || null);
     }).catch(console.error)
@@ -51,19 +48,6 @@ export default function StudentDashboard() {
         </p>
       </div>
 
-      {/* Notifications */}
-      {notices.length > 0 && (
-        <div className="mb-6 space-y-2">
-          {notices.map((n, i) => (
-            <div key={i} className="notification-strip">
-              <span className="text-xs font-semibold text-navy uppercase tracking-wide mr-2">
-                {n.type === 'result_published' ? 'Result' : 'Update'}
-              </span>
-              {n.message}
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* GPA summary row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
