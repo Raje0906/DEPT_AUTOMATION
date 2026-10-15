@@ -157,12 +157,17 @@ router.post('/forms', verifyToken, requireFeedbackCoordinator, async (req, res) 
   try {
     const {
       title,
+      feedbackType = 'MID_SEM',
       academicYear = '2026-27',
       semester = 5,
       classYear = 'TE',
       division = 'All',
       formConfig = {},
     } = req.body;
+
+    const normalizedType = ['MID_SEM', 'END_SEM'].includes(String(feedbackType).toUpperCase())
+      ? String(feedbackType).toUpperCase()
+      : 'MID_SEM';
 
     // Validate that active course allocations exist in the HOD matrix
     const matrix = await fetchHODAllocations({ academicYear, semester, division });
@@ -172,15 +177,17 @@ router.post('/forms', verifyToken, requireFeedbackCoordinator, async (req, res) 
       });
     }
 
-    const formId = `FB-${academicYear}-${classYear}-SEM${semester}-${division.replace(/\s+/g, '')}-${Date.now().toString().slice(-4)}`;
-    const formTitle = title || `Department of Computer Engg - ${classYear} Mid-Sem Feedback (Sem-${semester})`;
+    const typePrefix = normalizedType === 'END_SEM' ? 'END' : 'MID';
+    const formId = `FB-${academicYear}-${classYear}-SEM${semester}-${typePrefix}-${division.replace(/\s+/g, '')}-${Date.now().toString().slice(-4)}`;
+    const phaseLabel = normalizedType === 'END_SEM' ? 'End-Sem' : 'Mid-Sem';
+    const formTitle = title || `Department of Computer Engg - ${classYear} ${phaseLabel} Feedback (Sem-${semester})`;
 
     const insertRes = await pool.query(
       `INSERT INTO feedback_forms
-       (id, title, academic_year, semester, class_year, division, status, created_by, form_config, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, 'draft', $7, $8, NOW(), NOW())
+       (id, title, academic_year, semester, class_year, division, feedback_type, status, created_by, form_config, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'draft', $8, $9, NOW(), NOW())
        RETURNING *`,
-      [formId, formTitle, academicYear, parseInt(semester, 10), classYear, division, req.user.id, JSON.stringify(formConfig)]
+      [formId, formTitle, academicYear, parseInt(semester, 10), classYear, division, normalizedType, req.user.id, JSON.stringify(formConfig)]
     );
 
     res.status(201).json({
@@ -235,7 +242,7 @@ router.get('/forms/:id', verifyToken, async (req, res) => {
 router.put('/forms/:id', verifyToken, requireFeedbackCoordinator, async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, status, division, formConfig } = req.body;
+    const { title, status, division, feedbackType, formConfig } = req.body;
 
     const existingRes = await pool.query(`SELECT * FROM feedback_forms WHERE id = $1`, [id]);
     if (existingRes.rows.length === 0) {
@@ -256,21 +263,37 @@ router.put('/forms/:id', verifyToken, requireFeedbackCoordinator, async (req, re
           error: `Cannot publish form: ${matrix.error}`,
         });
       }
+
+      // ── Mutual Exclusivity Enforcement ──────────────────────────────────────
+      // Automatically archive/unpublish any other published form for the same cohort
+      // This strictly prevents Mid-Sem and End-Sem from being published at the same time.
+      const targetDivision = division || currentForm.division;
+      await pool.query(
+        `UPDATE feedback_forms
+         SET status = 'archived', updated_at = NOW()
+         WHERE id != $1
+           AND academic_year = $2
+           AND semester = $3
+           AND status = 'published'
+           AND (division = $4 OR division = 'All' OR $4 = 'All')`,
+        [id, currentForm.academic_year, currentForm.semester, targetDivision]
+      );
     }
 
     const newStatus = status || currentForm.status;
     const newTitle = title || currentForm.title;
     const newDivision = division || currentForm.division;
+    const newType = feedbackType || currentForm.feedback_type || 'MID_SEM';
     const newConfig = formConfig ? JSON.stringify(formConfig) : currentForm.form_config;
     const publishedAt = (newStatus === 'published' && currentForm.status !== 'published') ? new Date() : currentForm.published_at;
 
     const updateRes = await pool.query(
       `UPDATE feedback_forms
-       SET title = $1, status = $2, division = $3, form_config = $4,
-           published_at = $5, updated_at = NOW()
-       WHERE id = $6
+       SET title = $1, status = $2, division = $3, feedback_type = $4, form_config = $5,
+           published_at = $6, updated_at = NOW()
+       WHERE id = $7
        RETURNING *`,
-      [newTitle, newStatus, newDivision, newConfig, publishedAt, id]
+      [newTitle, newStatus, newDivision, newType, newConfig, publishedAt, id]
     );
 
     res.json({
@@ -335,6 +358,8 @@ router.get('/student/available', verifyToken, async (req, res) => {
     const student = studentRes.rows[0];
 
     // Find published forms matching semester and division
+    // STRICT ENFORCEMENT: Only ONE active evaluation phase (Mid-Sem OR End-Sem) is presented to the student.
+    // End-Sem takes natural precedence if active, followed by the most recently published form.
     const formsRes = await pool.query(
       `SELECT ff.*,
               (SELECT fs.id FROM feedback_submissions fs WHERE fs.form_id = ff.id AND fs.student_id = $1) AS submission_id,
@@ -343,20 +368,28 @@ router.get('/student/available', verifyToken, async (req, res) => {
        WHERE ff.status = 'published'
          AND ff.semester = $2
          AND (ff.division = 'All' OR ff.division = $3 OR ff.division ILIKE '%' || $3 || '%')
-       ORDER BY ff.created_at DESC`,
+       ORDER BY 
+         CASE WHEN ff.feedback_type = 'END_SEM' THEN 1 ELSE 2 END,
+         ff.published_at DESC NULLS LAST,
+         ff.created_at DESC
+       LIMIT 1`,
       [student.id, student.current_semester, student.division]
     );
 
     const availableForms = formsRes.rows.map(f => ({
       id: f.id,
       title: f.title,
+      feedbackType: f.feedback_type || 'MID_SEM',
       academicYear: f.academic_year,
       semester: f.semester,
       classYear: f.class_year,
       division: f.division,
       publishedAt: f.published_at,
       hasSubmitted: !!f.submission_id,
+      submission_id: f.submission_id,
+      submissionId: f.submission_id,
       submittedAt: f.submitted_at,
+      submitted_at: f.submitted_at,
     }));
 
     res.json({

@@ -69,7 +69,17 @@ app.use('/api/magazines',    magazineRoutes);
 app.use('/api/feedback',     feedbackRoutes);
 app.use('/api/notifications', notificationRoutes);
 
-// ─── Health check ────────────────────────────────────────────────────────────
+// ─── Root & Health check ─────────────────────────────────────────────────────
+app.get('/', (req, res) => {
+  res.json({
+    status: 'online',
+    message: 'Department Automation Backend API is live.',
+    health: '/api/health',
+    version: '1.0.0',
+    timestamp: new Date().toISOString()
+  });
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString(), version: '1.0.0' });
 });
