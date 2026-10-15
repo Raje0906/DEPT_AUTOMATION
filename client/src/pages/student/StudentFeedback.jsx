@@ -231,7 +231,8 @@ export default function StudentFeedback() {
         ) : (
           <div className="grid grid-cols-1 gap-4">
             {availableForms.map((form) => {
-              const hasSubmitted = !!form.submission_id;
+              const hasSubmitted = Boolean(form.hasSubmitted || form.submission_id || form.submissionId || form.submitted_at || form.submittedAt);
+              const isEndSem = form.feedbackType === 'END_SEM';
 
               return (
                 <div
@@ -239,8 +240,13 @@ export default function StudentFeedback() {
                   className="p-6 bg-white border border-rule rounded flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-navy transition-colors shadow-sm"
                 >
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-blue-50 text-navy">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border ${
+                        isEndSem ? 'bg-purple-50 text-purple-900 border-purple-200' : 'bg-blue-50 text-navy border-blue-200'
+                      }`}>
+                        {isEndSem ? 'End-Semester Evaluation' : 'Mid-Semester Evaluation'}
+                      </span>
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-gray-100 text-gray-700">
                         AY {form.academicYear} · Semester {form.semester}
                       </span>
                       {hasSubmitted ? (

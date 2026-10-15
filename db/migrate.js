@@ -988,16 +988,25 @@ async function runMigrations() {
         semester      INTEGER NOT NULL,
         class_year    VARCHAR(20) NOT NULL DEFAULT 'TE',
         division      VARCHAR(30) NOT NULL DEFAULT 'All',
+        feedback_type VARCHAR(20) NOT NULL DEFAULT 'MID_SEM' CHECK (feedback_type IN ('MID_SEM', 'END_SEM')),
         status        VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'unpublished', 'archived')),
         created_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
         published_at  TIMESTAMPTZ,
+        start_date    TIMESTAMPTZ,
+        end_date      TIMESTAMPTZ,
         form_config   JSONB DEFAULT '{}'::jsonb,
         created_at    TIMESTAMPTZ DEFAULT NOW(),
         updated_at    TIMESTAMPTZ DEFAULT NOW()
       );
 
+      ALTER TABLE feedback_forms ADD COLUMN IF NOT EXISTS feedback_type VARCHAR(20) NOT NULL DEFAULT 'MID_SEM';
+      ALTER TABLE feedback_forms ADD COLUMN IF NOT EXISTS start_date TIMESTAMPTZ;
+      ALTER TABLE feedback_forms ADD COLUMN IF NOT EXISTS end_date TIMESTAMPTZ;
+      UPDATE feedback_forms SET feedback_type = 'END_SEM' WHERE title ILIKE '%end%' AND feedback_type = 'MID_SEM';
+
       CREATE INDEX IF NOT EXISTS idx_feedback_forms_status ON feedback_forms(status);
       CREATE INDEX IF NOT EXISTS idx_feedback_forms_ay_sem ON feedback_forms(academic_year, semester, division);
+      CREATE INDEX IF NOT EXISTS idx_feedback_forms_type ON feedback_forms(feedback_type);
 
       CREATE TABLE IF NOT EXISTS feedback_submissions (
         id                    SERIAL PRIMARY KEY,

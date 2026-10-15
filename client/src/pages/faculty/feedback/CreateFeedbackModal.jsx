@@ -3,6 +3,7 @@ import { XMarkIcon, CheckCircleIcon, ExclamationTriangleIcon } from '@heroicons/
 import api from '../../../api/axios';
 
 export default function CreateFeedbackModal({ isOpen, onClose, onFormCreated }) {
+  const [feedbackType, setFeedbackType] = useState('MID_SEM'); // 'MID_SEM' | 'END_SEM'
   const [title, setTitle] = useState('TE Sem 5 Mid-Semester Feedback 2026-27');
   const [academicYear, setAcademicYear] = useState('2026-27');
   const [semester, setSemester] = useState(5);
@@ -15,6 +16,18 @@ export default function CreateFeedbackModal({ isOpen, onClose, onFormCreated }) 
   const [allocError, setAllocError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+
+  const updateDefaultTitle = (type, sem, ay, div) => {
+    const phaseLabel = type === 'END_SEM' ? 'End-Semester' : 'Mid-Semester';
+    const divSuffix = div && div !== 'All' ? ` (${div})` : '';
+    setTitle(`TE Sem ${sem} ${phaseLabel} Feedback ${ay}${divSuffix}`);
+    setDescription(`Official TE ${phaseLabel} Faculty & Course Feedback`);
+  };
+
+  const handleTypeChange = (type) => {
+    setFeedbackType(type);
+    updateDefaultTitle(type, semester, academicYear, division);
+  };
 
   // Fetch live allocations preview from HOD matrix whenever academicYear, semester, division change
   useEffect(() => {
@@ -55,6 +68,7 @@ export default function CreateFeedbackModal({ isOpen, onClose, onFormCreated }) 
     try {
       const res = await api.post('/feedback/forms', {
         title,
+        feedbackType,
         academicYear,
         semester,
         classYear,
@@ -105,6 +119,54 @@ export default function CreateFeedbackModal({ isOpen, onClose, onFormCreated }) 
             </div>
           )}
 
+          {/* Phase Selection: Mid-Semester vs End-Semester */}
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-ink mb-1.5">
+              Evaluation Phase <span className="text-red-500">*</span>
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => handleTypeChange('MID_SEM')}
+                className={`p-3 rounded-lg border text-left transition-all ${
+                  feedbackType === 'MID_SEM'
+                    ? 'bg-blue-50/80 border-navy text-navy font-bold ring-1 ring-navy shadow-xs'
+                    : 'bg-white border-gray-200 text-slate-700 hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Mid-Semester Feedback</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${feedbackType === 'MID_SEM' ? 'bg-navy text-white' : 'bg-gray-100 text-slate-600'}`}>
+                    Phase 1
+                  </span>
+                </div>
+                <p className="text-[11px] text-draft font-normal mt-1 leading-snug">
+                  Mid-term evaluation (Weeks 7–9).
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleTypeChange('END_SEM')}
+                className={`p-3 rounded-lg border text-left transition-all ${
+                  feedbackType === 'END_SEM'
+                    ? 'bg-purple-50/80 border-purple-800 text-purple-950 font-bold ring-1 ring-purple-800 shadow-xs'
+                    : 'bg-white border-gray-200 text-slate-700 hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">End-Semester Feedback</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${feedbackType === 'END_SEM' ? 'bg-purple-800 text-white' : 'bg-gray-100 text-slate-600'}`}>
+                    Phase 2
+                  </span>
+                </div>
+                <p className="text-[11px] text-draft font-normal mt-1 leading-snug">
+                  Final term evaluation (Weeks 14–16).
+                </p>
+              </button>
+            </div>
+          </div>
+
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-ink mb-1.5">
               Form Title <span className="text-red-500">*</span>
@@ -126,7 +188,10 @@ export default function CreateFeedbackModal({ isOpen, onClose, onFormCreated }) 
               </label>
               <select
                 value={academicYear}
-                onChange={(e) => setAcademicYear(e.target.value)}
+                onChange={(e) => {
+                  setAcademicYear(e.target.value);
+                  updateDefaultTitle(feedbackType, semester, e.target.value, division);
+                }}
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-navy focus:border-navy outline-none bg-white"
               >
                 <option value="2026-27">2026-27</option>
@@ -140,7 +205,11 @@ export default function CreateFeedbackModal({ isOpen, onClose, onFormCreated }) 
               </label>
               <select
                 value={semester}
-                onChange={(e) => setSemester(parseInt(e.target.value, 10))}
+                onChange={(e) => {
+                  const s = parseInt(e.target.value, 10);
+                  setSemester(s);
+                  updateDefaultTitle(feedbackType, s, academicYear, division);
+                }}
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-navy focus:border-navy outline-none bg-white"
               >
                 <option value={5}>Semester 5 (TE Sem 1)</option>
@@ -154,7 +223,10 @@ export default function CreateFeedbackModal({ isOpen, onClose, onFormCreated }) 
               </label>
               <select
                 value={division}
-                onChange={(e) => setDivision(e.target.value)}
+                onChange={(e) => {
+                  setDivision(e.target.value);
+                  updateDefaultTitle(feedbackType, semester, academicYear, e.target.value);
+                }}
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-navy focus:border-navy outline-none bg-white"
               >
                 <option value="All">All Divisions (TE Comp 1, 2, 3)</option>
