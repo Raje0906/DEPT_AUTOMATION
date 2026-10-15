@@ -11,58 +11,58 @@ import Login from './pages/auth/Login'
 import Register from './pages/auth/Register'
 
 // Student
-import StudentDashboard  from './pages/student/StudentDashboard'
-import StudentResults    from './pages/student/StudentResults'
-import CGPAView          from './pages/student/CGPAView'
-import StudentProject    from './pages/student/StudentProject'
+import StudentDashboard from './pages/student/StudentDashboard'
+import StudentResults from './pages/student/StudentResults'
+import CGPAView from './pages/student/CGPAView'
+import StudentProject from './pages/student/StudentProject'
 import SeminarGroupRegistration from './pages/student/SeminarGroupRegistration'
-import StudentMagazine   from './pages/student/StudentMagazine'
+import StudentMagazine from './pages/student/StudentMagazine'
 import StudentClubActivities from './pages/student/StudentClubActivities'
-import StudentFeedback   from './pages/student/StudentFeedback'
+import StudentFeedback from './pages/student/StudentFeedback'
 
 // Faculty
-import FacultyDashboard  from './pages/faculty/FacultyDashboard'
-import ResultGeneration  from './pages/faculty/ResultGeneration'
-import MarksEntry        from './pages/faculty/MarksEntry'
-import ClassReports      from './pages/faculty/ClassReports'
-import ProjectEval       from './pages/faculty/ProjectEval'
+import FacultyDashboard from './pages/faculty/FacultyDashboard'
+import ResultGeneration from './pages/faculty/ResultGeneration'
+import MarksEntry from './pages/faculty/MarksEntry'
+import ClassReports from './pages/faculty/ClassReports'
+import ProjectEval from './pages/faculty/ProjectEval'
 import BEProjectGovernance from './pages/faculty/BEProjectGovernance'
-import Magazines         from './pages/faculty/Magazines'
+import Magazines from './pages/faculty/Magazines'
 import CreateMagazineForm from './pages/faculty/magazine/CreateMagazineForm'
-import MagazineEditor    from './pages/faculty/magazine/MagazineEditor'
-import MagazinePreview   from './pages/faculty/magazine/MagazinePreview'
+import MagazineEditor from './pages/faculty/magazine/MagazineEditor'
+import MagazinePreview from './pages/faculty/magazine/MagazinePreview'
 import OnlineMagazineViewer from './pages/faculty/magazine/OnlineMagazineViewer'
 import FeedbackDashboard from './pages/faculty/feedback/FeedbackDashboard'
-import ManageClubs       from './pages/faculty/ManageClubs'
-import RemedialClasses   from './pages/faculty/RemedialClasses'
+import ManageClubs from './pages/faculty/ManageClubs'
+import RemedialClasses from './pages/faculty/RemedialClasses'
 import InsemMarksheetAnalysis from './pages/faculty/InsemMarksheetAnalysis'
 import EndTermInternalMarksheet from './pages/faculty/EndTermInternalMarksheet'
 import ClassTeacherNamelist from './pages/faculty/ClassTeacherNamelist'
 
 // HOD
-import HODDashboard   from './pages/hod/HODDashboard'
+import HODDashboard from './pages/hod/HODDashboard'
 import TeacherManagement from './pages/hod/TeacherManagement'
 import CoordinatorAssignment from './pages/hod/CoordinatorAssignment'
-import MarksApproval  from './pages/hod/MarksApproval'
+import MarksApproval from './pages/hod/MarksApproval'
 import PublishResults from './pages/hod/PublishResults'
-import HODAnalytics   from './pages/hod/HODAnalytics'
+import HODAnalytics from './pages/hod/HODAnalytics'
 import HODProjectView from './pages/hod/HODProjectView'
 import HODMagazineApprovals from './pages/hod/HODMagazineApprovals'
-import TermRollover   from './pages/hod/TermRollover'
+import TermRollover from './pages/hod/TermRollover'
 
 // Seminar Tool
-import SeminarSessions      from './pages/seminar/SeminarSessions'
-import SeminarUpload        from './pages/seminar/SeminarUpload'
-import SeminarAssignment    from './pages/seminar/SeminarAssignment'
-import SeminarReview        from './pages/seminar/SeminarReview'
-import SeminarGuideView     from './pages/seminar/SeminarGuideView'
-import SeminarEvaluation    from './pages/seminar/SeminarEvaluation'
+import SeminarSessions from './pages/seminar/SeminarSessions'
+import SeminarUpload from './pages/seminar/SeminarUpload'
+import SeminarAssignment from './pages/seminar/SeminarAssignment'
+import SeminarReview from './pages/seminar/SeminarReview'
+import SeminarGuideView from './pages/seminar/SeminarGuideView'
+import SeminarEvaluation from './pages/seminar/SeminarEvaluation'
 import SeminarMarksOverview from './pages/seminar/SeminarMarksOverview'
 import SeminarImportAssignWorkflow from './pages/seminar/SeminarImportAssignWorkflow'
-import SeminarSchedule      from './pages/seminar/SeminarSchedule'
+import SeminarSchedule from './pages/seminar/SeminarSchedule'
 
 // Alumni
-import AlumniFeedback      from './pages/alumni/AlumniFeedback'
+import AlumniFeedback from './pages/alumni/AlumniFeedback'
 import DistinguishedAlumni from './pages/alumni/DistinguishedAlumni'
 
 // HOD Seminar Approval
@@ -70,6 +70,7 @@ import HODSeminarMgmt from './pages/hod/HODSeminarMgmt'
 
 // Error Pages
 import NotFound from './pages/NotFound'
+import { Analytics } from '@vercel/analytics/react';
 
 function StudentLayout({ children }) {
   return <ProtectedRoute role="student"><Layout>{children}</Layout></ProtectedRoute>
@@ -99,91 +100,92 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <MagazineProvider>
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            style: { fontSize: '0.875rem', fontFamily: 'Inter, sans-serif', border: '1px solid #D4D0C8', borderRadius: '2px' },
-            duration: 4000,
-          }}
-        />
-        <Routes>
-          <Route path="/" element={<Navigate to="/login" replace />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              style: { fontSize: '0.875rem', fontFamily: 'Inter, sans-serif', border: '1px solid #D4D0C8', borderRadius: '2px' },
+              duration: 4000,
+            }}
+          />
+          <Routes>
+            <Route path="/" element={<Navigate to="/login" replace />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
 
-          {/* Student */}
-          <Route path="/student" element={<StudentLayout><StudentDashboard /></StudentLayout>} />
-          <Route path="/student/results" element={<StudentLayout><StudentResults /></StudentLayout>} />
-          <Route path="/student/cgpa" element={<StudentLayout><CGPAView /></StudentLayout>} />
-          <Route path="/student/project" element={<StudentLayout><StudentProject /></StudentLayout>} />
-          <Route path="/student/seminar" element={<StudentLayout><SeminarGroupRegistration /></StudentLayout>} />
-          <Route path="/student/magazine" element={<StudentLayout><StudentMagazine /></StudentLayout>} />
-          <Route path="/student/magazine/view/:id" element={<ProtectedRoute role="student"><OnlineMagazineViewer /></ProtectedRoute>} />
-          <Route path="/student/clubs" element={<StudentLayout><StudentClubActivities /></StudentLayout>} />
-          <Route path="/student/feedback" element={<StudentLayout><StudentFeedback /></StudentLayout>} />
+            {/* Student */}
+            <Route path="/student" element={<StudentLayout><StudentDashboard /></StudentLayout>} />
+            <Route path="/student/results" element={<StudentLayout><StudentResults /></StudentLayout>} />
+            <Route path="/student/cgpa" element={<StudentLayout><CGPAView /></StudentLayout>} />
+            <Route path="/student/project" element={<StudentLayout><StudentProject /></StudentLayout>} />
+            <Route path="/student/seminar" element={<StudentLayout><SeminarGroupRegistration /></StudentLayout>} />
+            <Route path="/student/magazine" element={<StudentLayout><StudentMagazine /></StudentLayout>} />
+            <Route path="/student/magazine/view/:id" element={<ProtectedRoute role="student"><OnlineMagazineViewer /></ProtectedRoute>} />
+            <Route path="/student/clubs" element={<StudentLayout><StudentClubActivities /></StudentLayout>} />
+            <Route path="/student/feedback" element={<StudentLayout><StudentFeedback /></StudentLayout>} />
 
-          {/* Faculty */}
-          <Route path="/faculty" element={<FacultyLayout><FacultyDashboard /></FacultyLayout>} />
-          <Route path="/faculty/subjects" element={<FacultyLayout><ResultGeneration /></FacultyLayout>} />
-          <Route path="/faculty/marks/:subjectId" element={<FacultyLayout><MarksEntry /></FacultyLayout>} />
-          <Route path="/faculty/remedial" element={<FacultyLayout><RemedialClasses /></FacultyLayout>} />
-          <Route path="/faculty/marksheet/insem-cce" element={<FacultyLayout><InsemMarksheetAnalysis /></FacultyLayout>} />
-          <Route path="/faculty/marksheet/end-term-internal" element={<FacultyLayout><EndTermInternalMarksheet /></FacultyLayout>} />
-          <Route path="/faculty/reports" element={<FacultyLayout><ClassReports /></FacultyLayout>} />
-          <Route path="/faculty/project-eval" element={<FacultyLayout><ProjectEval /></FacultyLayout>} />
-          <Route path="/faculty/project-coordination" element={<FacultyLayout><BEProjectGovernance /></FacultyLayout>} />
-          <Route path="/hod/project-governance" element={<Navigate to="/hod/projects" replace />} />
-          <Route path="/faculty/magazines" element={<FacultyLayout><Magazines /></FacultyLayout>} />
-          <Route path="/faculty/magazines/create" element={<MagazineCreatorLayout><CreateMagazineForm /></MagazineCreatorLayout>} />
-          <Route path="/faculty/magazines/editor/:id" element={<MagazineEditor />} />
-          <Route path="/faculty/magazines/preview/:id" element={<MagazinePreview />} />
-          <Route path="/faculty/magazines/view/:id" element={<OnlineMagazineViewer />} />
-          <Route path="/faculty/feedback" element={<FeedbackCoordinatorLayout><FeedbackDashboard /></FeedbackCoordinatorLayout>} />
-          <Route path="/faculty/clubs" element={<FacultyLayout><ManageClubs /></FacultyLayout>} />
-          <Route path="/hod/clubs" element={<Navigate to="/hod" replace />} />
-          <Route path="/faculty/class-namelist" element={<AnyLayout><ClassTeacherNamelist /></AnyLayout>} />
+            {/* Faculty */}
+            <Route path="/faculty" element={<FacultyLayout><FacultyDashboard /></FacultyLayout>} />
+            <Route path="/faculty/subjects" element={<FacultyLayout><ResultGeneration /></FacultyLayout>} />
+            <Route path="/faculty/marks/:subjectId" element={<FacultyLayout><MarksEntry /></FacultyLayout>} />
+            <Route path="/faculty/remedial" element={<FacultyLayout><RemedialClasses /></FacultyLayout>} />
+            <Route path="/faculty/marksheet/insem-cce" element={<FacultyLayout><InsemMarksheetAnalysis /></FacultyLayout>} />
+            <Route path="/faculty/marksheet/end-term-internal" element={<FacultyLayout><EndTermInternalMarksheet /></FacultyLayout>} />
+            <Route path="/faculty/reports" element={<FacultyLayout><ClassReports /></FacultyLayout>} />
+            <Route path="/faculty/project-eval" element={<FacultyLayout><ProjectEval /></FacultyLayout>} />
+            <Route path="/faculty/project-coordination" element={<FacultyLayout><BEProjectGovernance /></FacultyLayout>} />
+            <Route path="/hod/project-governance" element={<Navigate to="/hod/projects" replace />} />
+            <Route path="/faculty/magazines" element={<FacultyLayout><Magazines /></FacultyLayout>} />
+            <Route path="/faculty/magazines/create" element={<MagazineCreatorLayout><CreateMagazineForm /></MagazineCreatorLayout>} />
+            <Route path="/faculty/magazines/editor/:id" element={<MagazineEditor />} />
+            <Route path="/faculty/magazines/preview/:id" element={<MagazinePreview />} />
+            <Route path="/faculty/magazines/view/:id" element={<OnlineMagazineViewer />} />
+            <Route path="/faculty/feedback" element={<FeedbackCoordinatorLayout><FeedbackDashboard /></FeedbackCoordinatorLayout>} />
+            <Route path="/faculty/clubs" element={<FacultyLayout><ManageClubs /></FacultyLayout>} />
+            <Route path="/hod/clubs" element={<Navigate to="/hod" replace />} />
+            <Route path="/faculty/class-namelist" element={<AnyLayout><ClassTeacherNamelist /></AnyLayout>} />
 
-          {/* Seminar Tool — Coordinator */}
-          <Route path="/faculty/seminar"                    element={<CoordinatorLayout><SeminarSessions /></CoordinatorLayout>} />
-          <Route path="/faculty/seminar/import-assign"      element={<Navigate to="/faculty/seminar" replace />} />
-          <Route path="/faculty/seminar/schedule"           element={<CoordinatorLayout><SeminarSchedule /></CoordinatorLayout>} />
-          <Route path="/faculty/seminar/:id/upload"         element={<CoordinatorLayout><SeminarUpload /></CoordinatorLayout>} />
-          <Route path="/faculty/seminar/:id/assign"         element={<CoordinatorLayout><SeminarAssignment /></CoordinatorLayout>} />
-          <Route path="/faculty/seminar/:id/review"         element={<CoordinatorLayout><SeminarReview /></CoordinatorLayout>} />
-          <Route path="/faculty/seminar/:id/marks-overview" element={<CoordinatorLayout><SeminarMarksOverview /></CoordinatorLayout>} />
-          {/* Seminar Tool — Guide view and Evaluation */}
-          <Route path="/faculty/seminar/my-groups"          element={<FacultyLayout><SeminarGuideView /></FacultyLayout>} />
-          <Route path="/faculty/seminar/evaluate/:groupId"  element={<FacultyLayout><SeminarEvaluation /></FacultyLayout>} />
-          {/* HOD also accesses seminar */}
-          <Route path="/hod/seminar"                        element={<HODLayout><SeminarSessions /></HODLayout>} />
-          <Route path="/hod/seminar/:id/marks-overview"     element={<HODLayout><SeminarMarksOverview /></HODLayout>} />
-          <Route path="/hod/seminar-approvals"              element={<HODLayout><HODSeminarMgmt /></HODLayout>} />
+            {/* Seminar Tool — Coordinator */}
+            <Route path="/faculty/seminar" element={<CoordinatorLayout><SeminarSessions /></CoordinatorLayout>} />
+            <Route path="/faculty/seminar/import-assign" element={<Navigate to="/faculty/seminar" replace />} />
+            <Route path="/faculty/seminar/schedule" element={<CoordinatorLayout><SeminarSchedule /></CoordinatorLayout>} />
+            <Route path="/faculty/seminar/:id/upload" element={<CoordinatorLayout><SeminarUpload /></CoordinatorLayout>} />
+            <Route path="/faculty/seminar/:id/assign" element={<CoordinatorLayout><SeminarAssignment /></CoordinatorLayout>} />
+            <Route path="/faculty/seminar/:id/review" element={<CoordinatorLayout><SeminarReview /></CoordinatorLayout>} />
+            <Route path="/faculty/seminar/:id/marks-overview" element={<CoordinatorLayout><SeminarMarksOverview /></CoordinatorLayout>} />
+            {/* Seminar Tool — Guide view and Evaluation */}
+            <Route path="/faculty/seminar/my-groups" element={<FacultyLayout><SeminarGuideView /></FacultyLayout>} />
+            <Route path="/faculty/seminar/evaluate/:groupId" element={<FacultyLayout><SeminarEvaluation /></FacultyLayout>} />
+            {/* HOD also accesses seminar */}
+            <Route path="/hod/seminar" element={<HODLayout><SeminarSessions /></HODLayout>} />
+            <Route path="/hod/seminar/:id/marks-overview" element={<HODLayout><SeminarMarksOverview /></HODLayout>} />
+            <Route path="/hod/seminar-approvals" element={<HODLayout><HODSeminarMgmt /></HODLayout>} />
 
-          {/* HOD */}
-          <Route path="/hod" element={<HODLayout><HODDashboard /></HODLayout>} />
-          <Route path="/hod/teachers" element={<HODLayout><TeacherManagement /></HODLayout>} />
-          <Route path="/hod/coordinators" element={<HODLayout><CoordinatorAssignment /></HODLayout>} />
-          <Route path="/hod/approval" element={<HODLayout><MarksApproval /></HODLayout>} />
-          <Route path="/hod/remedial" element={<HODLayout><RemedialClasses /></HODLayout>} />
-          <Route path="/hod/marksheet/insem-cce" element={<HODLayout><InsemMarksheetAnalysis /></HODLayout>} />
-          <Route path="/hod/marksheet/end-term-internal" element={<HODLayout><EndTermInternalMarksheet /></HODLayout>} />
-          <Route path="/hod/magazine-approvals" element={<HODLayout><HODMagazineApprovals /></HODLayout>} />
-          <Route path="/hod/magazines/preview/:id" element={<HODLayout><MagazinePreview /></HODLayout>} />
-          <Route path="/hod/feedback" element={<HODLayout><FeedbackDashboard /></HODLayout>} />
-          <Route path="/hod/publish" element={<HODLayout><PublishResults /></HODLayout>} />
-          <Route path="/hod/rollover" element={<HODLayout><TermRollover /></HODLayout>} />
-          <Route path="/hod/analytics" element={<HODLayout><HODAnalytics /></HODLayout>} />
-          <Route path="/hod/projects" element={<HODLayout><HODProjectView /></HODLayout>} />
+            {/* HOD */}
+            <Route path="/hod" element={<HODLayout><HODDashboard /></HODLayout>} />
+            <Route path="/hod/teachers" element={<HODLayout><TeacherManagement /></HODLayout>} />
+            <Route path="/hod/coordinators" element={<HODLayout><CoordinatorAssignment /></HODLayout>} />
+            <Route path="/hod/approval" element={<HODLayout><MarksApproval /></HODLayout>} />
+            <Route path="/hod/remedial" element={<HODLayout><RemedialClasses /></HODLayout>} />
+            <Route path="/hod/marksheet/insem-cce" element={<HODLayout><InsemMarksheetAnalysis /></HODLayout>} />
+            <Route path="/hod/marksheet/end-term-internal" element={<HODLayout><EndTermInternalMarksheet /></HODLayout>} />
+            <Route path="/hod/magazine-approvals" element={<HODLayout><HODMagazineApprovals /></HODLayout>} />
+            <Route path="/hod/magazines/preview/:id" element={<HODLayout><MagazinePreview /></HODLayout>} />
+            <Route path="/hod/feedback" element={<HODLayout><FeedbackDashboard /></HODLayout>} />
+            <Route path="/hod/publish" element={<HODLayout><PublishResults /></HODLayout>} />
+            <Route path="/hod/rollover" element={<HODLayout><TermRollover /></HODLayout>} />
+            <Route path="/hod/analytics" element={<HODLayout><HODAnalytics /></HODLayout>} />
+            <Route path="/hod/projects" element={<HODLayout><HODProjectView /></HODLayout>} />
 
-          {/* Alumni */}
-          <Route path="/alumni/feedback"      element={<AnyLayout><AlumniFeedback /></AnyLayout>} />
-          <Route path="/alumni/distinguished" element={<AnyLayout><DistinguishedAlumni /></AnyLayout>} />
+            {/* Alumni */}
+            <Route path="/alumni/feedback" element={<AnyLayout><AlumniFeedback /></AnyLayout>} />
+            <Route path="/alumni/distinguished" element={<AnyLayout><DistinguishedAlumni /></AnyLayout>} />
 
-          {/* Fallback 404 */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+            {/* Fallback 404 */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
         </MagazineProvider>
       </AuthProvider>
+      <Analytics />
     </BrowserRouter>
   )
 }
