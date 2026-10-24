@@ -27,7 +27,6 @@ export default function SeminarGroupRegistration() {
   const [summaryErrors, setSummaryErrors] = useState([]);
 
   // Form Fields
-  const [finalSeminarTopic, setFinalSeminarTopic] = useState('');
   const [domain, setDomain] = useState('');
   const [customDomain, setCustomDomain] = useState('');
   const [isCustomDomain, setIsCustomDomain] = useState(false);
@@ -96,9 +95,6 @@ export default function SeminarGroupRegistration() {
         });
         setRegistrationData(data.registration || null);
         setMembersData(data.members || []);
-        if (data.group.final_topic) {
-          setFinalSeminarTopic(data.group.final_topic);
-        }
       } else {
         setHasSubmission(false);
         setGroupData(null);
@@ -157,17 +153,10 @@ export default function SeminarGroupRegistration() {
     e.preventDefault();
 
     const chosenDomain = isCustomDomain ? customDomain.trim() : domain.trim();
-    const finalTopic = finalSeminarTopic.trim();
     const activeCount = showMember4 ? 4 : 3;
     const errors = {};
     const summary = [];
     let firstErrorKey = null;
-
-    if (!finalTopic) {
-      errors['final_topic'] = 'Final Seminar Topic is required';
-      summary.push('Final Seminar Topic is required');
-      if (!firstErrorKey) firstErrorKey = 'final_topic';
-    }
 
     if (!chosenDomain) {
       errors['domain'] = 'Project Domain is required';
@@ -175,7 +164,7 @@ export default function SeminarGroupRegistration() {
       if (!firstErrorKey) firstErrorKey = 'domain_select';
     }
 
-    // Relaxed member validation: Name and at least one PRN (College or University) per member
+    // Member validation: Name, at least one PRN, and Topic fields are required per member
     for (let idx = 0; idx < activeCount; idx++) {
       const m = members[idx];
       const memberNum = idx + 1;
@@ -191,6 +180,38 @@ export default function SeminarGroupRegistration() {
       if (isFieldBlank(m.college_prn) && isFieldBlank(m.university_prn)) {
         const key = `member_${idx}_college_prn`;
         const msg = `Enter College PRN (e.g. F23...) or University PRN (e.g. 723...) for Member ${memberNum}`;
+        errors[key] = msg;
+        summary.push(msg);
+        if (!firstErrorKey) firstErrorKey = key;
+      }
+
+      if (isFieldBlank(m.topic1)) {
+        const key = `member_${idx}_topic1`;
+        const msg = `Enter Topic 1 for Member ${memberNum}`;
+        errors[key] = msg;
+        summary.push(msg);
+        if (!firstErrorKey) firstErrorKey = key;
+      }
+
+      if (isFieldBlank(m.topic2)) {
+        const key = `member_${idx}_topic2`;
+        const msg = `Enter Topic 2 for Member ${memberNum}`;
+        errors[key] = msg;
+        summary.push(msg);
+        if (!firstErrorKey) firstErrorKey = key;
+      }
+
+      if (isFieldBlank(m.topic3)) {
+        const key = `member_${idx}_topic3`;
+        const msg = `Enter Topic 3 for Member ${memberNum}`;
+        errors[key] = msg;
+        summary.push(msg);
+        if (!firstErrorKey) firstErrorKey = key;
+      }
+
+      if (isFieldBlank(m.final_topic)) {
+        const key = `member_${idx}_final_topic`;
+        const msg = `Enter Final Topic for Member ${memberNum}`;
         errors[key] = msg;
         summary.push(msg);
         if (!firstErrorKey) firstErrorKey = key;
@@ -217,6 +238,8 @@ export default function SeminarGroupRegistration() {
     const membersToSubmit = members.slice(0, activeCount).map((m, idx) => {
       const cPrn = (m.college_prn || '').trim().toUpperCase();
       const uPrn = (m.university_prn || '').trim().toUpperCase();
+      const mTopic1 = (m.topic1 || '').trim();
+      const mFinalTopic = (m.final_topic || mTopic1).trim();
       return {
         ...m,
         student_name: m.student_name.trim(),
@@ -226,20 +249,22 @@ export default function SeminarGroupRegistration() {
         division: m.division ? m.division.trim().toUpperCase() : '',
         mobile: m.mobile ? m.mobile.trim() : '',
         email: m.email ? m.email.trim().toLowerCase() : '',
-        topic1: m.topic1 ? m.topic1.trim() : (finalTopic || ''),
-        topic2: m.topic2 ? m.topic2.trim() : '',
-        topic3: m.topic3 ? m.topic3.trim() : '',
-        final_topic: m.final_topic ? m.final_topic.trim() : (finalTopic || ''),
+        topic1: mTopic1,
+        topic2: (m.topic2 || '').trim(),
+        topic3: (m.topic3 || '').trim(),
+        final_topic: mFinalTopic,
         is_leader: idx === 0,
       };
     });
+
+    const groupFinalTopic = membersToSubmit[0]?.final_topic || membersToSubmit[0]?.topic1 || '';
 
     setSubmitting(true);
     try {
       const payload = {
         session_id: session?.id,
         domain: chosenDomain,
-        final_topic: finalTopic,
+        final_topic: groupFinalTopic,
         members: membersToSubmit,
       };
 
@@ -351,46 +376,15 @@ export default function SeminarGroupRegistration() {
             </div>
           )}
 
-          {/* Section 1: Final Seminar Topic & Domain of Interest */}
+          {/* Section 1: Domain of Interest */}
           <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-4 shadow-xs">
             <div className="border-b border-slate-100 pb-2">
               <h2 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                1. Final Seminar Topic & Domain
+                1. Domain / Field of Study
               </h2>
             </div>
 
             <div className="space-y-4 text-xs">
-              {/* Final Seminar Topic */}
-              <div>
-                <label htmlFor="final_topic" className="block text-[11px] font-semibold text-slate-800 mb-1">
-                  Final Seminar Topic <span className="text-red-600 font-bold">*</span>
-                </label>
-                <input
-                  id="final_topic"
-                  type="text"
-                  placeholder="e.g. Distributed Consensus in High-Throughput Blockchain Networks"
-                  value={finalSeminarTopic}
-                  onChange={(e) => {
-                    setFinalSeminarTopic(e.target.value);
-                    if (fieldErrors['final_topic']) {
-                      setFieldErrors(prev => {
-                        const copy = { ...prev };
-                        delete copy['final_topic'];
-                        return copy;
-                      });
-                    }
-                  }}
-                  className={`w-full p-2.5 border rounded outline-none transition-colors text-xs font-medium ${
-                    fieldErrors['final_topic']
-                      ? 'border-red-500 bg-red-50/30 focus:border-red-600'
-                      : 'border-slate-300 focus:border-[#1E2D5A] focus:ring-1 focus:ring-[#1E2D5A]'
-                  }`}
-                />
-                {fieldErrors['final_topic'] && (
-                  <p className="mt-1 text-[11px] font-medium text-red-600">{fieldErrors['final_topic']}</p>
-                )}
-              </div>
-
               {/* Domain (Text / Dropdown) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                 <div>
@@ -415,6 +409,9 @@ export default function SeminarGroupRegistration() {
                     ))}
                     <option value="OTHER_CUSTOM">+ Other (Specify Custom Domain)</option>
                   </select>
+                  {fieldErrors['domain'] && (
+                    <p className="mt-1 text-[11px] font-medium text-red-600">{fieldErrors['domain']}</p>
+                  )}
                 </div>
 
                 {/* Custom domain text input if chosen */}
@@ -605,7 +602,7 @@ export default function SeminarGroupRegistration() {
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
                         <div>
                           <label htmlFor={`member_${idx}_topic1`} className="block text-[11px] font-medium text-slate-700 mb-1">
-                            Topic 1 (Primary Preference)
+                            Topic 1 (Primary Preference) <span className="text-red-600 font-bold">*</span>
                           </label>
                           <input
                             id={`member_${idx}_topic1`}
@@ -613,13 +610,20 @@ export default function SeminarGroupRegistration() {
                             placeholder="Proposed seminar topic 1"
                             value={m.topic1 || ''}
                             onChange={(e) => handleMemberChange(idx, 'topic1', e.target.value)}
-                            className="w-full p-2 border border-slate-300 rounded outline-none focus:border-[#1E2D5A]"
+                            className={`w-full p-2 border rounded outline-none transition-colors ${
+                              fieldErrors[`member_${idx}_topic1`]
+                                ? 'border-red-500 bg-red-50/30'
+                                : 'border-slate-300 focus:border-[#1E2D5A] focus:ring-1 focus:ring-[#1E2D5A]'
+                            }`}
                           />
+                          {fieldErrors[`member_${idx}_topic1`] && (
+                            <p className="mt-1 text-[11px] font-medium text-red-600">{fieldErrors[`member_${idx}_topic1`]}</p>
+                          )}
                         </div>
 
                         <div>
                           <label htmlFor={`member_${idx}_topic2`} className="block text-[11px] font-medium text-slate-700 mb-1">
-                            Topic 2 (Secondary Preference)
+                            Topic 2 (Secondary Preference) <span className="text-red-600 font-bold">*</span>
                           </label>
                           <input
                             id={`member_${idx}_topic2`}
@@ -627,13 +631,20 @@ export default function SeminarGroupRegistration() {
                             placeholder="Proposed seminar topic 2"
                             value={m.topic2 || ''}
                             onChange={(e) => handleMemberChange(idx, 'topic2', e.target.value)}
-                            className="w-full p-2 border border-slate-300 rounded outline-none focus:border-[#1E2D5A]"
+                            className={`w-full p-2 border rounded outline-none transition-colors ${
+                              fieldErrors[`member_${idx}_topic2`]
+                                ? 'border-red-500 bg-red-50/30'
+                                : 'border-slate-300 focus:border-[#1E2D5A] focus:ring-1 focus:ring-[#1E2D5A]'
+                            }`}
                           />
+                          {fieldErrors[`member_${idx}_topic2`] && (
+                            <p className="mt-1 text-[11px] font-medium text-red-600">{fieldErrors[`member_${idx}_topic2`]}</p>
+                          )}
                         </div>
 
                         <div>
                           <label htmlFor={`member_${idx}_topic3`} className="block text-[11px] font-medium text-slate-700 mb-1">
-                            Topic 3 (Tertiary Preference)
+                            Topic 3 (Tertiary Preference) <span className="text-red-600 font-bold">*</span>
                           </label>
                           <input
                             id={`member_${idx}_topic3`}
@@ -641,24 +652,49 @@ export default function SeminarGroupRegistration() {
                             placeholder="Proposed seminar topic 3"
                             value={m.topic3 || ''}
                             onChange={(e) => handleMemberChange(idx, 'topic3', e.target.value)}
-                            className="w-full p-2 border border-slate-300 rounded outline-none focus:border-[#1E2D5A]"
+                            className={`w-full p-2 border rounded outline-none transition-colors ${
+                              fieldErrors[`member_${idx}_topic3`]
+                                ? 'border-red-500 bg-red-50/30'
+                                : 'border-slate-300 focus:border-[#1E2D5A] focus:ring-1 focus:ring-[#1E2D5A]'
+                            }`}
                           />
+                          {fieldErrors[`member_${idx}_topic3`] && (
+                            <p className="mt-1 text-[11px] font-medium text-red-600">{fieldErrors[`member_${idx}_topic3`]}</p>
+                          )}
                         </div>
                       </div>
 
                       {/* Final Topic for this student (after their 3 topics) */}
                       <div>
-                        <label htmlFor={`member_${idx}_final_topic`} className="block text-[11px] font-semibold text-[#1E2D5A] mb-1">
-                          Final Topic for Student {memberNum} (After 3 Topics)
-                        </label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label htmlFor={`member_${idx}_final_topic`} className="block text-[11px] font-semibold text-[#1E2D5A]">
+                            Final Topic for Student {memberNum} (After 3 Topics) <span className="text-red-600 font-bold">*</span>
+                          </label>
+                          {m.topic1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleMemberChange(idx, 'final_topic', m.topic1)}
+                              className="text-[10px] text-blue-600 hover:underline font-medium"
+                            >
+                              Same as Topic 1
+                            </button>
+                          )}
+                        </div>
                         <input
                           id={`member_${idx}_final_topic`}
                           type="text"
-                          placeholder={finalSeminarTopic ? `Defaults to: ${finalSeminarTopic}` : "Confirmed final seminar topic"}
-                          value={m.final_topic !== undefined && m.final_topic !== '' ? m.final_topic : (finalSeminarTopic || '')}
+                          placeholder="Confirmed final seminar topic"
+                          value={m.final_topic !== undefined && m.final_topic !== '' ? m.final_topic : (m.topic1 || '')}
                           onChange={(e) => handleMemberChange(idx, 'final_topic', e.target.value)}
-                          className="w-full p-2 border border-blue-200 bg-blue-50/20 rounded text-xs focus:border-[#1E2D5A] focus:ring-1 focus:ring-[#1E2D5A] outline-none font-medium text-slate-900"
+                          className={`w-full p-2 border rounded text-xs outline-none font-medium text-slate-900 transition-colors ${
+                            fieldErrors[`member_${idx}_final_topic`]
+                              ? 'border-red-500 bg-red-50/30'
+                              : 'border-blue-200 bg-blue-50/20 focus:border-[#1E2D5A] focus:ring-1 focus:ring-[#1E2D5A]'
+                          }`}
                         />
+                        {fieldErrors[`member_${idx}_final_topic`] && (
+                          <p className="mt-1 text-[11px] font-medium text-red-600">{fieldErrors[`member_${idx}_final_topic`]}</p>
+                        )}
                       </div>
                     </div>
                   </div>

@@ -665,7 +665,7 @@ router.post('/register-group', verifyToken, requireRole('student'), async (req, 
     }
 
     const rawMembers = Array.isArray(members) ? members : [];
-    const finalTopic = req.body.final_topic || req.body.final_seminar_topic || (rawMembers[0]?.topic1 ? String(rawMembers[0]?.topic1).trim() : '');
+    const finalTopic = req.body.final_topic || req.body.final_seminar_topic || (rawMembers[0]?.final_topic ? String(rawMembers[0]?.final_topic).trim() : '') || (rawMembers[0]?.topic1 ? String(rawMembers[0]?.topic1).trim() : '');
     const finalDomain = domain ? String(domain).trim() : '';
 
     const fieldErrors = [];
@@ -674,13 +674,6 @@ router.post('/register-group', verifyToken, requireRole('student'), async (req, 
       fieldErrors.push({
         field: 'domain',
         message: 'Please select or specify a project domain of interest.',
-      });
-    }
-
-    if (isFieldBlankOrPlaceholder(finalTopic)) {
-      fieldErrors.push({
-        field: 'final_topic',
-        message: 'Please enter the Final Seminar Topic.',
       });
     }
 
@@ -713,12 +706,36 @@ router.post('/register-group', verifyToken, requireRole('student'), async (req, 
           message: `Enter PRN (College PRN e.g. F23... or University PRN e.g. 723...) for member ${memberNum}`,
         });
       }
+
+      if (isFieldBlankOrPlaceholder(m?.topic1)) {
+        fieldErrors.push({
+          memberIndex: memberNum,
+          field: 'topic1',
+          message: `Enter Topic 1 for member ${memberNum}`,
+        });
+      }
+
+      if (isFieldBlankOrPlaceholder(m?.topic2)) {
+        fieldErrors.push({
+          memberIndex: memberNum,
+          field: 'topic2',
+          message: `Enter Topic 2 for member ${memberNum}`,
+        });
+      }
+
+      if (isFieldBlankOrPlaceholder(m?.topic3)) {
+        fieldErrors.push({
+          memberIndex: memberNum,
+          field: 'topic3',
+          message: `Enter Topic 3 for member ${memberNum}`,
+        });
+      }
     });
 
     if (fieldErrors.length > 0) {
       await client.query('ROLLBACK');
       return res.status(422).json({
-        error: fieldErrors[0]?.message || 'Please fill in all mandatory fields: Domain, Final Seminar Topic, and Member Names/PRNs.',
+        error: fieldErrors[0]?.message || 'Please fill in all mandatory fields: Domain, Member Names/PRNs, and Topic preferences.',
         errors: fieldErrors,
       });
     }
