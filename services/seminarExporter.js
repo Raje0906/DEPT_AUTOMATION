@@ -5,8 +5,8 @@ const XLSX = require('xlsx');
 const INSTITUTION = 'MES Wadia College of Engineering, Pune';
 const DEPARTMENT  = 'Department of Computer Engineering';
 
-const COL = { groupNo: 0, domain: 1, guide: 2, name: 3, prn: 4, topic1: 5, topic2: 6, topic3: 7 };
-const NUM_COLS = 8;
+const COL = { groupNo: 0, domain: 1, guide: 2, name: 3, prn: 4, topic1: 5, topic2: 6, topic3: 7, finalTopic: 8 };
+const NUM_COLS = 9;
 
 function getExportLifecycleLabel(session, groupCount) {
   if (session?.status === 'PUBLISHED') {
@@ -46,7 +46,7 @@ function buildWorkbook(session, groups, membersByGroupId) {
   merges.push({ s: { r: 2, c: 0 }, e: { r: 2, c: NUM_COLS - 1 } });
 
   // Column headers
-  wsData.push(['Group No.', 'Domain', 'Guide', 'Student Name', 'PRN', 'Topic 1', 'Topic 2', 'Topic 3']);
+  wsData.push(['Group No.', 'Domain', 'Guide', 'Student Name', 'PRN', 'Topic 1', 'Topic 2', 'Topic 3', 'Final Topic']);
 
   let currentRow = 4;
 
@@ -62,11 +62,12 @@ function buildWorkbook(session, groups, membersByGroupId) {
         row[COL.domain]  = group.domain || '';
         row[COL.guide]   = group.guide_name || 'Unassigned';
       }
-      row[COL.name]   = m.student_name || '';
-      row[COL.prn]    = m.prn || '';
-      row[COL.topic1] = m.topic1 || '';
-      row[COL.topic2] = m.topic2 || '';
-      row[COL.topic3] = m.topic3 || '';
+      row[COL.name]       = m.student_name || '';
+      row[COL.prn]        = m.university_prn || m.prn || '';
+      row[COL.topic1]     = m.topic1 || '';
+      row[COL.topic2]     = m.topic2 || '';
+      row[COL.topic3]     = m.topic3 || '';
+      row[COL.finalTopic] = m.final_topic || group.final_topic || '';
       wsData.push(row);
       currentRow++;
     });
@@ -85,8 +86,8 @@ function buildWorkbook(session, groups, membersByGroupId) {
   const ws = XLSX.utils.aoa_to_sheet(wsData);
   ws['!merges'] = merges;
   ws['!cols'] = [
-    { wch: 10 }, { wch: 32 }, { wch: 28 },
-    { wch: 30 }, { wch: 16 }, { wch: 40 }, { wch: 40 }, { wch: 40 },
+    { wch: 10 }, { wch: 28 }, { wch: 26 },
+    { wch: 28 }, { wch: 18 }, { wch: 35 }, { wch: 35 }, { wch: 35 }, { wch: 35 },
   ];
 
   XLSX.utils.book_append_sheet(wb, ws, 'Group List');

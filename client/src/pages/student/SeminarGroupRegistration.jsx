@@ -34,10 +34,10 @@ export default function SeminarGroupRegistration() {
   const [showMember4, setShowMember4] = useState(false);
 
   const initialMembers = [
-    { student_name: '', university_prn: '', division: '', mobile: '', email: '', is_leader: true },
-    { student_name: '', university_prn: '', division: '', mobile: '', email: '', is_leader: false },
-    { student_name: '', university_prn: '', division: '', mobile: '', email: '', is_leader: false },
-    { student_name: '', university_prn: '', division: '', mobile: '', email: '', is_leader: false },
+    { student_name: '', university_prn: '', division: '', mobile: '', email: '', topic1: '', topic2: '', topic3: '', final_topic: '', is_leader: true },
+    { student_name: '', university_prn: '', division: '', mobile: '', email: '', topic1: '', topic2: '', topic3: '', final_topic: '', is_leader: false },
+    { student_name: '', university_prn: '', division: '', mobile: '', email: '', topic1: '', topic2: '', topic3: '', final_topic: '', is_leader: false },
+    { student_name: '', university_prn: '', division: '', mobile: '', email: '', topic1: '', topic2: '', topic3: '', final_topic: '', is_leader: false },
   ];
   const [members, setMembers] = useState(initialMembers);
 
@@ -218,8 +218,10 @@ export default function SeminarGroupRegistration() {
       division: m.division ? m.division.trim().toUpperCase() : '',
       mobile: m.mobile ? m.mobile.trim() : '',
       email: m.email ? m.email.trim().toLowerCase() : '',
-      topic1: finalTopic,
-      final_topic: finalTopic,
+      topic1: m.topic1 ? m.topic1.trim() : (finalTopic || ''),
+      topic2: m.topic2 ? m.topic2.trim() : '',
+      topic3: m.topic3 ? m.topic3.trim() : '',
+      final_topic: m.final_topic ? m.final_topic.trim() : (finalTopic || ''),
       is_leader: idx === 0,
     }));
 
@@ -564,6 +566,77 @@ export default function SeminarGroupRegistration() {
                         />
                       </div>
                     </div>
+
+                    {/* Member Topics: Topic 1, Topic 2, Topic 3, and Final Topic */}
+                    <div className="pt-3 border-t border-slate-200/80 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                          Topic Preferences & Final Topic (Student {memberNum})
+                        </span>
+                        <span className="text-[10px] text-slate-500">
+                          3 proposed topics + final topic
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                        <div>
+                          <label htmlFor={`member_${idx}_topic1`} className="block text-[11px] font-medium text-slate-700 mb-1">
+                            Topic 1 (Primary Preference)
+                          </label>
+                          <input
+                            id={`member_${idx}_topic1`}
+                            type="text"
+                            placeholder="Proposed seminar topic 1"
+                            value={m.topic1 || ''}
+                            onChange={(e) => handleMemberChange(idx, 'topic1', e.target.value)}
+                            className="w-full p-2 border border-slate-300 rounded outline-none focus:border-[#1E2D5A]"
+                          />
+                        </div>
+
+                        <div>
+                          <label htmlFor={`member_${idx}_topic2`} className="block text-[11px] font-medium text-slate-700 mb-1">
+                            Topic 2 (Secondary Preference)
+                          </label>
+                          <input
+                            id={`member_${idx}_topic2`}
+                            type="text"
+                            placeholder="Proposed seminar topic 2"
+                            value={m.topic2 || ''}
+                            onChange={(e) => handleMemberChange(idx, 'topic2', e.target.value)}
+                            className="w-full p-2 border border-slate-300 rounded outline-none focus:border-[#1E2D5A]"
+                          />
+                        </div>
+
+                        <div>
+                          <label htmlFor={`member_${idx}_topic3`} className="block text-[11px] font-medium text-slate-700 mb-1">
+                            Topic 3 (Tertiary Preference)
+                          </label>
+                          <input
+                            id={`member_${idx}_topic3`}
+                            type="text"
+                            placeholder="Proposed seminar topic 3"
+                            value={m.topic3 || ''}
+                            onChange={(e) => handleMemberChange(idx, 'topic3', e.target.value)}
+                            className="w-full p-2 border border-slate-300 rounded outline-none focus:border-[#1E2D5A]"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Final Topic for this student (after their 3 topics) */}
+                      <div>
+                        <label htmlFor={`member_${idx}_final_topic`} className="block text-[11px] font-semibold text-[#1E2D5A] mb-1">
+                          Final Topic for Student {memberNum} (After 3 Topics)
+                        </label>
+                        <input
+                          id={`member_${idx}_final_topic`}
+                          type="text"
+                          placeholder={finalSeminarTopic ? `Defaults to: ${finalSeminarTopic}` : "Confirmed final seminar topic"}
+                          value={m.final_topic !== undefined && m.final_topic !== '' ? m.final_topic : (finalSeminarTopic || '')}
+                          onChange={(e) => handleMemberChange(idx, 'final_topic', e.target.value)}
+                          className="w-full p-2 border border-blue-200 bg-blue-50/20 rounded text-xs focus:border-[#1E2D5A] focus:ring-1 focus:ring-[#1E2D5A] outline-none font-medium text-slate-900"
+                        />
+                      </div>
+                    </div>
                   </div>
                 );
               })}
@@ -697,7 +770,10 @@ export default function SeminarGroupRegistration() {
                     <th className="py-2.5 px-3 font-semibold">Student Name</th>
                     <th className="py-2.5 px-3 font-semibold">University PRN</th>
                     <th className="py-2.5 px-3 font-semibold">Div</th>
-                    <th className="py-2.5 px-3 font-semibold">Contact Info</th>
+                    <th className="py-2.5 px-3 font-semibold">Topic 1</th>
+                    <th className="py-2.5 px-3 font-semibold">Topic 2</th>
+                    <th className="py-2.5 px-3 font-semibold">Topic 3</th>
+                    <th className="py-2.5 px-3 font-semibold text-[#1E2D5A]">Final Topic</th>
                     <th className="py-2.5 px-3 font-semibold">Role</th>
                   </tr>
                 </thead>
@@ -716,9 +792,17 @@ export default function SeminarGroupRegistration() {
                       <td className="py-3 px-3 uppercase">
                         {m.division || '—'}
                       </td>
-                      <td className="py-3 px-3 space-y-0.5 text-slate-600 font-mono text-[11px]">
-                        <div>{m.email || '—'}</div>
-                        <div>{m.mobile || '—'}</div>
+                      <td className="py-3 px-3 text-slate-600 max-w-[140px] truncate" title={m.topic1}>
+                        {m.topic1 || '—'}
+                      </td>
+                      <td className="py-3 px-3 text-slate-600 max-w-[140px] truncate" title={m.topic2}>
+                        {m.topic2 || '—'}
+                      </td>
+                      <td className="py-3 px-3 text-slate-600 max-w-[140px] truncate" title={m.topic3}>
+                        {m.topic3 || '—'}
+                      </td>
+                      <td className="py-3 px-3 font-medium text-[#1E2D5A] max-w-[180px]" title={m.final_topic || groupData?.final_topic}>
+                        {m.final_topic || groupData?.final_topic || '—'}
                       </td>
                       <td className="py-3 px-3">
                         {m.is_leader ? (
