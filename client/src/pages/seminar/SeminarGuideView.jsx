@@ -199,7 +199,8 @@ export default function SeminarGuideView() {
                                   <thead>
                                     <tr className="bg-[var(--paper)] border border-[var(--rule)] text-[var(--ink)]/60 font-semibold">
                                       <th className="px-3 py-1.5 text-left">Name</th>
-                                      <th className="px-3 py-1.5 text-left">PRN</th>
+                                      <th className="px-3 py-1.5 text-left">College PRN</th>
+                                      <th className="px-3 py-1.5 text-left">University PRN</th>
                                       <th className="px-3 py-1.5 text-left">Div</th>
                                       <th className="px-3 py-1.5 text-left">Topic 1</th>
                                       <th className="px-3 py-1.5 text-left">Topic 2</th>
@@ -216,7 +217,8 @@ export default function SeminarGuideView() {
                                             <span className="ml-1.5 text-[9px] bg-[var(--navy)] text-white px-1.5 py-0.5 rounded font-bold">Leader</span>
                                           )}
                                         </td>
-                                        <td className="px-3 py-1.5 font-mono text-[var(--ink)]/70">{m.university_prn || m.prn}</td>
+                                        <td className="px-3 py-1.5 font-mono text-[var(--ink)]/70">{m.college_prn || (m.prn && String(m.prn).trim().toUpperCase().startsWith('F') ? m.prn : '') || m.prn || '—'}</td>
+                                        <td className="px-3 py-1.5 font-mono text-[var(--ink)]/70">{m.university_prn || (m.prn && String(m.prn).trim().startsWith('7') ? m.prn : '') || '—'}</td>
                                         <td className="px-3 py-1.5 text-[var(--ink)]/60">{m.division}</td>
                                         <td className="px-3 py-1.5 text-[var(--ink)]/60 max-w-[120px] truncate" title={m.topic1}>{m.topic1 || '—'}</td>
                                         <td className="px-3 py-1.5 text-[var(--ink)]/60 max-w-[120px] truncate" title={m.topic2}>{m.topic2 || '—'}</td>

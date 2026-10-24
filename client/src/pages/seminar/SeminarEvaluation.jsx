@@ -71,8 +71,8 @@ export default function SeminarEvaluation() {
 
       (d.groups || []).forEach(grp => {
         (grp.members || []).forEach(m => {
-          const prnVal = m.university_prn || m.prn;
-          const existing = fetchedMarks[prnVal] || {};
+          const prnVal = m.university_prn || m.college_prn || m.prn;
+          const existing = fetchedMarks[prnVal] || fetchedMarks[m.college_prn] || fetchedMarks[m.university_prn] || fetchedMarks[m.prn] || {};
           let scores = existing.metric_scores || {};
           if (typeof scores === 'string') {
             try { scores = JSON.parse(scores); } catch (e) { scores = {}; }
@@ -280,7 +280,7 @@ export default function SeminarEvaluation() {
       const wsData = [];
       const merges = [];
 
-      const totalCols = 7 + metrics.length + 1;
+      const totalCols = 8 + metrics.length + 1;
 
       // Header Rows
       wsData.push(['M.E.S. WADIA COLLEGE OF ENGINEERING, PUNE', ...new Array(totalCols - 1).fill('')]);
@@ -302,6 +302,7 @@ export default function SeminarEvaluation() {
       const headerCols = [
         'Group Number',
         'Student Name',
+        'College PRN',
         'University PRN',
         'Sign',
         'Final Topic',
@@ -324,9 +325,11 @@ export default function SeminarEvaluation() {
 
         members.forEach(m => {
           currentRow++;
-          const prnVal = m.university_prn || m.prn || '';
-          const studentScores = marksState[prnVal]?.metric_scores || {};
-          const studentTotal = getStudentTotal(prnVal);
+          const collegePrnVal = m.college_prn || (m.prn && String(m.prn).trim().toUpperCase().startsWith('F') ? m.prn : '') || m.prn || '';
+          const univPrnVal = m.university_prn || (m.prn && String(m.prn).trim().startsWith('7') ? m.prn : '') || '';
+          const prnVal = m.university_prn || m.college_prn || m.prn || '';
+          const studentScores = marksState[prnVal]?.metric_scores || marksState[collegePrnVal]?.metric_scores || marksState[univPrnVal]?.metric_scores || {};
+          const studentTotal = getStudentTotal(prnVal) || getStudentTotal(collegePrnVal) || getStudentTotal(univPrnVal);
 
           const metricCells = metrics.map(metric => {
             const val = studentScores[metric.name];
@@ -336,7 +339,8 @@ export default function SeminarEvaluation() {
           const row = [
             grpNoText,
             m.student_name || '',
-            prnVal,
+            collegePrnVal,
+            univPrnVal,
             '', // Sign
             finalTopicText,
             domainText,
@@ -349,7 +353,7 @@ export default function SeminarEvaluation() {
 
         const endRow = currentRow;
         if (members.length > 1) {
-          [0, 4, 5, 6].forEach(colIdx => {
+          [0, 5, 6, 7].forEach(colIdx => {
             merges.push({
               s: { r: startRow, c: colIdx },
               e: { r: endRow, c: colIdx },
@@ -363,6 +367,7 @@ export default function SeminarEvaluation() {
       ws['!cols'] = [
         { wch: 14 },
         { wch: 28 },
+        { wch: 18 },
         { wch: 18 },
         { wch: 12 },
         { wch: 38 },
@@ -419,6 +424,7 @@ export default function SeminarEvaluation() {
       const tableHead = [[
         'Group #',
         'Student Name',
+        'College PRN',
         'University PRN',
         'Sign',
         'Final Topic',
@@ -438,9 +444,11 @@ export default function SeminarEvaluation() {
         const grpGuideName = grp.guide_name || guide?.name || 'Assigned Guide';
 
         members.forEach((m, mi) => {
-          const prnVal = m.university_prn || m.prn || '';
-          const studentScores = marksState[prnVal]?.metric_scores || {};
-          const studentTotal = getStudentTotal(prnVal);
+          const collegePrnVal = m.college_prn || (m.prn && String(m.prn).trim().toUpperCase().startsWith('F') ? m.prn : '') || m.prn || '—';
+          const univPrnVal = m.university_prn || (m.prn && String(m.prn).trim().startsWith('7') ? m.prn : '') || '—';
+          const prnVal = m.university_prn || m.college_prn || m.prn || '';
+          const studentScores = marksState[prnVal]?.metric_scores || marksState[collegePrnVal]?.metric_scores || marksState[univPrnVal]?.metric_scores || {};
+          const studentTotal = getStudentTotal(prnVal) || getStudentTotal(collegePrnVal) || getStudentTotal(univPrnVal);
 
           const metricCells = metrics.map(metric => {
             const val = studentScores[metric.name];
@@ -451,7 +459,8 @@ export default function SeminarEvaluation() {
           tableBody.push([
             mi === 0 ? { content: grpNoText, rowSpan: members.length, styles: { valign: 'middle', halign: 'center' } } : null,
             m.student_name || '—',
-            prnVal || '—',
+            collegePrnVal,
+            univPrnVal,
             '', // Sign space
             mi === 0 ? { content: finalTopicText, rowSpan: members.length, styles: { valign: 'middle' } } : null,
             mi === 0 ? { content: domainText, rowSpan: members.length, styles: { valign: 'middle' } } : null,
@@ -634,7 +643,8 @@ export default function SeminarEvaluation() {
                 <tr className="bg-[#1E2D5A] text-white text-[11px] font-semibold divide-x divide-slate-700">
                   <th className="py-3 px-3 w-24 text-center whitespace-nowrap">Group Number</th>
                   <th className="py-3 px-3.5 min-w-[160px]">Student Name</th>
-                  <th className="py-3 px-3 w-32 whitespace-nowrap">University PRN</th>
+                  <th className="py-3 px-3 w-28 whitespace-nowrap">College PRN</th>
+                  <th className="py-3 px-3 w-28 whitespace-nowrap">University PRN</th>
                   <th className="py-3 px-2 w-14 text-center">Sign</th>
                   <th className="py-3 px-3.5 min-w-[200px]">Final Topic</th>
                   <th className="py-3 px-3 min-w-[130px]">Domain</th>
@@ -660,8 +670,10 @@ export default function SeminarEvaluation() {
                   const grpGuideName = grp.guide_name || guide?.name || 'Assigned Guide';
 
                   return members.map((m, mIdx) => {
-                    const prnVal = m.university_prn || m.prn || '';
-                    const studentTotal = getStudentTotal(prnVal);
+                    const collegePrnVal = m.college_prn || (m.prn && String(m.prn).trim().toUpperCase().startsWith('F') ? m.prn : '') || m.prn || '';
+                    const univPrnVal = m.university_prn || (m.prn && String(m.prn).trim().startsWith('7') ? m.prn : '') || '';
+                    const prnVal = m.university_prn || m.college_prn || m.prn || '';
+                    const studentTotal = getStudentTotal(prnVal) || getStudentTotal(collegePrnVal) || getStudentTotal(univPrnVal);
                     const isEvenGroup = grp.group_no % 2 === 0;
 
                     return (
@@ -691,9 +703,14 @@ export default function SeminarEvaluation() {
                           )}
                         </td>
 
+                        {/* College PRN */}
+                        <td className="py-2.5 px-3 font-mono font-medium text-slate-700">
+                          {collegePrnVal || '—'}
+                        </td>
+
                         {/* University PRN */}
                         <td className="py-2.5 px-3 font-mono font-medium text-slate-700">
-                          {prnVal || '—'}
+                          {univPrnVal || '—'}
                         </td>
 
                         {/* Sign (Placeholder Box) */}

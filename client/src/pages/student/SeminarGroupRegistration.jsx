@@ -34,10 +34,10 @@ export default function SeminarGroupRegistration() {
   const [showMember4, setShowMember4] = useState(false);
 
   const initialMembers = [
-    { student_name: '', university_prn: '', division: '', mobile: '', email: '', topic1: '', topic2: '', topic3: '', final_topic: '', is_leader: true },
-    { student_name: '', university_prn: '', division: '', mobile: '', email: '', topic1: '', topic2: '', topic3: '', final_topic: '', is_leader: false },
-    { student_name: '', university_prn: '', division: '', mobile: '', email: '', topic1: '', topic2: '', topic3: '', final_topic: '', is_leader: false },
-    { student_name: '', university_prn: '', division: '', mobile: '', email: '', topic1: '', topic2: '', topic3: '', final_topic: '', is_leader: false },
+    { student_name: '', college_prn: '', university_prn: '', division: '', mobile: '', email: '', topic1: '', topic2: '', topic3: '', final_topic: '', is_leader: true },
+    { student_name: '', college_prn: '', university_prn: '', division: '', mobile: '', email: '', topic1: '', topic2: '', topic3: '', final_topic: '', is_leader: false },
+    { student_name: '', college_prn: '', university_prn: '', division: '', mobile: '', email: '', topic1: '', topic2: '', topic3: '', final_topic: '', is_leader: false },
+    { student_name: '', college_prn: '', university_prn: '', division: '', mobile: '', email: '', topic1: '', topic2: '', topic3: '', final_topic: '', is_leader: false },
   ];
   const [members, setMembers] = useState(initialMembers);
 
@@ -69,10 +69,14 @@ export default function SeminarGroupRegistration() {
         // Pre-fill Student 1 (Leader) from logged-in student's profile
         setMembers(prev => {
           const copy = [...prev];
+          const rawPrn = data.prefill.prn || '';
+          const isColPrn = String(rawPrn).trim().toUpperCase().startsWith('F');
+          const isUnivPrn = String(rawPrn).trim().startsWith('7');
           copy[0] = {
             ...copy[0],
             student_name: data.prefill.name || user?.name || '',
-            university_prn: data.prefill.prn || '',
+            college_prn: data.prefill.college_prn || (isColPrn ? rawPrn : '') || (rawPrn && !isUnivPrn ? rawPrn : ''),
+            university_prn: data.prefill.university_prn || (isUnivPrn ? rawPrn : '') || '',
             division: data.prefill.division || '',
             mobile: data.prefill.mobile || '',
             email: data.prefill.email || user?.email || '',
@@ -171,7 +175,7 @@ export default function SeminarGroupRegistration() {
       if (!firstErrorKey) firstErrorKey = 'domain_select';
     }
 
-    // Relaxed member validation: Name and University PRN are required per member
+    // Relaxed member validation: Name and at least one PRN (College or University) per member
     for (let idx = 0; idx < activeCount; idx++) {
       const m = members[idx];
       const memberNum = idx + 1;
@@ -184,9 +188,9 @@ export default function SeminarGroupRegistration() {
         if (!firstErrorKey) firstErrorKey = key;
       }
 
-      if (isFieldBlank(m.university_prn)) {
-        const key = `member_${idx}_university_prn`;
-        const msg = `Enter University PRN for Member ${memberNum}`;
+      if (isFieldBlank(m.college_prn) && isFieldBlank(m.university_prn)) {
+        const key = `member_${idx}_college_prn`;
+        const msg = `Enter College PRN (e.g. F23...) or University PRN (e.g. 723...) for Member ${memberNum}`;
         errors[key] = msg;
         summary.push(msg);
         if (!firstErrorKey) firstErrorKey = key;
@@ -210,20 +214,25 @@ export default function SeminarGroupRegistration() {
     setFieldErrors({});
     setSummaryErrors([]);
 
-    const membersToSubmit = members.slice(0, activeCount).map((m, idx) => ({
-      ...m,
-      student_name: m.student_name.trim(),
-      prn: m.university_prn.trim(),
-      university_prn: m.university_prn.trim(),
-      division: m.division ? m.division.trim().toUpperCase() : '',
-      mobile: m.mobile ? m.mobile.trim() : '',
-      email: m.email ? m.email.trim().toLowerCase() : '',
-      topic1: m.topic1 ? m.topic1.trim() : (finalTopic || ''),
-      topic2: m.topic2 ? m.topic2.trim() : '',
-      topic3: m.topic3 ? m.topic3.trim() : '',
-      final_topic: m.final_topic ? m.final_topic.trim() : (finalTopic || ''),
-      is_leader: idx === 0,
-    }));
+    const membersToSubmit = members.slice(0, activeCount).map((m, idx) => {
+      const cPrn = (m.college_prn || '').trim().toUpperCase();
+      const uPrn = (m.university_prn || '').trim().toUpperCase();
+      return {
+        ...m,
+        student_name: m.student_name.trim(),
+        college_prn: cPrn,
+        university_prn: uPrn,
+        prn: cPrn || uPrn,
+        division: m.division ? m.division.trim().toUpperCase() : '',
+        mobile: m.mobile ? m.mobile.trim() : '',
+        email: m.email ? m.email.trim().toLowerCase() : '',
+        topic1: m.topic1 ? m.topic1.trim() : (finalTopic || ''),
+        topic2: m.topic2 ? m.topic2.trim() : '',
+        topic3: m.topic3 ? m.topic3.trim() : '',
+        final_topic: m.final_topic ? m.final_topic.trim() : (finalTopic || ''),
+        is_leader: idx === 0,
+      };
+    });
 
     setSubmitting(true);
     try {
@@ -476,7 +485,7 @@ export default function SeminarGroupRegistration() {
                       )}
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
                       {/* Full Name */}
                       <div>
                         <label htmlFor={nameKey} className="block text-[11px] font-medium text-slate-700 mb-1">
@@ -499,26 +508,41 @@ export default function SeminarGroupRegistration() {
                         )}
                       </div>
 
-                      {/* University PRN */}
+                      {/* College PRN (starts with F) */}
                       <div>
-                        <label htmlFor={prnKey} className="block text-[11px] font-medium text-slate-700 mb-1">
-                          University PRN <span className="text-red-600 font-bold">*</span>
+                        <label htmlFor={`member_${idx}_college_prn`} className="block text-[11px] font-medium text-slate-700 mb-1">
+                          College PRN <span className="text-slate-400 font-normal">(starts with F)</span>
                         </label>
                         <input
-                          id={prnKey}
+                          id={`member_${idx}_college_prn`}
                           type="text"
-                          placeholder="e.g. 72123456B / F23112000"
-                          value={m.university_prn}
-                          onChange={(e) => handleMemberChange(idx, 'university_prn', e.target.value)}
+                          placeholder="e.g. F23112001"
+                          value={m.college_prn || ''}
+                          onChange={(e) => handleMemberChange(idx, 'college_prn', e.target.value)}
                           className={`w-full p-2 border rounded font-mono uppercase outline-none transition-colors ${
-                            fieldErrors[prnKey]
+                            fieldErrors[`member_${idx}_college_prn`]
                               ? 'border-red-500 bg-red-50/30'
                               : 'border-slate-300 focus:border-[#1E2D5A] focus:ring-1 focus:ring-[#1E2D5A]'
                           }`}
                         />
-                        {fieldErrors[prnKey] && (
-                          <p className="mt-1 text-[11px] font-medium text-red-600">{fieldErrors[prnKey]}</p>
+                        {fieldErrors[`member_${idx}_college_prn`] && (
+                          <p className="mt-1 text-[11px] font-medium text-red-600">{fieldErrors[`member_${idx}_college_prn`]}</p>
                         )}
+                      </div>
+
+                      {/* University PRN (starts with 723) */}
+                      <div>
+                        <label htmlFor={`member_${idx}_university_prn`} className="block text-[11px] font-medium text-slate-700 mb-1">
+                          University PRN <span className="text-slate-400 font-normal">(starts with 723)</span>
+                        </label>
+                        <input
+                          id={`member_${idx}_university_prn`}
+                          type="text"
+                          placeholder="e.g. 72312345B"
+                          value={m.university_prn || ''}
+                          onChange={(e) => handleMemberChange(idx, 'university_prn', e.target.value)}
+                          className="w-full p-2 border border-slate-300 rounded font-mono uppercase outline-none focus:border-[#1E2D5A] focus:ring-1 focus:ring-[#1E2D5A]"
+                        />
                       </div>
 
                       {/* Division */}
@@ -552,7 +576,7 @@ export default function SeminarGroupRegistration() {
                       </div>
 
                       {/* Email */}
-                      <div className="sm:col-span-2 lg:col-span-4">
+                      <div>
                         <label htmlFor={`member_${idx}_email`} className="block text-[11px] font-medium text-slate-600 mb-1">
                           College Email
                         </label>
@@ -768,6 +792,7 @@ export default function SeminarGroupRegistration() {
                   <tr className="border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[11px]">
                     <th className="py-2.5 px-3 font-semibold">#</th>
                     <th className="py-2.5 px-3 font-semibold">Student Name</th>
+                    <th className="py-2.5 px-3 font-semibold">College PRN</th>
                     <th className="py-2.5 px-3 font-semibold">University PRN</th>
                     <th className="py-2.5 px-3 font-semibold">Div</th>
                     <th className="py-2.5 px-3 font-semibold">Topic 1</th>
@@ -787,7 +812,10 @@ export default function SeminarGroupRegistration() {
                         {m.student_name || '—'}
                       </td>
                       <td className="py-3 px-3 font-mono font-medium text-slate-800">
-                        {m.university_prn || m.prn || '—'}
+                        {m.college_prn || (m.prn && String(m.prn).trim().toUpperCase().startsWith('F') ? m.prn : '') || m.prn || '—'}
+                      </td>
+                      <td className="py-3 px-3 font-mono font-medium text-slate-800">
+                        {m.university_prn || (m.prn && String(m.prn).trim().startsWith('7') ? m.prn : '') || '—'}
                       </td>
                       <td className="py-3 px-3 uppercase">
                         {m.division || '—'}

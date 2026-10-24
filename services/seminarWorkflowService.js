@@ -862,7 +862,7 @@ function generateWorkflowExcel(session, groups, guides, issues = []) {
   // ─── Sheet 1: "Groups with Guide" ──────────────────────────────────────────
   const s1Data = [];
   const s1Merges = [];
-  const S1_COLS = 9; // Group No, Student Name, College PRN, Topic 1, Topic 2, Topic 3, Final Topic, Domain, Guide
+  const S1_COLS = 10; // Group No, Student Name, College PRN, University PRN, Topic 1, Topic 2, Topic 3, Final Topic, Domain, Guide
 
   // Title Row
   s1Data.push([sanitizeFormula(titleText), ...new Array(S1_COLS - 1).fill('')]);
@@ -873,6 +873,7 @@ function generateWorkflowExcel(session, groups, guides, issues = []) {
     'Group No.',
     'Student Name',
     'College PRN',
+    'University PRN',
     'Topic 1',
     'Topic 2',
     'Topic 3',
@@ -893,15 +894,16 @@ function generateWorkflowExcel(session, groups, guides, issues = []) {
       const row = new Array(S1_COLS).fill('');
       if (mi === 0) {
         row[0] = sanitizeFormula(g.group_no);
-        row[7] = sanitizeFormula(g.domain || g.domain_raw || '');
-        row[8] = sanitizeFormula(g.guide_name || 'Unassigned');
+        row[8] = sanitizeFormula(g.domain || g.domain_raw || '');
+        row[9] = sanitizeFormula(g.guide_name || 'Unassigned');
       }
       row[1] = sanitizeFormula(m.student_name || m.name || '');
-      row[2] = sanitizeFormula(m.university_prn || m.prn || '');
-      row[3] = sanitizeFormula(m.topic1 || '');
-      row[4] = sanitizeFormula(m.topic2 || '');
-      row[5] = sanitizeFormula(m.topic3 || '');
-      row[6] = sanitizeFormula(m.final_topic || g.final_topic || '');
+      row[2] = sanitizeFormula(m.college_prn || (m.prn && String(m.prn).trim().toUpperCase().startsWith('F') ? m.prn : '') || m.prn || '');
+      row[3] = sanitizeFormula(m.university_prn || (m.prn && String(m.prn).trim().startsWith('7') ? m.prn : '') || '');
+      row[4] = sanitizeFormula(m.topic1 || '');
+      row[5] = sanitizeFormula(m.topic2 || '');
+      row[6] = sanitizeFormula(m.topic3 || '');
+      row[7] = sanitizeFormula(m.final_topic || g.final_topic || '');
 
       s1Data.push(row);
       rIdx++;
@@ -909,7 +911,7 @@ function generateWorkflowExcel(session, groups, guides, issues = []) {
 
     if (members.length > 1) {
       // Merge Group No, Domain, Guide across member rows
-      [0, 7, 8].forEach(c => {
+      [0, 8, 9].forEach(c => {
         s1Merges.push({ s: { r: startRow, c }, e: { r: rIdx - 1, c } });
       });
     }
@@ -922,7 +924,7 @@ function generateWorkflowExcel(session, groups, guides, issues = []) {
   const ws1 = XLSX.utils.aoa_to_sheet(s1Data);
   ws1['!merges'] = s1Merges;
   ws1['!cols'] = [
-    { wch: 10 }, { wch: 28 }, { wch: 18 },
+    { wch: 10 }, { wch: 28 }, { wch: 18 }, { wch: 18 },
     { wch: 32 }, { wch: 32 }, { wch: 32 }, { wch: 35 },
     { wch: 26 }, { wch: 26 },
   ];
@@ -991,7 +993,8 @@ function generateWorkflowExcel(session, groups, guides, issues = []) {
   s3Data.push([
     'Group No.',
     'Name',
-    'PRN',
+    'College PRN',
+    'University PRN',
     'Division',
     'Topic 1',
     'Topic 2',
@@ -1008,7 +1011,8 @@ function generateWorkflowExcel(session, groups, guides, issues = []) {
       s3Data.push([
         sanitizeFormula(g.group_no),
         sanitizeFormula(m.student_name || m.name || ''),
-        sanitizeFormula(m.university_prn || m.prn || ''),
+        sanitizeFormula(m.college_prn || (m.prn && String(m.prn).trim().toUpperCase().startsWith('F') ? m.prn : '') || m.prn || ''),
+        sanitizeFormula(m.university_prn || (m.prn && String(m.prn).trim().startsWith('7') ? m.prn : '') || ''),
         sanitizeFormula(m.division || ''),
         sanitizeFormula(m.topic1 || ''),
         sanitizeFormula(m.topic2 || ''),
@@ -1024,7 +1028,7 @@ function generateWorkflowExcel(session, groups, guides, issues = []) {
 
   const ws3 = XLSX.utils.aoa_to_sheet(s3Data);
   ws3['!cols'] = [
-    { wch: 10 }, { wch: 28 }, { wch: 16 }, { wch: 10 },
+    { wch: 10 }, { wch: 28 }, { wch: 18 }, { wch: 18 }, { wch: 10 },
     { wch: 30 }, { wch: 30 }, { wch: 30 }, { wch: 35 },
     { wch: 15 }, { wch: 30 }, { wch: 14 }, { wch: 26 },
   ];

@@ -5,8 +5,8 @@ const XLSX = require('xlsx');
 const INSTITUTION = 'MES Wadia College of Engineering, Pune';
 const DEPARTMENT  = 'Department of Computer Engineering';
 
-const COL = { groupNo: 0, domain: 1, guide: 2, name: 3, prn: 4, topic1: 5, topic2: 6, topic3: 7, finalTopic: 8 };
-const NUM_COLS = 9;
+const COL = { groupNo: 0, domain: 1, guide: 2, name: 3, collegePrn: 4, univPrn: 5, topic1: 6, topic2: 7, topic3: 8, finalTopic: 9 };
+const NUM_COLS = 10;
 
 function getExportLifecycleLabel(session, groupCount) {
   if (session?.status === 'PUBLISHED') {
@@ -46,7 +46,7 @@ function buildWorkbook(session, groups, membersByGroupId) {
   merges.push({ s: { r: 2, c: 0 }, e: { r: 2, c: NUM_COLS - 1 } });
 
   // Column headers
-  wsData.push(['Group No.', 'Domain', 'Guide', 'Student Name', 'PRN', 'Topic 1', 'Topic 2', 'Topic 3', 'Final Topic']);
+  wsData.push(['Group No.', 'Domain', 'Guide', 'Student Name', 'College PRN', 'University PRN', 'Topic 1', 'Topic 2', 'Topic 3', 'Final Topic']);
 
   let currentRow = 4;
 
@@ -63,7 +63,8 @@ function buildWorkbook(session, groups, membersByGroupId) {
         row[COL.guide]   = group.guide_name || 'Unassigned';
       }
       row[COL.name]       = m.student_name || '';
-      row[COL.prn]        = m.university_prn || m.prn || '';
+      row[COL.collegePrn] = m.college_prn || (m.prn && String(m.prn).trim().toUpperCase().startsWith('F') ? m.prn : '') || m.prn || '';
+      row[COL.univPrn]    = m.university_prn || (m.prn && String(m.prn).trim().startsWith('7') ? m.prn : '') || '';
       row[COL.topic1]     = m.topic1 || '';
       row[COL.topic2]     = m.topic2 || '';
       row[COL.topic3]     = m.topic3 || '';
@@ -87,7 +88,7 @@ function buildWorkbook(session, groups, membersByGroupId) {
   ws['!merges'] = merges;
   ws['!cols'] = [
     { wch: 10 }, { wch: 28 }, { wch: 26 },
-    { wch: 28 }, { wch: 18 }, { wch: 35 }, { wch: 35 }, { wch: 35 }, { wch: 35 },
+    { wch: 28 }, { wch: 18 }, { wch: 18 }, { wch: 35 }, { wch: 35 }, { wch: 35 }, { wch: 35 },
   ];
 
   XLSX.utils.book_append_sheet(wb, ws, 'Group List');
@@ -196,7 +197,7 @@ function buildConsolidatedEvaluationWorkbook(session, guide, groups, metrics, ma
   ];
 
   const totalMax = metricList.reduce((acc, m) => acc + Number(m.max_marks || 0), 0);
-  const totalCols = 7 + metricList.length + 1; // 7 base cols + metrics + 1 total
+  const totalCols = 8 + metricList.length + 1; // 8 base cols + metrics + 1 total
 
   // Header 1: Institution
   wsData.push([INSTITUTION, ...new Array(totalCols - 1).fill('')]);
@@ -225,6 +226,7 @@ function buildConsolidatedEvaluationWorkbook(session, guide, groups, metrics, ma
   const headerCols = [
     'Group Number',
     'Student Name',
+    'College PRN',
     'University PRN',
     'Sign',
     'Final Topic',
@@ -247,8 +249,10 @@ function buildConsolidatedEvaluationWorkbook(session, guide, groups, metrics, ma
 
     members.forEach((m, mi) => {
       currentRow++;
-      const prnVal = m.university_prn || m.prn || '';
-      const marksRecord = marksMap[prnVal] || {};
+      const collegePrnVal = m.college_prn || (m.prn && String(m.prn).trim().toUpperCase().startsWith('F') ? m.prn : '') || m.prn || '';
+      const univPrnVal = m.university_prn || (m.prn && String(m.prn).trim().startsWith('7') ? m.prn : '') || '';
+      const lookupPrn = m.university_prn || m.college_prn || m.prn || '';
+      const marksRecord = marksMap[lookupPrn] || marksMap[collegePrnVal] || marksMap[univPrnVal] || {};
       const metricScores = marksRecord.metric_scores || {};
 
       let studentTotal = 0;
@@ -267,7 +271,8 @@ function buildConsolidatedEvaluationWorkbook(session, guide, groups, metrics, ma
       const row = [
         groupNoText,
         m.student_name || '',
-        prnVal,
+        collegePrnVal,
+        univPrnVal,
         '', // Sign placeholder
         finalTopicText,
         domainText,
@@ -280,8 +285,8 @@ function buildConsolidatedEvaluationWorkbook(session, guide, groups, metrics, ma
 
     const groupEndRow = currentRow;
     if (members.length > 1) {
-      // Merge Group Number (col 0), Final Topic (col 4), Domain (col 5), Guide Name (col 6)
-      [0, 4, 5, 6].forEach(colIdx => {
+      // Merge Group Number (col 0), Final Topic (col 5), Domain (col 6), Guide Name (col 7)
+      [0, 5, 6, 7].forEach(colIdx => {
         merges.push({
           s: { r: groupStartRow, c: colIdx },
           e: { r: groupEndRow, c: colIdx }
@@ -295,6 +300,7 @@ function buildConsolidatedEvaluationWorkbook(session, guide, groups, metrics, ma
   ws['!cols'] = [
     { wch: 14 }, // Group Number
     { wch: 28 }, // Student Name
+    { wch: 18 }, // College PRN
     { wch: 18 }, // University PRN
     { wch: 12 }, // Sign
     { wch: 38 }, // Final Topic

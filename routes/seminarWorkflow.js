@@ -634,8 +634,9 @@ router.get('/:sessionId/export-excel', async (req, res) => {
                  json_build_object(
                    'name', m.student_name,
                    'student_name', m.student_name,
-                   'prn', COALESCE(m.university_prn, m.prn),
-                   'university_prn', COALESCE(m.university_prn, m.prn),
+                   'prn', COALESCE(m.college_prn, m.university_prn, m.prn),
+                   'college_prn', COALESCE(m.college_prn, CASE WHEN UPPER(m.prn) LIKE 'F%' THEN m.prn ELSE '' END, m.prn),
+                   'university_prn', COALESCE(m.university_prn, CASE WHEN m.prn LIKE '7%' THEN m.prn ELSE '' END, ''),
                    'division', m.division,
                    'mobile', m.mobile,
                    'email', m.email,

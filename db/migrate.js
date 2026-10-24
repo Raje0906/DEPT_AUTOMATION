@@ -984,13 +984,15 @@ async function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_psched_rows_sched ON presentation_schedule_rows(schedule_id);
       CREATE INDEX IF NOT EXISTS idx_psched_rows_guide ON presentation_schedule_rows(guide_id);
 
-      -- ─── SEMINAR ENHANCEMENTS: FINAL TOPIC, UNIVERSITY PRN, EXAMINER, METRICS ───
+      -- ─── SEMINAR ENHANCEMENTS: FINAL TOPIC, UNIVERSITY PRN, COLLEGE PRN, EXAMINER, METRICS ───
       ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS final_topic TEXT;
       ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS university_prn VARCHAR(60);
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS college_prn VARCHAR(60);
       ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS examiner_name VARCHAR(200);
       ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS examiner_faculty_id INTEGER REFERENCES faculty(id) ON DELETE SET NULL;
 
       ALTER TABLE seminar_group_members ADD COLUMN IF NOT EXISTS university_prn VARCHAR(60);
+      ALTER TABLE seminar_group_members ADD COLUMN IF NOT EXISTS college_prn VARCHAR(60);
       ALTER TABLE seminar_group_members ADD COLUMN IF NOT EXISTS final_topic TEXT;
 
       ALTER TABLE seminar_guides ADD COLUMN IF NOT EXISTS examiner_name VARCHAR(200);

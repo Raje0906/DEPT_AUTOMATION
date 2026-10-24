@@ -418,7 +418,8 @@ router.get('/my-submission', verifyToken, async (req, res) => {
 
     group.final_topic = group.final_topic || membersRes.rows[0]?.final_topic || membersRes.rows[0]?.topic1 || '';
     membersRes.rows.forEach(m => {
-      m.university_prn = m.university_prn || m.prn || '';
+      m.college_prn = m.college_prn || (m.prn && String(m.prn).trim().toUpperCase().startsWith('F') ? m.prn : '') || m.prn || '';
+      m.university_prn = m.university_prn || (m.prn && String(m.prn).trim().startsWith('7') ? m.prn : '') || '';
       m.final_topic = m.final_topic || group.final_topic || m.topic1 || '';
     });
 
@@ -693,7 +694,9 @@ router.post('/register-group', verifyToken, requireRole('student'), async (req, 
     rawMembers.forEach((m, idx) => {
       const memberNum = idx + 1;
       const rawName = m?.student_name || m?.name;
-      const rawPrn = m?.university_prn || m?.prn || m?.roll_no;
+      const rawCollegePrn = m?.college_prn || (m?.prn && String(m.prn).trim().toUpperCase().startsWith('F') ? m.prn : '');
+      const rawUnivPrn = m?.university_prn || (m?.prn && String(m.prn).trim().startsWith('7') ? m.prn : '');
+      const rawAnyPrn = rawCollegePrn || rawUnivPrn || m?.prn || m?.roll_no;
 
       if (isFieldBlankOrPlaceholder(rawName)) {
         fieldErrors.push({
@@ -703,11 +706,11 @@ router.post('/register-group', verifyToken, requireRole('student'), async (req, 
         });
       }
 
-      if (isFieldBlankOrPlaceholder(rawPrn)) {
+      if (isFieldBlankOrPlaceholder(rawAnyPrn)) {
         fieldErrors.push({
           memberIndex: memberNum,
           field: 'prn',
-          message: `Enter the University PRN of member ${memberNum}`,
+          message: `Enter PRN (College PRN e.g. F23... or University PRN e.g. 723...) for member ${memberNum}`,
         });
       }
     });
@@ -715,20 +718,23 @@ router.post('/register-group', verifyToken, requireRole('student'), async (req, 
     if (fieldErrors.length > 0) {
       await client.query('ROLLBACK');
       return res.status(422).json({
-        error: fieldErrors[0]?.message || 'Please fill in all mandatory fields: Domain, Final Seminar Topic, and Member Names/University PRNs.',
+        error: fieldErrors[0]?.message || 'Please fill in all mandatory fields: Domain, Final Seminar Topic, and Member Names/PRNs.',
         errors: fieldErrors,
       });
     }
 
     // Prepare cleaned members with relaxed validation
     const cleanedMembers = rawMembers.map((m, idx) => {
-      const prnVal = escapeHtml(m.university_prn || m.prn || m.roll_no).toUpperCase();
+      const collegePrnVal = escapeHtml(m.college_prn || (m.prn && String(m.prn).trim().toUpperCase().startsWith('F') ? m.prn : '') || '').toUpperCase();
+      const univPrnVal = escapeHtml(m.university_prn || (m.prn && String(m.prn).trim().startsWith('7') ? m.prn : '') || '').toUpperCase();
+      const prnVal = collegePrnVal || univPrnVal || escapeHtml(m.prn || m.roll_no || '').toUpperCase();
       const memberFinalTopic = m.final_topic ? escapeHtml(m.final_topic) : escapeHtml(finalTopic);
       return {
         memberIndex: idx + 1,
         student_name: escapeHtml(m.student_name || m.name),
         prn: prnVal,
-        university_prn: prnVal,
+        college_prn: collegePrnVal || (prnVal.startsWith('F') ? prnVal : ''),
+        university_prn: univPrnVal || (prnVal.startsWith('7') ? prnVal : ''),
         division: escapeHtml(m.division || ''),
         mobile: escapeHtml(m.mobile || ''),
         email: escapeHtml(m.email || '').toLowerCase(),
@@ -798,9 +804,9 @@ router.post('/register-group', verifyToken, requireRole('student'), async (req, 
       await client.query('DELETE FROM seminar_group_members WHERE group_id = $1', [finalGroupId]);
       for (const m of cleanedMembers) {
         await client.query(
-          `INSERT INTO seminar_group_members (group_id, member_index, student_name, prn, university_prn, division, mobile, email, topic1, topic2, topic3, final_topic, is_leader)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-          [finalGroupId, m.memberIndex, m.student_name, m.prn, m.university_prn, m.division, m.mobile, m.email, m.topic1, m.topic2, m.topic3, m.final_topic, m.is_leader]
+          `INSERT INTO seminar_group_members (group_id, member_index, student_name, prn, college_prn, university_prn, division, mobile, email, topic1, topic2, topic3, final_topic, is_leader)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+          [finalGroupId, m.memberIndex, m.student_name, m.prn, m.college_prn, m.university_prn, m.division, m.mobile, m.email, m.topic1, m.topic2, m.topic3, m.final_topic, m.is_leader]
         );
       }
 
@@ -830,9 +836,9 @@ router.post('/register-group', verifyToken, requireRole('student'), async (req, 
 
       for (const m of cleanedMembers) {
         await client.query(
-          `INSERT INTO seminar_group_members (group_id, member_index, student_name, prn, university_prn, division, mobile, email, topic1, topic2, topic3, final_topic, is_leader)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-          [finalGroupId, m.memberIndex, m.student_name, m.prn, m.university_prn, m.division, m.mobile, m.email, m.topic1, m.topic2, m.topic3, m.final_topic, m.is_leader]
+          `INSERT INTO seminar_group_members (group_id, member_index, student_name, prn, college_prn, university_prn, division, mobile, email, topic1, topic2, topic3, final_topic, is_leader)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+          [finalGroupId, m.memberIndex, m.student_name, m.prn, m.college_prn, m.university_prn, m.division, m.mobile, m.email, m.topic1, m.topic2, m.topic3, m.final_topic, m.is_leader]
         );
       }
 
@@ -2334,7 +2340,8 @@ router.get('/my-groups', verifyToken, requireRole('faculty', 'hod'), async (req,
                   'id', m.id,
                   'name', m.student_name,
                   'prn', m.prn,
-                  'university_prn', COALESCE(m.university_prn, m.prn),
+                  'college_prn', COALESCE(m.college_prn, CASE WHEN UPPER(m.prn) LIKE 'F%' THEN m.prn ELSE '' END, m.prn),
+                  'university_prn', COALESCE(m.university_prn, CASE WHEN m.prn LIKE '7%' THEN m.prn ELSE '' END, ''),
                   'final_topic', COALESCE(m.final_topic, sg.final_topic),
                   'division', m.division,
                   'mobile', m.mobile,
@@ -2854,7 +2861,8 @@ router.get('/evaluation-sheet', verifyToken, async (req, res) => {
     if (groupIds.length > 0) {
       const memRes = await pool.query(
         `SELECT id, group_id, member_index, student_name, prn,
-                COALESCE(university_prn, prn) as university_prn,
+                COALESCE(college_prn, CASE WHEN UPPER(prn) LIKE 'F%' THEN prn ELSE '' END, prn) as college_prn,
+                COALESCE(university_prn, CASE WHEN prn LIKE '7%' THEN prn ELSE '' END, '') as university_prn,
                 COALESCE(final_topic, topic1) as final_topic,
                 division, mobile, email
          FROM seminar_group_members
@@ -3108,7 +3116,8 @@ router.get('/evaluation-sheet/export-excel', verifyToken, async (req, res) => {
     if (groupIds.length > 0) {
       const memRes = await pool.query(
         `SELECT id, group_id, member_index, student_name, prn,
-                COALESCE(university_prn, prn) as university_prn,
+                COALESCE(college_prn, CASE WHEN UPPER(prn) LIKE 'F%' THEN prn ELSE '' END, prn) as college_prn,
+                COALESCE(university_prn, CASE WHEN prn LIKE '7%' THEN prn ELSE '' END, '') as university_prn,
                 COALESCE(final_topic, topic1) as final_topic
          FROM seminar_group_members
          WHERE group_id = ANY($1)
