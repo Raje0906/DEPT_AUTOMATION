@@ -983,6 +983,37 @@ async function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_psched_sess ON presentation_schedules(session_id);
       CREATE INDEX IF NOT EXISTS idx_psched_rows_sched ON presentation_schedule_rows(schedule_id);
       CREATE INDEX IF NOT EXISTS idx_psched_rows_guide ON presentation_schedule_rows(guide_id);
+
+      -- ─── SEMINAR ENHANCEMENTS: FINAL TOPIC, UNIVERSITY PRN, EXAMINER, METRICS ───
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS final_topic TEXT;
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS university_prn VARCHAR(60);
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS examiner_name VARCHAR(200);
+      ALTER TABLE seminar_groups ADD COLUMN IF NOT EXISTS examiner_faculty_id INTEGER REFERENCES faculty(id) ON DELETE SET NULL;
+
+      ALTER TABLE seminar_group_members ADD COLUMN IF NOT EXISTS university_prn VARCHAR(60);
+      ALTER TABLE seminar_group_members ADD COLUMN IF NOT EXISTS final_topic TEXT;
+
+      ALTER TABLE seminar_guides ADD COLUMN IF NOT EXISTS examiner_name VARCHAR(200);
+      ALTER TABLE seminar_guides ADD COLUMN IF NOT EXISTS examiner_faculty_id INTEGER REFERENCES faculty(id) ON DELETE SET NULL;
+
+      ALTER TABLE presentation_schedule_rows ADD COLUMN IF NOT EXISTS examiner_name VARCHAR(200);
+      ALTER TABLE presentation_schedule_rows ADD COLUMN IF NOT EXISTS examiner_faculty_id INTEGER REFERENCES faculty(id) ON DELETE SET NULL;
+
+      ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS metric_scores JSONB DEFAULT '{}'::jsonb;
+
+      CREATE TABLE IF NOT EXISTS seminar_evaluation_metrics (
+        id SERIAL PRIMARY KEY,
+        session_id INTEGER NOT NULL REFERENCES seminar_sessions(id) ON DELETE CASCADE,
+        guide_id INTEGER REFERENCES faculty(id) ON DELETE CASCADE,
+        name VARCHAR(200) NOT NULL,
+        max_marks NUMERIC(5,2) NOT NULL DEFAULT 5.00,
+        display_order INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_sem_eval_metrics_sess ON seminar_evaluation_metrics(session_id);
+      CREATE INDEX IF NOT EXISTS idx_sem_eval_metrics_guide ON seminar_evaluation_metrics(guide_id);
+
       -- 2024 Pattern Subjects Columns Support
       ALTER TABLE subjects ALTER COLUMN code TYPE VARCHAR(50);
       ALTER TABLE subjects

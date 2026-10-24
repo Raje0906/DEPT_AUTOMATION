@@ -14,7 +14,7 @@ const {
   normPrn,
   normEmail,
 } = require('../services/seminarParser');
-const { buildWorkbook, buildMarksWorkbook, getExportLifecycleLabel } = require('../services/seminarExporter');
+const { buildWorkbook, buildMarksWorkbook, buildConsolidatedEvaluationWorkbook, getExportLifecycleLabel } = require('../services/seminarExporter');
 
 const router = express.Router();
 
@@ -56,6 +56,7 @@ async function getFacultyId(userId) {
   const r = await pool.query('SELECT id FROM faculty WHERE user_id = $1', [userId]);
   return r.rows[0]?.id ?? null;
 }
+
 
 
 // ─── Seminar Coordinator Management (HOD Governance) ─────────────────────────
@@ -415,6 +416,12 @@ router.get('/my-submission', verifyToken, async (req, res) => {
       [group.id]
     );
 
+    group.final_topic = group.final_topic || membersRes.rows[0]?.final_topic || membersRes.rows[0]?.topic1 || '';
+    membersRes.rows.forEach(m => {
+      m.university_prn = m.university_prn || m.prn || '';
+      m.final_topic = m.final_topic || group.final_topic || m.topic1 || '';
+    });
+
     // Query per-group registration record
     let regRes = await pool.query(
       `SELECT r.*, u.name as registered_by_name, u.email as registered_by_email
@@ -635,8 +642,7 @@ router.post('/register-group', verifyToken, requireRole('student'), async (req, 
       });
     }
 
-    // PART 2: Enforce mandatory Name, PRN, and Topics (3 per member) on student registration form
-    const REQUIRED_TOPIC_COUNT = 3;
+    // PART 2: Validate mandatory Domain, Final Topic, and Member details (relaxed validation)
     const PLACEHOLDER_STRINGS = new Set(['.', '..', '-', 'n/a', 'na', 'none']);
 
     function isFieldBlankOrPlaceholder(val) {
@@ -657,13 +663,37 @@ router.post('/register-group', verifyToken, requireRole('student'), async (req, 
         .replace(/'/g, '&#039;');
     }
 
-    const fieldErrors = [];
     const rawMembers = Array.isArray(members) ? members : [];
+    const finalTopic = req.body.final_topic || req.body.final_seminar_topic || (rawMembers[0]?.topic1 ? String(rawMembers[0]?.topic1).trim() : '');
+    const finalDomain = domain ? String(domain).trim() : '';
+
+    const fieldErrors = [];
+
+    if (isFieldBlankOrPlaceholder(finalDomain)) {
+      fieldErrors.push({
+        field: 'domain',
+        message: 'Please select or specify a project domain of interest.',
+      });
+    }
+
+    if (isFieldBlankOrPlaceholder(finalTopic)) {
+      fieldErrors.push({
+        field: 'final_topic',
+        message: 'Please enter the Final Seminar Topic.',
+      });
+    }
+
+    if (rawMembers.length === 0) {
+      fieldErrors.push({
+        field: 'members',
+        message: 'At least one group member is required.',
+      });
+    }
 
     rawMembers.forEach((m, idx) => {
       const memberNum = idx + 1;
       const rawName = m?.student_name || m?.name;
-      const rawPrn = m?.prn || m?.roll_no;
+      const rawPrn = m?.university_prn || m?.prn || m?.roll_no;
 
       if (isFieldBlankOrPlaceholder(rawName)) {
         fieldErrors.push({
@@ -677,58 +707,40 @@ router.post('/register-group', verifyToken, requireRole('student'), async (req, 
         fieldErrors.push({
           memberIndex: memberNum,
           field: 'prn',
-          message: `Enter the PRN of member ${memberNum}`,
+          message: `Enter the University PRN of member ${memberNum}`,
         });
-      }
-
-      for (let t = 1; t <= REQUIRED_TOPIC_COUNT; t++) {
-        const rawTopic = m?.[`topic${t}`];
-        if (isFieldBlankOrPlaceholder(rawTopic)) {
-          fieldErrors.push({
-            memberIndex: memberNum,
-            field: `topic${t}`,
-            message: `Enter topic ${t} of member ${memberNum}`,
-          });
-        }
       }
     });
 
     if (fieldErrors.length > 0) {
       await client.query('ROLLBACK');
       return res.status(422).json({
-        error: 'Mandatory fields missing: Name, PRN, and 3 Topics are required for each member.',
+        error: fieldErrors[0]?.message || 'Please fill in all mandatory fields: Domain, Final Seminar Topic, and Member Names/University PRNs.',
         errors: fieldErrors,
       });
     }
 
-    // In-memory validation of fields, formats, group size, and duplicate PRNs within submission
-    const valResult = validateSingleGroup({ domain, members });
-    if (!valResult.valid) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({
-        error: valResult.errors[0],
-        errors: valResult.errors,
-        warnings: valResult.warnings,
-      });
-    }
-
-    const { cleanedGroup } = valResult;
-
-    // Trim and escape all inputs before persistence
-    cleanedGroup.members = cleanedGroup.members.map(m => ({
-      ...m,
-      student_name: escapeHtml(m.student_name),
-      prn: escapeHtml(m.prn).toUpperCase(),
-      division: escapeHtml(m.division),
-      mobile: escapeHtml(m.mobile),
-      email: escapeHtml(m.email).toLowerCase(),
-      topic1: escapeHtml(m.topic1),
-      topic2: escapeHtml(m.topic2),
-      topic3: escapeHtml(m.topic3),
-    }));
+    // Prepare cleaned members with relaxed validation
+    const cleanedMembers = rawMembers.map((m, idx) => {
+      const prnVal = escapeHtml(m.university_prn || m.prn || m.roll_no).toUpperCase();
+      return {
+        memberIndex: idx + 1,
+        student_name: escapeHtml(m.student_name || m.name),
+        prn: prnVal,
+        university_prn: prnVal,
+        division: escapeHtml(m.division || ''),
+        mobile: escapeHtml(m.mobile || ''),
+        email: escapeHtml(m.email || '').toLowerCase(),
+        topic1: escapeHtml(finalTopic),
+        topic2: escapeHtml(m.topic2 || ''),
+        topic3: escapeHtml(m.topic3 || ''),
+        final_topic: escapeHtml(finalTopic),
+        is_leader: idx === 0,
+      };
+    });
 
     // Database check for duplicate PRNs across OTHER groups in this session
-    const prnList = cleanedGroup.members.map(m => m.prn);
+    const prnList = cleanedMembers.map(m => m.prn).filter(Boolean);
     const conflictQuery = `
       SELECT sg.id as group_id, sg.group_no, m.student_name, m.prn, r.registered_by, u.name as registered_by_name, r.registered_at
       FROM seminar_group_members m
@@ -775,19 +787,19 @@ router.post('/register-group', verifyToken, requireRole('student'), async (req, 
 
       await client.query(
         `UPDATE seminar_groups
-         SET domain = $1, allow_edit = FALSE, status = 'APPROVED', submitted_at = NOW(), updated_at = NOW(),
-             leader_user_id = COALESCE(leader_user_id, $3)
-         WHERE id = $2`,
-        [cleanedGroup.domain, finalGroupId, req.user.id]
+         SET domain = $1, final_topic = $2, allow_edit = FALSE, status = 'APPROVED', submitted_at = NOW(), updated_at = NOW(),
+             leader_user_id = COALESCE(leader_user_id, $4)
+         WHERE id = $3`,
+        [finalDomain, finalTopic, finalGroupId, req.user.id]
       );
 
       // Re-insert members
       await client.query('DELETE FROM seminar_group_members WHERE group_id = $1', [finalGroupId]);
-      for (const m of cleanedGroup.members) {
+      for (const m of cleanedMembers) {
         await client.query(
-          `INSERT INTO seminar_group_members (group_id, member_index, student_name, prn, division, mobile, email, topic1, topic2, topic3, is_leader)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-          [finalGroupId, m.memberIndex, m.student_name, m.prn, m.division, m.mobile, m.email, m.topic1, m.topic2, m.topic3, m.is_leader]
+          `INSERT INTO seminar_group_members (group_id, member_index, student_name, prn, university_prn, division, mobile, email, topic1, topic2, topic3, final_topic, is_leader)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+          [finalGroupId, m.memberIndex, m.student_name, m.prn, m.university_prn, m.division, m.mobile, m.email, m.topic1, m.topic2, m.topic3, m.final_topic, m.is_leader]
         );
       }
 
@@ -809,17 +821,17 @@ router.post('/register-group', verifyToken, requireRole('student'), async (req, 
       finalGroupNo = maxNoRes.rows[0].next_no;
 
       const gRow = await client.query(
-        `INSERT INTO seminar_groups (session_id, group_no, domain, leader_user_id, allow_edit, submitted_at)
-         VALUES ($1, $2, $3, $4, FALSE, NOW()) RETURNING id`,
-        [sessionId, finalGroupNo, cleanedGroup.domain, req.user.id]
+        `INSERT INTO seminar_groups (session_id, group_no, domain, final_topic, leader_user_id, allow_edit, submitted_at)
+         VALUES ($1, $2, $3, $4, $5, FALSE, NOW()) RETURNING id`,
+        [sessionId, finalGroupNo, finalDomain, finalTopic, req.user.id]
       );
       finalGroupId = gRow.rows[0].id;
 
-      for (const m of cleanedGroup.members) {
+      for (const m of cleanedMembers) {
         await client.query(
-          `INSERT INTO seminar_group_members (group_id, member_index, student_name, prn, division, mobile, email, topic1, topic2, topic3, is_leader)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-          [finalGroupId, m.memberIndex, m.student_name, m.prn, m.division, m.mobile, m.email, m.topic1, m.topic2, m.topic3, m.is_leader]
+          `INSERT INTO seminar_group_members (group_id, member_index, student_name, prn, university_prn, division, mobile, email, topic1, topic2, topic3, final_topic, is_leader)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+          [finalGroupId, m.memberIndex, m.student_name, m.prn, m.university_prn, m.division, m.mobile, m.email, m.topic1, m.topic2, m.topic3, m.final_topic, m.is_leader]
         );
       }
 
@@ -1967,7 +1979,9 @@ router.get('/sessions/:id/presentation-schedules', verifyToken, requireCoordinat
     const groupsRes = await pool.query(`
       SELECT sg.id, sg.group_no, sg.domain,
              COALESCE(sg.guide_id, sem_g.faculty_id) as guide_id,
-             COALESCE(u.name, sg.guide_name, sem_g.guide_name, 'Unassigned') as guide_name
+             COALESCE(u.name, sg.guide_name, sem_g.guide_name, 'Unassigned') as guide_name,
+             COALESCE(sg.examiner_name, sem_g.examiner_name, '') as examiner_name,
+             COALESCE(sg.examiner_faculty_id, sem_g.examiner_faculty_id) as examiner_faculty_id
       FROM seminar_groups sg
       LEFT JOIN seminar_guides sem_g ON sg.seminar_guide_id = sem_g.id
       LEFT JOIN faculty f ON (sg.guide_id = f.id OR sem_g.faculty_id = f.id)
@@ -1987,6 +2001,8 @@ router.get('/sessions/:id/presentation-schedules', verifyToken, requireCoordinat
           guideMap.set(g.guide_id, {
             guide_id: g.guide_id,
             guide_name: g.guide_name,
+            examiner_name: g.examiner_name || '',
+            examiner_faculty_id: g.examiner_faculty_id || null,
             group_nos: [],
           });
         }
@@ -2011,7 +2027,7 @@ router.get('/sessions/:id/presentation-schedules', verifyToken, requireCoordinat
       ORDER BY ps.presentation_no ASC
     `, [sessionId]);
 
-    // Fetch saved rows
+    // Fetch saved rows including examiner
     const rowsRes = await pool.query(`
       SELECT psr.*, ps.presentation_no
       FROM presentation_schedule_rows psr
@@ -2040,15 +2056,34 @@ router.get('/sessions/:id/presentation-schedules', verifyToken, requireCoordinat
           room_no: r.room_no || '',
           date: r.date ? (r.date instanceof Date ? r.date.toISOString().split('T')[0] : String(r.date).slice(0, 10)) : '',
           time_text: r.time_text || '',
+          examiner_name: r.examiner_name || '',
+          examiner_faculty_id: r.examiner_faculty_id || null,
         };
+
+        // If row has examiner, sync to guide display
+        const targetGuide = guides.find(g => g.guide_id === r.guide_id);
+        if (targetGuide && r.examiner_name && !targetGuide.examiner_name) {
+          targetGuide.examiner_name = r.examiner_name;
+          targetGuide.examiner_faculty_id = r.examiner_faculty_id;
+        }
       }
     }
+
+    // Active faculty list for dropdown selection
+    const facRes = await pool.query(
+      `SELECT f.id, u.name, f.designation, f.department
+       FROM faculty f
+       JOIN users u ON f.user_id = u.id
+       WHERE u.is_active = true
+       ORDER BY u.name ASC`
+    );
 
     res.json({
       session,
       guides,
       unassigned_groups: unassignedGroups,
       schedules,
+      faculty_list: facRes.rows,
     });
   } catch (err) {
     console.error('[Seminar] GET /presentation-schedules:', err);
@@ -2111,6 +2146,8 @@ router.put('/sessions/:id/presentation-schedules/:presentationNo', verifyToken, 
         const roomNo = row.room_no ? String(row.room_no).trim() : null;
         const dateVal = row.date && String(row.date).trim() ? String(row.date).trim() : null;
         const timeText = row.time_text ? String(row.time_text).trim() : null;
+        const examinerName = row.examiner_name ? String(row.examiner_name).trim() : null;
+        const examinerFacultyId = row.examiner_faculty_id ? parseInt(row.examiner_faculty_id, 10) : null;
 
         // Check room clash if room, date, and time are non-empty
         if (roomNo && dateVal && timeText) {
@@ -2127,13 +2164,33 @@ router.put('/sessions/:id/presentation-schedules/:presentationNo', verifyToken, 
           }
         }
 
-        // Upsert row
+        // Upsert row with examiner info
         await client.query(`
-          INSERT INTO presentation_schedule_rows (schedule_id, guide_id, room_no, date, time_text)
-          VALUES ($1, $2, $3, $4, $5)
+          INSERT INTO presentation_schedule_rows (schedule_id, guide_id, room_no, date, time_text, examiner_name, examiner_faculty_id)
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
           ON CONFLICT (schedule_id, guide_id)
-          DO UPDATE SET room_no = EXCLUDED.room_no, date = EXCLUDED.date, time_text = EXCLUDED.time_text
-        `, [scheduleId, guideId, roomNo, dateVal, timeText]);
+          DO UPDATE SET room_no = EXCLUDED.room_no,
+                        date = EXCLUDED.date,
+                        time_text = EXCLUDED.time_text,
+                        examiner_name = EXCLUDED.examiner_name,
+                        examiner_faculty_id = EXCLUDED.examiner_faculty_id
+        `, [scheduleId, guideId, roomNo, dateVal, timeText, examinerName, examinerFacultyId]);
+
+        // Automatically propagate assigned examiner to ALL groups under that guide
+        if (examinerName !== undefined) {
+          await client.query(`
+            UPDATE seminar_groups
+            SET examiner_name = $1, examiner_faculty_id = $2
+            WHERE session_id = $3
+              AND (guide_id = $4 OR seminar_guide_id IN (SELECT id FROM seminar_guides WHERE faculty_id = $4 AND session_id = $3))
+          `, [examinerName, examinerFacultyId, sessionId, guideId]);
+
+          await client.query(`
+            UPDATE seminar_guides
+            SET examiner_name = $1, examiner_faculty_id = $2
+            WHERE session_id = $3 AND faculty_id = $4
+          `, [examinerName, examinerFacultyId, sessionId, guideId]);
+        }
       }
     }
 
@@ -2152,6 +2209,54 @@ router.put('/sessions/:id/presentation-schedules/:presentationNo', verifyToken, 
     res.status(500).json({ error: 'Failed to save presentation schedule' });
   } finally {
     client.release();
+  }
+});
+
+// PATCH /api/seminar/sessions/:id/guides/:guideId/examiner — directly update examiner for guide
+router.patch('/sessions/:id/guides/:guideId/examiner', verifyToken, requireCoordinator, async (req, res) => {
+  const sessionId = parseInt(req.params.id, 10);
+  const guideId = parseInt(req.params.guideId, 10);
+  const { examiner_name, examiner_faculty_id } = req.body;
+
+  try {
+    const exName = examiner_name ? String(examiner_name).trim() : null;
+    const exFacId = examiner_faculty_id ? parseInt(examiner_faculty_id, 10) : null;
+
+    // 1. Update seminar_groups for all groups under this guide
+    await pool.query(
+      `UPDATE seminar_groups
+       SET examiner_name = $1, examiner_faculty_id = $2
+       WHERE session_id = $3
+         AND (guide_id = $4 OR seminar_guide_id IN (SELECT id FROM seminar_guides WHERE faculty_id = $4 AND session_id = $3))`,
+      [exName, exFacId, sessionId, guideId]
+    );
+
+    // 2. Update seminar_guides
+    await pool.query(
+      `UPDATE seminar_guides
+       SET examiner_name = $1, examiner_faculty_id = $2
+       WHERE session_id = $3 AND faculty_id = $4`,
+      [exName, exFacId, sessionId, guideId]
+    );
+
+    // 3. Update presentation_schedule_rows if rows exist
+    await pool.query(
+      `UPDATE presentation_schedule_rows psr
+       SET examiner_name = $1, examiner_faculty_id = $2
+       FROM presentation_schedules ps
+       WHERE psr.schedule_id = ps.id AND ps.session_id = $3 AND psr.guide_id = $4`,
+      [exName, exFacId, sessionId, guideId]
+    );
+
+    res.json({
+      success: true,
+      message: `Examiner "${exName || 'Unassigned'}" assigned to all groups under guide.`,
+      examiner_name: exName,
+      examiner_faculty_id: exFacId,
+    });
+  } catch (err) {
+    console.error('[Seminar] assign examiner error:', err.message);
+    res.status(500).json({ error: 'Failed to assign examiner: ' + err.message });
   }
 });
 
@@ -2214,7 +2319,7 @@ router.get('/my-groups', verifyToken, requireRole('faculty', 'hod'), async (req,
     if (!fid) return res.status(404).json({ error: 'Faculty record not found' });
 
     const r = await pool.query(
-      `SELECT sg.id, sg.group_no, sg.domain, sg.status as approval_status,
+      `SELECT sg.id, sg.group_no, sg.domain, sg.final_topic, sg.examiner_name, sg.status as approval_status,
               ss.id as session_id, ss.name as session_name, ss.academic_year, ss.batch, ss.status as session_status,
               COALESCE(
                 (SELECT sm.status FROM seminar_marks sm WHERE sm.group_id = sg.id LIMIT 1),
@@ -2228,6 +2333,8 @@ router.get('/my-groups', verifyToken, requireRole('faculty', 'hod'), async (req,
                   'id', m.id,
                   'name', m.student_name,
                   'prn', m.prn,
+                  'university_prn', COALESCE(m.university_prn, m.prn),
+                  'final_topic', COALESCE(m.final_topic, sg.final_topic),
                   'division', m.division,
                   'mobile', m.mobile,
                   'email', m.email,
@@ -2241,7 +2348,7 @@ router.get('/my-groups', verifyToken, requireRole('faculty', 'hod'), async (req,
        JOIN seminar_sessions ss ON sg.session_id = ss.id
        LEFT JOIN seminar_group_members m ON m.group_id = sg.id
        WHERE (sg.guide_id = $1 OR EXISTS (SELECT 1 FROM seminar_guides sem_g WHERE sem_g.id = sg.seminar_guide_id AND sem_g.faculty_id = $1))
-       GROUP BY sg.id, sg.group_no, sg.domain, sg.status, ss.id, ss.name, ss.academic_year, ss.batch, ss.status
+       GROUP BY sg.id, sg.group_no, sg.domain, sg.final_topic, sg.examiner_name, sg.status, ss.id, ss.name, ss.academic_year, ss.batch, ss.status
        ORDER BY ss.id DESC, sg.group_no ASC`,
       [fid]
     );
@@ -2575,6 +2682,480 @@ router.post('/groups/:groupId/evaluation', verifyToken, requireRole('faculty', '
     res.status(400).json({ error: err.message || 'Failed to save evaluation' });
   } finally {
     client.release();
+  }
+});
+
+// ─── Seminar Evaluation Metrics & Consolidated Marksheet System ───────────────
+
+const DEFAULT_SEMINAR_METRICS = [
+  { name: 'Literature Survey', max_marks: 5, display_order: 1 },
+  { name: 'Report Writing', max_marks: 5, display_order: 2 },
+  { name: 'Topic Understanding', max_marks: 5, display_order: 3 },
+  { name: 'Attendance & Active Participation', max_marks: 5, display_order: 4 },
+  { name: 'Presentation Skill', max_marks: 5, display_order: 5 },
+];
+
+async function getOrInitSeminarMetrics(sessionId) {
+  const res = await pool.query(
+    `SELECT * FROM seminar_evaluation_metrics
+     WHERE session_id = $1
+     ORDER BY display_order ASC, id ASC`,
+    [sessionId]
+  );
+  if (res.rows.length > 0) {
+    return res.rows;
+  }
+  // Initialize default 5 metrics (Total sum = 25)
+  const created = [];
+  for (const m of DEFAULT_SEMINAR_METRICS) {
+    const ins = await pool.query(
+      `INSERT INTO seminar_evaluation_metrics (session_id, name, max_marks, display_order)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [sessionId, m.name, m.max_marks, m.display_order]
+    );
+    created.push(ins.rows[0]);
+  }
+  return created;
+}
+
+// GET /api/seminar/sessions/:id/metrics — fetch configurable criteria
+router.get('/sessions/:id/metrics', verifyToken, async (req, res) => {
+  try {
+    const sessionId = parseInt(req.params.id, 10);
+    const metrics = await getOrInitSeminarMetrics(sessionId);
+    res.json({ metrics });
+  } catch (err) {
+    console.error('[Seminar] GET /metrics:', err.message);
+    res.status(500).json({ error: 'Failed to fetch evaluation metrics' });
+  }
+});
+
+// PUT /api/seminar/sessions/:id/metrics — add, rename, reorder, delete, change max marks
+router.put('/sessions/:id/metrics', verifyToken, async (req, res) => {
+  const sessionId = parseInt(req.params.id, 10);
+  const { metrics } = req.body;
+  if (!Array.isArray(metrics) || metrics.length === 0) {
+    return res.status(400).json({ error: 'At least one metric is required' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM seminar_evaluation_metrics WHERE session_id = $1', [sessionId]);
+
+    const saved = [];
+    for (let i = 0; i < metrics.length; i++) {
+      const m = metrics[i];
+      const name = String(m.name || `Criterion ${i + 1}`).trim();
+      const maxMarks = Math.max(0.5, parseFloat(m.max_marks) || 5);
+      const displayOrder = m.display_order != null ? parseInt(m.display_order, 10) : (i + 1);
+
+      const ins = await client.query(
+        `INSERT INTO seminar_evaluation_metrics (session_id, name, max_marks, display_order, updated_at)
+         VALUES ($1, $2, $3, $4, NOW()) RETURNING *`,
+        [sessionId, name, maxMarks, displayOrder]
+      );
+      saved.push(ins.rows[0]);
+    }
+
+    await client.query('COMMIT');
+    res.json({ success: true, metrics: saved });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[Seminar] PUT /metrics:', err.message);
+    res.status(500).json({ error: 'Failed to save evaluation metrics: ' + err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// GET /api/seminar/evaluation-sheet — guide sees only their groups on consolidated table
+router.get('/evaluation-sheet', verifyToken, async (req, res) => {
+  try {
+    let sessionId = req.query.session_id ? parseInt(req.query.session_id, 10) : null;
+    if (!sessionId) {
+      const sRes = await pool.query(
+        `SELECT id, name, academic_year, batch, status FROM seminar_sessions
+         ORDER BY (CASE WHEN status = 'PUBLISHED' THEN 1 ELSE 2 END) ASC, created_at DESC LIMIT 1`
+      );
+      if (!sRes.rows.length) return res.status(404).json({ error: 'No seminar session found' });
+      sessionId = sRes.rows[0].id;
+    }
+
+    const sessRes = await pool.query('SELECT * FROM seminar_sessions WHERE id = $1', [sessionId]);
+    if (!sessRes.rows.length) return res.status(404).json({ error: 'Seminar session not found' });
+    const session = sessRes.rows[0];
+
+    const isHod = req.user.role === 'hod' || req.user.role === 'admin';
+    const facRes = await pool.query(
+      `SELECT f.*, u.name as faculty_name, u.email as faculty_email
+       FROM faculty f JOIN users u ON f.user_id = u.id
+       WHERE f.user_id = $1`,
+      [req.user.id]
+    );
+    const loggedInFac = facRes.rows[0] || null;
+    const isCoordinator = Boolean(loggedInFac?.is_seminar_coordinator);
+
+    let targetFacultyId = null;
+    let guideFaculty = null;
+
+    if (req.query.guide_id && (isHod || isCoordinator)) {
+      targetFacultyId = parseInt(req.query.guide_id, 10);
+      const gFac = await pool.query(
+        `SELECT f.*, u.name as faculty_name FROM faculty f JOIN users u ON f.user_id = u.id WHERE f.id = $1`,
+        [targetFacultyId]
+      );
+      guideFaculty = gFac.rows[0];
+    } else {
+      if (!loggedInFac) {
+        return res.status(403).json({ error: 'Faculty profile not found for user' });
+      }
+      targetFacultyId = loggedInFac.id;
+      guideFaculty = loggedInFac;
+    }
+
+    // Resolve assigned examiner for this guide in this session
+    const examinerRes = await pool.query(
+      `SELECT COALESCE(psr.examiner_name, sem_g.examiner_name, sg.examiner_name, '') as examiner_name
+       FROM seminar_guides sem_g
+       LEFT JOIN presentation_schedule_rows psr ON (psr.guide_id = sem_g.faculty_id)
+       LEFT JOIN seminar_groups sg ON (sg.guide_id = sem_g.faculty_id AND sg.session_id = sem_g.session_id)
+       WHERE sem_g.session_id = $1 AND sem_g.faculty_id = $2
+         AND COALESCE(psr.examiner_name, sem_g.examiner_name, sg.examiner_name, '') <> ''
+       LIMIT 1`,
+      [sessionId, targetFacultyId]
+    );
+    const examinerName = examinerRes.rows[0]?.examiner_name || '';
+
+    // Fetch groups assigned to this guide
+    const groupsRes = await pool.query(
+      `SELECT sg.id, sg.group_no, sg.domain,
+              COALESCE(sg.final_topic, '') as final_topic,
+              COALESCE(u.name, sg.guide_name, sem_g.guide_name, $3) as guide_name,
+              COALESCE(sg.examiner_name, sem_g.examiner_name, $4) as examiner_name,
+              sg.status as approval_status
+       FROM seminar_groups sg
+       LEFT JOIN seminar_guides sem_g ON (sg.seminar_guide_id = sem_g.id OR (sg.guide_id = sem_g.faculty_id AND sem_g.session_id = sg.session_id))
+       LEFT JOIN faculty f ON (sg.guide_id = f.id OR sem_g.faculty_id = f.id)
+       LEFT JOIN users u ON f.user_id = u.id
+       WHERE sg.session_id = $1
+         AND (sg.guide_id = $2 OR sem_g.faculty_id = $2)
+       ORDER BY sg.group_no ASC`,
+      [sessionId, targetFacultyId, guideFaculty?.faculty_name || 'Assigned Guide', examinerName]
+    );
+
+    const groups = groupsRes.rows;
+    const groupIds = groups.map(g => g.id);
+
+    const membersByGroup = new Map();
+    const marksByPrn = {};
+
+    if (groupIds.length > 0) {
+      const memRes = await pool.query(
+        `SELECT id, group_id, member_index, student_name, prn,
+                COALESCE(university_prn, prn) as university_prn,
+                COALESCE(final_topic, topic1) as final_topic,
+                division, mobile, email
+         FROM seminar_group_members
+         WHERE group_id = ANY($1)
+         ORDER BY group_id ASC, member_index ASC`,
+        [groupIds]
+      );
+      for (const m of memRes.rows) {
+        if (!membersByGroup.has(m.group_id)) membersByGroup.set(m.group_id, []);
+        membersByGroup.get(m.group_id).push(m);
+      }
+
+      const marksRes = await pool.query(
+        `SELECT * FROM seminar_marks WHERE group_id = ANY($1)`,
+        [groupIds]
+      );
+      for (const mk of marksRes.rows) {
+        let scores = mk.metric_scores || {};
+        if (typeof scores === 'string') {
+          try { scores = JSON.parse(scores); } catch (e) { scores = {}; }
+        }
+        // Fallback mapping from legacy columns if metric_scores is empty
+        if (Object.keys(scores).length === 0) {
+          if (mk.attendance_marks != null) scores['Attendance & Active Participation'] = Number(mk.attendance_marks);
+          if (mk.presentation_marks != null) scores['Presentation Skill'] = Number(mk.presentation_marks);
+          if (mk.subject_understanding_marks != null) scores['Topic Understanding'] = Number(mk.subject_understanding_marks);
+          if (mk.report_marks != null) scores['Report Writing'] = Number(mk.report_marks);
+        }
+        marksByPrn[mk.prn] = {
+          ...mk,
+          metric_scores: scores,
+        };
+      }
+    }
+
+    for (const g of groups) {
+      g.members = membersByGroup.get(g.id) || [];
+      if (!g.final_topic && g.members.length > 0 && g.members[0].final_topic) {
+        g.final_topic = g.members[0].final_topic;
+      }
+    }
+
+    const metrics = await getOrInitSeminarMetrics(sessionId);
+
+    // List of guides for coordinator/HOD selector
+    let guideOptions = [];
+    if (isHod || isCoordinator) {
+      const gOpts = await pool.query(
+        `SELECT DISTINCT f.id, u.name as faculty_name, f.designation
+         FROM seminar_groups sg
+         JOIN faculty f ON sg.guide_id = f.id
+         JOIN users u ON f.user_id = u.id
+         WHERE sg.session_id = $1
+         ORDER BY u.name ASC`,
+        [sessionId]
+      );
+      guideOptions = gOpts.rows;
+    }
+
+    res.json({
+      session,
+      guide: {
+        id: targetFacultyId,
+        name: guideFaculty?.faculty_name || 'Assigned Guide',
+        examiner_name: examinerName,
+      },
+      metrics,
+      groups,
+      marks: marksByPrn,
+      canEdit: true,
+      guideOptions,
+      isHodOrCoordinator: isHod || isCoordinator,
+    });
+  } catch (err) {
+    console.error('[Seminar] GET /evaluation-sheet:', err.message);
+    res.status(500).json({ error: 'Failed to load evaluation sheet: ' + err.message });
+  }
+});
+
+// POST /api/seminar/evaluation-sheet — save entire evaluation marksheet
+router.post('/evaluation-sheet', verifyToken, async (req, res) => {
+  const { session_id, status = 'DRAFT', marks } = req.body;
+  const sessionId = parseInt(session_id, 10);
+  if (!sessionId || !Array.isArray(marks)) {
+    return res.status(400).json({ error: 'Valid session_id and marks array required' });
+  }
+
+  const metrics = await getOrInitSeminarMetrics(sessionId);
+  const metricMaxMap = new Map();
+  let totalMaxMarks = 0;
+  metrics.forEach(m => {
+    const maxVal = Number(m.max_marks || 0);
+    metricMaxMap.set(m.name, maxVal);
+    metricMaxMap.set(String(m.id), maxVal);
+    totalMaxMarks += maxVal;
+  });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    for (const entry of marks) {
+      const { group_id, prn, metric_scores = {}, remarks = '' } = entry;
+      if (!group_id || !prn) continue;
+
+      let calcTotal = 0;
+      for (const [mKey, scoreVal] of Object.entries(metric_scores)) {
+        if (scoreVal === '' || scoreVal === null || scoreVal === undefined) continue;
+        const num = parseFloat(scoreVal);
+        if (isNaN(num)) continue;
+        if (num < 0) {
+          throw new Error(`Mark for PRN ${prn} cannot be negative (${mKey}: ${scoreVal})`);
+        }
+        const maxForMetric = metricMaxMap.get(mKey) ?? 10;
+        if (num > maxForMetric) {
+          throw new Error(`Mark for PRN ${prn} on "${mKey}" (${num}) exceeds maximum allowed of ${maxForMetric}`);
+        }
+        calcTotal += num;
+      }
+      calcTotal = Math.round(calcTotal * 100) / 100;
+
+      const submittedAt = status === 'SUBMITTED' ? new Date() : null;
+      const submittedBy = status === 'SUBMITTED' ? req.user.id : null;
+
+      // Extract specific metric fields for backward compatibility
+      const att = metric_scores['Attendance & Active Participation'] ?? metric_scores['Attendance'] ?? null;
+      const pres = metric_scores['Presentation Skill'] ?? metric_scores['Presentation'] ?? null;
+      const sub = metric_scores['Topic Understanding'] ?? metric_scores['Subject Understanding'] ?? null;
+      const rep = metric_scores['Report Writing'] ?? null;
+
+      await client.query(`
+        INSERT INTO seminar_marks (
+          session_id, group_id, prn,
+          metric_scores, total_marks, max_marks,
+          attendance_marks, presentation_marks, subject_understanding_marks, report_marks,
+          status, entered_by, entered_at, submitted_at, submitted_by, remarks
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), $13, $14, $15)
+        ON CONFLICT (group_id, prn)
+        DO UPDATE SET
+          metric_scores = EXCLUDED.metric_scores,
+          total_marks = EXCLUDED.total_marks,
+          max_marks = EXCLUDED.max_marks,
+          attendance_marks = COALESCE(EXCLUDED.attendance_marks, seminar_marks.attendance_marks),
+          presentation_marks = COALESCE(EXCLUDED.presentation_marks, seminar_marks.presentation_marks),
+          subject_understanding_marks = COALESCE(EXCLUDED.subject_understanding_marks, seminar_marks.subject_understanding_marks),
+          report_marks = COALESCE(EXCLUDED.report_marks, seminar_marks.report_marks),
+          status = EXCLUDED.status,
+          entered_by = EXCLUDED.entered_by,
+          entered_at = NOW(),
+          submitted_at = CASE WHEN EXCLUDED.status = 'SUBMITTED' THEN NOW() ELSE seminar_marks.submitted_at END,
+          submitted_by = CASE WHEN EXCLUDED.status = 'SUBMITTED' THEN EXCLUDED.entered_by ELSE seminar_marks.submitted_by END,
+          remarks = COALESCE(EXCLUDED.remarks, seminar_marks.remarks)
+      `, [
+        sessionId,
+        group_id,
+        prn,
+        JSON.stringify(metric_scores),
+        calcTotal,
+        totalMaxMarks || 25,
+        att,
+        pres,
+        sub,
+        rep,
+        status,
+        req.user.id,
+        submittedAt,
+        submittedBy,
+        remarks || null,
+      ]);
+    }
+
+    await client.query('COMMIT');
+    res.json({
+      success: true,
+      message: status === 'SUBMITTED' ? 'Evaluation finalized and submitted successfully.' : 'Evaluation draft saved successfully.',
+      status,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[Seminar] POST /evaluation-sheet error:', err.message);
+    res.status(400).json({ error: err.message || 'Failed to save evaluation marks' });
+  } finally {
+    client.release();
+  }
+});
+
+// GET /api/seminar/evaluation-sheet/export-excel — export Excel reproducing exact evaluation layout
+router.get('/evaluation-sheet/export-excel', verifyToken, async (req, res) => {
+  try {
+    let sessionId = req.query.session_id ? parseInt(req.query.session_id, 10) : null;
+    if (!sessionId) {
+      const sRes = await pool.query("SELECT id FROM seminar_sessions WHERE status = 'PUBLISHED' LIMIT 1");
+      if (!sRes.rows.length) return res.status(404).json({ error: 'No seminar session found' });
+      sessionId = sRes.rows[0].id;
+    }
+
+    const sessRes = await pool.query('SELECT * FROM seminar_sessions WHERE id = $1', [sessionId]);
+    const session = sessRes.rows[0];
+
+    const isHod = req.user.role === 'hod' || req.user.role === 'admin';
+    const facRes = await pool.query(
+      `SELECT f.*, u.name as faculty_name FROM faculty f JOIN users u ON f.user_id = u.id WHERE f.user_id = $1`,
+      [req.user.id]
+    );
+    const loggedInFac = facRes.rows[0] || null;
+
+    let targetFacultyId = req.query.guide_id ? parseInt(req.query.guide_id, 10) : loggedInFac?.id;
+    let guideFaculty = null;
+    if (targetFacultyId) {
+      const gFac = await pool.query(
+        `SELECT f.*, u.name as faculty_name FROM faculty f JOIN users u ON f.user_id = u.id WHERE f.id = $1`,
+        [targetFacultyId]
+      );
+      guideFaculty = gFac.rows[0];
+    }
+
+    const examinerRes = await pool.query(
+      `SELECT COALESCE(psr.examiner_name, sem_g.examiner_name, sg.examiner_name, '') as examiner_name
+       FROM seminar_guides sem_g
+       LEFT JOIN presentation_schedule_rows psr ON (psr.guide_id = sem_g.faculty_id)
+       LEFT JOIN seminar_groups sg ON (sg.guide_id = sem_g.faculty_id AND sg.session_id = sem_g.session_id)
+       WHERE sem_g.session_id = $1 AND sem_g.faculty_id = $2
+         AND COALESCE(psr.examiner_name, sem_g.examiner_name, sg.examiner_name, '') <> ''
+       LIMIT 1`,
+      [sessionId, targetFacultyId]
+    );
+    const examinerName = examinerRes.rows[0]?.examiner_name || '';
+
+    const groupsRes = await pool.query(
+      `SELECT sg.id, sg.group_no, sg.domain,
+              COALESCE(sg.final_topic, '') as final_topic,
+              COALESCE(u.name, sg.guide_name, sem_g.guide_name, $3) as guide_name,
+              COALESCE(sg.examiner_name, sem_g.examiner_name, $4) as examiner_name
+       FROM seminar_groups sg
+       LEFT JOIN seminar_guides sem_g ON (sg.seminar_guide_id = sem_g.id OR (sg.guide_id = sem_g.faculty_id AND sem_g.session_id = sg.session_id))
+       LEFT JOIN faculty f ON (sg.guide_id = f.id OR sem_g.faculty_id = f.id)
+       LEFT JOIN users u ON f.user_id = u.id
+       WHERE sg.session_id = $1
+         AND (sg.guide_id = $2 OR sem_g.faculty_id = $2)
+       ORDER BY sg.group_no ASC`,
+      [sessionId, targetFacultyId, guideFaculty?.faculty_name || 'Assigned Guide', examinerName]
+    );
+
+    const groups = groupsRes.rows;
+    const groupIds = groups.map(g => g.id);
+
+    const membersByGroup = new Map();
+    const marksByPrn = {};
+
+    if (groupIds.length > 0) {
+      const memRes = await pool.query(
+        `SELECT id, group_id, member_index, student_name, prn,
+                COALESCE(university_prn, prn) as university_prn,
+                COALESCE(final_topic, topic1) as final_topic
+         FROM seminar_group_members
+         WHERE group_id = ANY($1)
+         ORDER BY group_id ASC, member_index ASC`,
+        [groupIds]
+      );
+      for (const m of memRes.rows) {
+        if (!membersByGroup.has(m.group_id)) membersByGroup.set(m.group_id, []);
+        membersByGroup.get(m.group_id).push(m);
+      }
+
+      const marksRes = await pool.query(
+        `SELECT * FROM seminar_marks WHERE group_id = ANY($1)`,
+        [groupIds]
+      );
+      for (const mk of marksRes.rows) {
+        let scores = mk.metric_scores || {};
+        if (typeof scores === 'string') {
+          try { scores = JSON.parse(scores); } catch (e) { scores = {}; }
+        }
+        marksByPrn[mk.prn] = { ...mk, metric_scores: scores };
+      }
+    }
+
+    for (const g of groups) {
+      g.members = membersByGroup.get(g.id) || [];
+      if (!g.final_topic && g.members.length > 0 && g.members[0].final_topic) {
+        g.final_topic = g.members[0].final_topic;
+      }
+    }
+
+    const metrics = await getOrInitSeminarMetrics(sessionId);
+
+    const buffer = buildConsolidatedEvaluationWorkbook(
+      session,
+      { id: targetFacultyId, name: guideFaculty?.faculty_name || 'Guide', examiner_name: examinerName },
+      groups,
+      metrics,
+      marksByPrn
+    );
+
+    const filename = `Seminar_Evaluation_Sheet_${(guideFaculty?.faculty_name || 'Guide').replace(/[^a-z0-9]/gi, '_')}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  } catch (err) {
+    console.error('[Seminar] export-excel error:', err.message);
+    res.status(500).json({ error: 'Failed to export evaluation sheet: ' + err.message });
   }
 });
 

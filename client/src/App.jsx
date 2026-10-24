@@ -154,6 +154,7 @@ export default function App() {
             <Route path="/faculty/seminar/:id/marks-overview" element={<CoordinatorLayout><SeminarMarksOverview /></CoordinatorLayout>} />
             {/* Seminar Tool — Guide view and Evaluation */}
             <Route path="/faculty/seminar/my-groups" element={<FacultyLayout><SeminarGuideView /></FacultyLayout>} />
+            <Route path="/faculty/seminar/evaluate" element={<FacultyLayout><SeminarEvaluation /></FacultyLayout>} />
             <Route path="/faculty/seminar/evaluate/:groupId" element={<FacultyLayout><SeminarEvaluation /></FacultyLayout>} />
             {/* HOD also accesses seminar */}
             <Route path="/hod/seminar" element={<HODLayout><SeminarSessions /></HODLayout>} />
