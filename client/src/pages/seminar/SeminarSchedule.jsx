@@ -39,9 +39,10 @@ export default function SeminarSchedule() {
   const [selectedSessionId, setSelectedSessionId] = useState('');
   const [session, setSession] = useState(null);
   const [guides, setGuides] = useState([]);
+  const [facultyList, setFacultyList] = useState([]);
   const [unassignedGroups, setUnassignedGroups] = useState([]);
   const [activeTab, setActiveTab] = useState(1); // 1 or 2
-  const [scheduleData, setScheduleData] = useState({}); // { [presNo]: { title, rows: { [guideId]: { room_no, date, time_text } }, updated_at, updated_by_name } }
+  const [scheduleData, setScheduleData] = useState({}); // { [presNo]: { title, rows: { [guideId]: { room_no, date, time_text, examiner_name, examiner_faculty_id } }, updated_at, updated_by_name } }
   const [isDirty, setIsDirty] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -91,6 +92,7 @@ export default function SeminarSchedule() {
       }
       setSession(data.session);
       setGuides(data.guides || []);
+      setFacultyList(data.faculty_list || []);
       setUnassignedGroups(data.unassigned_groups || []);
 
       // Build structured schedules state
@@ -105,6 +107,8 @@ export default function SeminarSchedule() {
             room_no: savedRow.room_no || '',
             date: savedRow.date || '',
             time_text: savedRow.time_text || '',
+            examiner_name: savedRow.examiner_name || g.examiner_name || '',
+            examiner_faculty_id: savedRow.examiner_faculty_id || g.examiner_faculty_id || null,
           };
         });
 
@@ -160,7 +164,7 @@ export default function SeminarSchedule() {
   const handleRowChange = (guideId, field, value) => {
     setScheduleData(prev => {
       const pres = prev[activeTab] || { title: '', rows: {} };
-      const row = pres.rows[guideId] || { guide_id: guideId, room_no: '', date: '', time_text: '' };
+      const row = pres.rows[guideId] || { guide_id: guideId, room_no: '', date: '', time_text: '', examiner_name: '', examiner_faculty_id: null };
       return {
         ...prev,
         [activeTab]: {
@@ -176,6 +180,58 @@ export default function SeminarSchedule() {
       };
     });
     setIsDirty(true);
+  };
+
+  // Assign Examiner per guide (applies to ALL groups under this guide)
+  const handleExaminerChange = async (guideId, newExaminerName) => {
+    const matched = (facultyList || []).find(
+      f => f.name.trim().toLowerCase() === (newExaminerName || '').trim().toLowerCase()
+    );
+    const examinerFacultyId = matched ? matched.id : null;
+
+    setScheduleData(prev => {
+      const next = { ...prev };
+      PRESENTATIONS.forEach(p => {
+        const pres = next[p.no] || { title: '', rows: {} };
+        const row = pres.rows[guideId] || { guide_id: guideId, room_no: '', date: '', time_text: '', examiner_name: '', examiner_faculty_id: null };
+        next[p.no] = {
+          ...pres,
+          rows: {
+            ...pres.rows,
+            [guideId]: {
+              ...row,
+              examiner_name: newExaminerName,
+              examiner_faculty_id: examinerFacultyId,
+            },
+          },
+        };
+      });
+      return next;
+    });
+
+    setGuides(prev => prev.map(g => {
+      if (g.guide_id === guideId) {
+        return {
+          ...g,
+          examiner_name: newExaminerName,
+          examiner_faculty_id: examinerFacultyId,
+        };
+      }
+      return g;
+    }));
+
+    setIsDirty(true);
+
+    if (selectedSessionId) {
+      try {
+        await api.patch(`/seminar/sessions/${selectedSessionId}/guides/${guideId}/examiner`, {
+          examiner_name: newExaminerName,
+          examiner_faculty_id: examinerFacultyId,
+        });
+      } catch (err) {
+        console.error('Failed to sync examiner to groups:', err);
+      }
+    }
   };
 
   // Title update handler
@@ -200,7 +256,7 @@ export default function SeminarSchedule() {
       const pres = prev[activeTab] || { title: '', rows: {} };
       const updatedRows = { ...pres.rows };
       guides.forEach(g => {
-        const existing = updatedRows[g.guide_id] || { guide_id: g.guide_id, room_no: '', date: '', time_text: '' };
+        const existing = updatedRows[g.guide_id] || { guide_id: g.guide_id, room_no: '', date: '', time_text: '', examiner_name: '', examiner_faculty_id: null };
         updatedRows[g.guide_id] = {
           ...existing,
           date: bulkDate !== '' ? bulkDate : existing.date,
@@ -228,7 +284,7 @@ export default function SeminarSchedule() {
       return;
     }
     const confirmed = window.confirm(
-      `Copy schedule rows from Presentation ${otherPresentationNo}? This will overwrite room and date/time values for matching guides in Presentation ${activeTab}.`
+      `Copy schedule rows from Presentation ${otherPresentationNo}? This will overwrite room, examiner and date/time values for matching guides in Presentation ${activeTab}.`
     );
     if (!confirmed) return;
 
@@ -243,6 +299,8 @@ export default function SeminarSchedule() {
             room_no: sourceRow.room_no || '',
             date: sourceRow.date || '',
             time_text: sourceRow.time_text || '',
+            examiner_name: sourceRow.examiner_name || '',
+            examiner_faculty_id: sourceRow.examiner_faculty_id || null,
           };
         }
       });
@@ -270,6 +328,8 @@ export default function SeminarSchedule() {
           room_no: row.room_no || '',
           date: row.date || null,
           time_text: row.time_text || '',
+          examiner_name: row.examiner_name || g.examiner_name || '',
+          examiner_faculty_id: row.examiner_faculty_id || g.examiner_faculty_id || null,
         };
       });
 
@@ -391,6 +451,7 @@ export default function SeminarSchedule() {
         const r = currentSchedule.rows[g.guide_id] || {};
         const srNo = String(idx + 1);
         const guideName = g.guide_name || '—';
+        const examinerName = r.examiner_name || g.examiner_name || '—';
         const groupNos = (g.group_nos || []).join(', ') || '—';
         const roomNo = r.room_no || '—';
         const rowDateTime = r.date
@@ -402,6 +463,7 @@ export default function SeminarSchedule() {
             return [
               srNo,
               guideName,
+              examinerName,
               groupNos,
               roomNo,
               {
@@ -411,41 +473,42 @@ export default function SeminarSchedule() {
               },
             ];
           }
-          return [srNo, guideName, groupNos, roomNo];
+          return [srNo, guideName, examinerName, groupNos, roomNo];
         }
 
-        return [srNo, guideName, groupNos, roomNo, rowDateTime];
+        return [srNo, guideName, examinerName, groupNos, roomNo, rowDateTime];
       });
 
       autoTable(doc, {
         startY: 115,
         margin: { left: margin, right: margin },
-        head: [['Sr. No.', 'Name of the project guide', 'Group nos.', 'Room no.', 'Date and time']],
+        head: [['Sr. No.', 'Name of the project guide', 'Assign Examiner', 'Group nos.', 'Room no.', 'Date and time']],
         body: tableRows,
         theme: 'plain',
         headStyles: {
           fillColor: [245, 243, 238], // #F5F3EE
           textColor: [30, 45, 90],
           fontStyle: 'bold',
-          fontSize: 9,
+          fontSize: 8.5,
           lineColor: [212, 208, 200],
           lineWidth: 0.5,
           halign: 'left',
         },
         bodyStyles: {
           textColor: [26, 31, 54],
-          fontSize: 8.5,
+          fontSize: 8,
           lineColor: [212, 208, 200],
           lineWidth: 0.5,
-          cellPadding: 7,
+          cellPadding: 6,
           halign: 'left',
         },
         columnStyles: {
-          0: { cellWidth: 42, halign: 'center' },
-          1: { cellWidth: 155 },
-          2: { cellWidth: 115 },
+          0: { cellWidth: 28, halign: 'center' },
+          1: { cellWidth: 110 },
+          2: { cellWidth: 110 },
           3: { cellWidth: 70 },
-          4: { cellWidth: 140 },
+          4: { cellWidth: 65 },
+          5: { cellWidth: 140 },
         },
       });
 
@@ -671,10 +734,11 @@ export default function SeminarSchedule() {
             <table className="w-full text-xs text-left border-collapse">
               <thead>
                 <tr className="border-b border-[#D4D0C8] bg-slate-50 text-[#1E2D5A] font-bold">
-                  <th className="p-3 w-16 text-center border-r border-[#D4D0C8]">Sr. No.</th>
-                  <th className="p-3 border-r border-[#D4D0C8]">Name of the project guide</th>
-                  <th className="p-3 border-r border-[#D4D0C8]">Group nos.</th>
-                  <th className="p-3 border-r border-[#D4D0C8] w-44">Room no.</th>
+                  <th className="p-3 w-14 text-center border-r border-[#D4D0C8]">Sr. No.</th>
+                  <th className="p-3 border-r border-[#D4D0C8] w-52">Name of the project guide</th>
+                  <th className="p-3 border-r border-[#D4D0C8] w-64">Assign Examiner</th>
+                  <th className="p-3 border-r border-[#D4D0C8] w-36">Group nos.</th>
+                  <th className="p-3 border-r border-[#D4D0C8] w-40">Room no.</th>
                   <th className="p-3">Date and time</th>
                 </tr>
               </thead>
@@ -684,8 +748,11 @@ export default function SeminarSchedule() {
                     room_no: '',
                     date: '',
                     time_text: '',
+                    examiner_name: '',
+                    examiner_faculty_id: null,
                   };
                   const weekdayFormatted = formatWeekdayDate(row.date);
+                  const currentExaminer = row.examiner_name || g.examiner_name || '';
 
                   return (
                     <tr
@@ -700,6 +767,34 @@ export default function SeminarSchedule() {
                       {/* Guide Name */}
                       <td className="p-3 font-medium text-slate-900 border-r border-[#D4D0C8]">
                         {g.guide_name}
+                      </td>
+
+                      {/* Assign Examiner (Dropdown + typing, applies to all groups under guide) */}
+                      <td className="p-3 border-r border-[#D4D0C8]">
+                        <div className="space-y-1">
+                          <input
+                            id={`examiner-input-${g.guide_id}`}
+                            list={`examiners-list-${g.guide_id}`}
+                            type="text"
+                            placeholder="Select or type examiner"
+                            value={currentExaminer}
+                            onChange={(e) => handleExaminerChange(g.guide_id, e.target.value)}
+                            className="w-full p-1.5 border border-[#D4D0C8] hover:border-[#1E2D5A] focus:border-[#1E2D5A] rounded text-xs bg-white focus:outline-none transition-colors"
+                          />
+                          <datalist id={`examiners-list-${g.guide_id}`}>
+                            {facultyList.map(f => (
+                              <option key={f.id} value={f.name}>
+                                {f.department ? `${f.name} (${f.department})` : f.name}
+                              </option>
+                            ))}
+                          </datalist>
+                          <div className="flex items-center justify-between text-[10px] text-slate-500">
+                            <span>All groups under {g.guide_name.split(' ')[0]}</span>
+                            {currentExaminer && (
+                              <span className="text-emerald-700 font-semibold">Assigned</span>
+                            )}
+                          </div>
+                        </div>
                       </td>
 
                       {/* Group Nos. */}
