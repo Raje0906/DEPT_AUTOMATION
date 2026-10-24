@@ -629,24 +629,27 @@ router.get('/:sessionId/export-excel', async (req, res) => {
     const [sessRes, grpRes, guiRes] = await Promise.all([
       pool.query('SELECT * FROM seminar_sessions WHERE id = $1', [sessionId]),
       pool.query(`
-        SELECT sg.id, sg.group_no, sg.domain, sg.domain_raw, sg.guide_name,
+        SELECT sg.id, sg.group_no, sg.domain, sg.domain_raw, sg.guide_name, sg.final_topic,
                json_agg(
                  json_build_object(
                    'name', m.student_name,
-                   'prn', m.prn,
+                   'student_name', m.student_name,
+                   'prn', COALESCE(m.university_prn, m.prn),
+                   'university_prn', COALESCE(m.university_prn, m.prn),
                    'division', m.division,
                    'mobile', m.mobile,
                    'email', m.email,
                    'topic1', m.topic1,
                    'topic2', m.topic2,
                    'topic3', m.topic3,
+                   'final_topic', COALESCE(m.final_topic, sg.final_topic, ''),
                    'is_leader', m.is_leader
                  ) ORDER BY m.member_index ASC
                ) as members
         FROM seminar_groups sg
         LEFT JOIN seminar_group_members m ON m.group_id = sg.id
         WHERE sg.session_id = $1
-        GROUP BY sg.id, sg.group_no, sg.domain, sg.domain_raw, sg.guide_name
+        GROUP BY sg.id, sg.group_no, sg.domain, sg.domain_raw, sg.guide_name, sg.final_topic
         ORDER BY sg.group_no ASC
       `, [sessionId]),
       pool.query(`

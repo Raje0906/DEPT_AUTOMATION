@@ -862,7 +862,7 @@ function generateWorkflowExcel(session, groups, guides, issues = []) {
   // ─── Sheet 1: "Groups with Guide" ──────────────────────────────────────────
   const s1Data = [];
   const s1Merges = [];
-  const S1_COLS = 8; // Group No, Student Name, College PRN, Topic 1, Topic 2, Topic 3, Domain, Guide
+  const S1_COLS = 9; // Group No, Student Name, College PRN, Topic 1, Topic 2, Topic 3, Final Topic, Domain, Guide
 
   // Title Row
   s1Data.push([sanitizeFormula(titleText), ...new Array(S1_COLS - 1).fill('')]);
@@ -876,6 +876,7 @@ function generateWorkflowExcel(session, groups, guides, issues = []) {
     'Topic 1',
     'Topic 2',
     'Topic 3',
+    'Final Topic',
     'Domain',
     'Guide',
   ]);
@@ -892,14 +893,15 @@ function generateWorkflowExcel(session, groups, guides, issues = []) {
       const row = new Array(S1_COLS).fill('');
       if (mi === 0) {
         row[0] = sanitizeFormula(g.group_no);
-        row[6] = sanitizeFormula(g.domain || g.domain_raw || '');
-        row[7] = sanitizeFormula(g.guide_name || 'Unassigned');
+        row[7] = sanitizeFormula(g.domain || g.domain_raw || '');
+        row[8] = sanitizeFormula(g.guide_name || 'Unassigned');
       }
       row[1] = sanitizeFormula(m.student_name || m.name || '');
-      row[2] = sanitizeFormula(m.prn || '');
+      row[2] = sanitizeFormula(m.university_prn || m.prn || '');
       row[3] = sanitizeFormula(m.topic1 || '');
       row[4] = sanitizeFormula(m.topic2 || '');
       row[5] = sanitizeFormula(m.topic3 || '');
+      row[6] = sanitizeFormula(m.final_topic || g.final_topic || '');
 
       s1Data.push(row);
       rIdx++;
@@ -907,7 +909,7 @@ function generateWorkflowExcel(session, groups, guides, issues = []) {
 
     if (members.length > 1) {
       // Merge Group No, Domain, Guide across member rows
-      [0, 6, 7].forEach(c => {
+      [0, 7, 8].forEach(c => {
         s1Merges.push({ s: { r: startRow, c }, e: { r: rIdx - 1, c } });
       });
     }
@@ -920,9 +922,9 @@ function generateWorkflowExcel(session, groups, guides, issues = []) {
   const ws1 = XLSX.utils.aoa_to_sheet(s1Data);
   ws1['!merges'] = s1Merges;
   ws1['!cols'] = [
-    { wch: 10 }, { wch: 30 }, { wch: 16 },
-    { wch: 38 }, { wch: 38 }, { wch: 38 },
-    { wch: 30 }, { wch: 28 },
+    { wch: 10 }, { wch: 28 }, { wch: 18 },
+    { wch: 32 }, { wch: 32 }, { wch: 32 }, { wch: 35 },
+    { wch: 26 }, { wch: 26 },
   ];
   // Page setup: landscape, repeat header row
   ws1['!pageSetup'] = { orientation: 'landscape', fitToWidth: 1 };
@@ -991,6 +993,10 @@ function generateWorkflowExcel(session, groups, guides, issues = []) {
     'Name',
     'PRN',
     'Division',
+    'Topic 1',
+    'Topic 2',
+    'Topic 3',
+    'Final Topic',
     'Mobile',
     'Email',
     'Leader (Y/N)',
@@ -1002,8 +1008,12 @@ function generateWorkflowExcel(session, groups, guides, issues = []) {
       s3Data.push([
         sanitizeFormula(g.group_no),
         sanitizeFormula(m.student_name || m.name || ''),
-        sanitizeFormula(m.prn || ''),
+        sanitizeFormula(m.university_prn || m.prn || ''),
         sanitizeFormula(m.division || ''),
+        sanitizeFormula(m.topic1 || ''),
+        sanitizeFormula(m.topic2 || ''),
+        sanitizeFormula(m.topic3 || ''),
+        sanitizeFormula(m.final_topic || g.final_topic || ''),
         sanitizeFormula(m.mobile || ''),
         sanitizeFormula(m.email || ''),
         m.is_leader ? 'Y' : 'N',
@@ -1015,6 +1025,7 @@ function generateWorkflowExcel(session, groups, guides, issues = []) {
   const ws3 = XLSX.utils.aoa_to_sheet(s3Data);
   ws3['!cols'] = [
     { wch: 10 }, { wch: 28 }, { wch: 16 }, { wch: 10 },
+    { wch: 30 }, { wch: 30 }, { wch: 30 }, { wch: 35 },
     { wch: 15 }, { wch: 30 }, { wch: 14 }, { wch: 26 },
   ];
   XLSX.utils.book_append_sheet(wb, ws3, 'Student list');

@@ -724,6 +724,7 @@ router.post('/register-group', verifyToken, requireRole('student'), async (req, 
     // Prepare cleaned members with relaxed validation
     const cleanedMembers = rawMembers.map((m, idx) => {
       const prnVal = escapeHtml(m.university_prn || m.prn || m.roll_no).toUpperCase();
+      const memberFinalTopic = m.final_topic ? escapeHtml(m.final_topic) : escapeHtml(finalTopic);
       return {
         memberIndex: idx + 1,
         student_name: escapeHtml(m.student_name || m.name),
@@ -732,10 +733,10 @@ router.post('/register-group', verifyToken, requireRole('student'), async (req, 
         division: escapeHtml(m.division || ''),
         mobile: escapeHtml(m.mobile || ''),
         email: escapeHtml(m.email || '').toLowerCase(),
-        topic1: escapeHtml(finalTopic),
+        topic1: escapeHtml(m.topic1 || ''),
         topic2: escapeHtml(m.topic2 || ''),
         topic3: escapeHtml(m.topic3 || ''),
-        final_topic: escapeHtml(finalTopic),
+        final_topic: memberFinalTopic,
         is_leader: idx === 0,
       };
     });
