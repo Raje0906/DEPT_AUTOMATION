@@ -90,16 +90,28 @@ export default function SeminarMarksOverview() {
             Monitor evaluation progress, track guide submissions, and export the official marksheet.
           </p>
         </div>
-        <button
-          onClick={handleExport}
-          disabled={exporting}
-          className="flex items-center gap-2 px-4 py-2.5 bg-[var(--navy)] text-white text-xs font-bold rounded-lg hover:bg-[var(--navy)]/90 disabled:opacity-50 transition-colors shadow-sm shrink-0"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-          </svg>
-          {exporting ? 'Exporting…' : 'Export Official Marksheet'}
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <Link
+            to={`/faculty/seminar/evaluate?session_id=${sessionId}`}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-blue-50 border border-blue-200 text-[#1E2D5A] text-xs font-bold rounded-lg hover:bg-blue-100 transition-colors shadow-2xs"
+            title="Seminar Coordinator: Configure rubric criteria and view consolidated marksheet"
+          >
+            <svg className="w-4 h-4 text-[#1E2D5A]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 12h9.75M10.5 18h9.75M3 6h.008v.008H3V6zm0 6h.008v.008H3V12zm0 6h.008v.008H3V18z" />
+            </svg>
+            Configure Metrics & Sheet
+          </Link>
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="flex items-center gap-2 px-4 py-2.5 bg-[var(--navy)] text-white text-xs font-bold rounded-lg hover:bg-[var(--navy)]/90 disabled:opacity-50 transition-colors shadow-sm"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+            </svg>
+            {exporting ? 'Exporting…' : 'Export Official Marksheet'}
+          </button>
+        </div>
       </div>
 
       {/* Stats Row */}

@@ -278,14 +278,24 @@ export default function SeminarSessions() {
               {/* Action Buttons */}
               <div className="flex items-center gap-2 shrink-0 pt-3 md:pt-0 border-t md:border-t-0 border-[var(--rule)]">
                 {s.status === 'PUBLISHED' && (
-                  <button
-                    type="button"
-                    id={`btn-schedule-session-${s.id}`}
-                    onClick={() => navigate('/faculty/seminar/schedule', { state: { sessionId: s.id } })}
-                    className="h-8 px-3 inline-flex items-center text-xs font-semibold border border-[#D4D0C8] text-[#1E2D5A] rounded-md bg-white hover:bg-slate-50 transition-colors shadow-2xs"
-                  >
-                    Schedule presentation
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      id={`btn-schedule-session-${s.id}`}
+                      onClick={() => navigate('/faculty/seminar/schedule', { state: { sessionId: s.id } })}
+                      className="h-8 px-3 inline-flex items-center text-xs font-semibold border border-[#D4D0C8] text-[#1E2D5A] rounded-md bg-white hover:bg-slate-50 transition-colors shadow-2xs"
+                    >
+                      Schedule presentation
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/faculty/seminar/evaluate?session_id=${s.id}`)}
+                      className="h-8 px-3 inline-flex items-center gap-1.5 text-xs font-semibold border border-blue-200 text-[#1E2D5A] bg-blue-50/70 hover:bg-blue-100 rounded-md transition-colors shadow-2xs"
+                      title="Seminar Coordinator: Configure Rubric Metrics & Marksheet"
+                    >
+                      Configure Metrics & Sheet
+                    </button>
+                  </>
                 )}
                 <button
                   type="button"

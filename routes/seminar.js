@@ -2755,8 +2755,8 @@ router.get('/sessions/:id/metrics', verifyToken, async (req, res) => {
   }
 });
 
-// PUT /api/seminar/sessions/:id/metrics — add, rename, reorder, delete, change max marks
-router.put('/sessions/:id/metrics', verifyToken, async (req, res) => {
+// PUT /api/seminar/sessions/:id/metrics — add, rename, reorder, delete, change max marks (Seminar Coordinator or HOD only)
+router.put('/sessions/:id/metrics', verifyToken, requireCoordinator, async (req, res) => {
   const sessionId = parseInt(req.params.id, 10);
   const { metrics } = req.body;
   if (!Array.isArray(metrics) || metrics.length === 0) {
