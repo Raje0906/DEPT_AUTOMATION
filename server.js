@@ -111,9 +111,21 @@ app.use((err, req, res, _next) => {
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 const PORT = parseInt(process.env.PORT, 10) || 5000;
 
+// ─── Global Process Safety Handlers ──────────────────────────────────────────
+process.on('unhandledRejection', (reason) => {
+  const msg = reason?.message || String(reason);
+  if (msg.includes('ECONNRESET') || msg.includes('EPIPE')) {
+    console.warn('[Server] Network connection dropped by peer (safe):', msg);
+  } else {
+    console.warn('[Server] Unhandled promise rejection:', reason);
+  }
+});
+
 async function start() {
   try {
+    console.log('[Boot] Verifying remote database schema & migrations...');
     await runMigrations();
+    console.log('[Boot] Database schema verified successfully.');
 
     // Auto-seed in development if no users exist
     const pool = require('./db/pool');

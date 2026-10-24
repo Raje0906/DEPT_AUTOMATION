@@ -40,7 +40,6 @@ async function ensureCoordinatorSchema() {
     console.error('[Coordinators] Schema init error:', err.message);
   }
 }
-ensureCoordinatorSchema();
 
 /**
  * GET /api/coordinators

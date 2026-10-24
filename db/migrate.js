@@ -620,6 +620,26 @@ async function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_sem_coord_hist_fac ON seminar_coordinator_history(faculty_id);
       CREATE INDEX IF NOT EXISTS idx_sem_coord_hist_created ON seminar_coordinator_history(created_at DESC);
 
+      -- ─── COORDINATOR ASSIGNMENTS ─────────────────────────────────────────────
+      CREATE TABLE IF NOT EXISTS coordinator_assignments (
+        id            SERIAL PRIMARY KEY,
+        faculty_id    INT NOT NULL REFERENCES faculty(id) ON DELETE CASCADE,
+        role_type     VARCHAR(50) NOT NULL,
+        academic_year VARCHAR(20) NOT NULL DEFAULT '2026-27',
+        is_active     BOOLEAN NOT NULL DEFAULT TRUE,
+        appointed_by  INT REFERENCES users(id),
+        appointed_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        revoked_at    TIMESTAMPTZ,
+        notes         TEXT,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      ALTER TABLE faculty ADD COLUMN IF NOT EXISTS is_club_coordinator BOOLEAN DEFAULT FALSE;
+      ALTER TABLE coordinator_assignments DROP CONSTRAINT IF EXISTS coordinator_assignments_role_type_check;
+      ALTER TABLE coordinator_assignments ADD CONSTRAINT coordinator_assignments_role_type_check
+        CHECK (role_type IN ('BE_PROJECT_COORDINATOR', 'TE_SEMINAR_COORDINATOR', 'CLUB_HEAD_COORDINATOR'));
+      CREATE INDEX IF NOT EXISTS idx_coord_assign ON coordinator_assignments (role_type, academic_year, is_active);
+
       ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS attendance_marks NUMERIC(5,2);
       ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS presentation_marks NUMERIC(5,2);
       ALTER TABLE seminar_marks ADD COLUMN IF NOT EXISTS subject_understanding_marks NUMERIC(5,2);

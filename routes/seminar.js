@@ -57,14 +57,6 @@ async function getFacultyId(userId) {
   return r.rows[0]?.id ?? null;
 }
 
-// Depublish published sessions on coordinator request while keeping all groups, members, and responses intact
-pool.query("UPDATE seminar_sessions SET status = 'SETUP', published_at = NULL WHERE status = 'PUBLISHED' RETURNING id, name")
-  .then(r => {
-    if (r.rows.length > 0) {
-      console.log('[Seminar] Depublished session for testing (group responses kept):', r.rows);
-    }
-  })
-  .catch(err => console.error('[Seminar] Depublish query error:', err.message));
 
 // ─── Seminar Coordinator Management (HOD Governance) ─────────────────────────
 
