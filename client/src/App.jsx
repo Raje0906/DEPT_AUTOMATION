@@ -60,6 +60,7 @@ import SeminarEvaluation from './pages/seminar/SeminarEvaluation'
 import SeminarMarksOverview from './pages/seminar/SeminarMarksOverview'
 import SeminarImportAssignWorkflow from './pages/seminar/SeminarImportAssignWorkflow'
 import SeminarSchedule from './pages/seminar/SeminarSchedule'
+import SeminarMetricsConfig from './pages/seminar/SeminarMetricsConfig'
 
 // Alumni
 import AlumniFeedback from './pages/alumni/AlumniFeedback'
@@ -148,6 +149,8 @@ export default function App() {
             <Route path="/faculty/seminar" element={<CoordinatorLayout><SeminarSessions /></CoordinatorLayout>} />
             <Route path="/faculty/seminar/import-assign" element={<Navigate to="/faculty/seminar" replace />} />
             <Route path="/faculty/seminar/schedule" element={<CoordinatorLayout><SeminarSchedule /></CoordinatorLayout>} />
+            <Route path="/faculty/seminar/metrics" element={<CoordinatorLayout><SeminarMetricsConfig /></CoordinatorLayout>} />
+            <Route path="/faculty/seminar/:id/metrics" element={<CoordinatorLayout><SeminarMetricsConfig /></CoordinatorLayout>} />
             <Route path="/faculty/seminar/:id/upload" element={<CoordinatorLayout><SeminarUpload /></CoordinatorLayout>} />
             <Route path="/faculty/seminar/:id/assign" element={<CoordinatorLayout><SeminarAssignment /></CoordinatorLayout>} />
             <Route path="/faculty/seminar/:id/review" element={<CoordinatorLayout><SeminarReview /></CoordinatorLayout>} />
@@ -158,6 +161,7 @@ export default function App() {
             <Route path="/faculty/seminar/evaluate/:groupId" element={<FacultyLayout><SeminarEvaluation /></FacultyLayout>} />
             {/* HOD also accesses seminar */}
             <Route path="/hod/seminar" element={<HODLayout><SeminarSessions /></HODLayout>} />
+            <Route path="/hod/seminar/metrics" element={<HODLayout><SeminarMetricsConfig /></HODLayout>} />
             <Route path="/hod/seminar/:id/marks-overview" element={<HODLayout><SeminarMarksOverview /></HODLayout>} />
             <Route path="/hod/seminar-approvals" element={<HODLayout><HODSeminarMgmt /></HODLayout>} />
 

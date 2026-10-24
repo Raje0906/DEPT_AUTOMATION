@@ -135,6 +135,17 @@ export default function SeminarSessions() {
         </div>
         <div className="flex items-center gap-2">
           <button
+            type="button"
+            onClick={() => navigate('/faculty/seminar/metrics')}
+            className="h-8 px-3 inline-flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-[#1E2D5A] hover:bg-blue-100 text-xs font-semibold rounded-md transition-colors shadow-2xs shrink-0"
+            title="Seminar Coordinator: Configure Evaluation Rubrics & Metrics"
+          >
+            <svg className="w-4 h-4 text-[#1E2D5A]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 12h9.75M10.5 18h9.75M3 6h.008v.008H3V6zm0 6h.008v.008H3V12zm0 6h.008v.008H3V18z" />
+            </svg>
+            Configure Metrics
+          </button>
+          <button
             id="btn-new-session"
             type="button"
             onClick={() => setShowForm(true)}
@@ -289,11 +300,19 @@ export default function SeminarSessions() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => navigate(`/faculty/seminar/evaluate?session_id=${s.id}`)}
+                      onClick={() => navigate(`/faculty/seminar/metrics?session_id=${s.id}`)}
                       className="h-8 px-3 inline-flex items-center gap-1.5 text-xs font-semibold border border-blue-200 text-[#1E2D5A] bg-blue-50/70 hover:bg-blue-100 rounded-md transition-colors shadow-2xs"
-                      title="Seminar Coordinator: Configure Rubric Metrics & Marksheet"
+                      title="Seminar Coordinator: Configure Rubric Metrics for this session"
                     >
-                      Configure Metrics & Sheet
+                      Configure Metrics
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/faculty/seminar/evaluate?session_id=${s.id}`)}
+                      className="h-8 px-3 inline-flex items-center gap-1 text-xs font-semibold border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 rounded-md transition-colors shadow-2xs"
+                      title="View Consolidated Evaluation Marksheet"
+                    >
+                      Evaluation Sheet
                     </button>
                   </>
                 )}

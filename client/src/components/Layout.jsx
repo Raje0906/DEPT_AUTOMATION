@@ -138,6 +138,7 @@ const roleNav = {
         { to: '/faculty/project-eval',    label: 'BE Project Evaluation', icon: Icons.project },
         { to: '/faculty/magazines',       label: 'Newsletter',            icon: Icons.magazines },
         { to: '/faculty/seminar',         label: 'TE Seminar Governance', icon: Icons.seminar },
+        { to: '/faculty/seminar/metrics', label: 'Configure Seminar Metrics', icon: Icons.resultGen },
         { to: '/faculty/seminar/my-groups', label: 'Seminar Assigned Groups', icon: Icons.teachers },
       ],
     },
@@ -172,6 +173,7 @@ const roleNav = {
       items: [
         { to: '/hod/projects',        label: 'BE Project Governance',   icon: Icons.project },
         { to: '/hod/seminar-approvals', label: 'TE Seminar Governance', icon: Icons.seminar },
+        { to: '/hod/seminar/metrics', label: 'Seminar Rubric Metrics',  icon: Icons.resultGen },
       ],
     },
     {
@@ -210,6 +212,7 @@ const PAGE_TITLES = {
   '/faculty/project-coordination': 'BE Project Governance',
   '/faculty/feedback': 'TE Mid-Sem Feedback Management',
   '/faculty/seminar': 'TE Seminar Governance',
+  '/faculty/seminar/metrics': 'Seminar Evaluation Metrics Configuration',
   '/faculty/seminar/import-assign': 'Import Responses & Assign Guides',
   '/faculty/seminar/schedule': 'Schedule Presentation',
   '/faculty/seminar/my-groups': 'Seminar Assigned Groups',
@@ -219,6 +222,7 @@ const PAGE_TITLES = {
   '/hod/coordinators': 'Academic Coordinator Assignment',
   '/hod/projects': 'BE Project Groups & Review',
   '/hod/seminar-approvals': 'TE Seminar Approval Desk',
+  '/hod/seminar/metrics': 'Seminar Evaluation Metrics Configuration',
   '/hod/feedback': 'TE Mid-Sem Feedback Reports',
   '/hod/approval': 'Mark Submission Approvals',
   '/hod/remedial': 'Remedial Action Plans Review',
